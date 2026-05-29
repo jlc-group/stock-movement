@@ -72,10 +72,15 @@ tr:hover { background: #f9fafb; cursor: pointer; }
 .close:hover { color: #111827; }
 .modal-body { flex: 1; overflow-y: auto; padding: 16px 24px 20px; }
 .modal-sticky .panel { padding: 0 24px 14px; }
-.month-filter { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 0; }
-.month-btn { padding: 6px 12px; border: 1px solid #d1d5db; background: white; border-radius: 6px; font-size: 12px; cursor: pointer; font-family: inherit; }
-.month-btn.active { background: #3b82f6; color: white; border-color: #3b82f6; }
-.month-btn:hover:not(.active) { background: #f3f4f6; }
+.month-filter { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 0; }
+.mf-group { display: flex; flex-direction: column; gap: 3px; }
+.mf-group > label { font-size: 11px; color: #6b7280; font-weight: 600; }
+.mf-select { padding: 7px 12px; border: 1px solid #d1d5db; border-radius: 8px; background: white; font-size: 13px; font-family: inherit; cursor: pointer; min-width: 120px; }
+.mf-select:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59,130,246,0.15); }
+.tx-col-act { display: none; width: 1%; white-space: nowrap; }
+body.admin-on .tx-col-act { display: table-cell; }
+.tx-edit-btn { padding: 3px 10px; font-size: 12px; border: 1px solid #d1d5db; background: #fff; border-radius: 6px; cursor: pointer; font-family: inherit; color: #374151; }
+.tx-edit-btn:hover { background: #eef2ff; border-color: #6366f1; color: #4338ca; }
 .tx-table { font-size: 13px; }
 .tx-table thead th { position: sticky; top: 0; background: #f9fafb; z-index: 5; }
 .tx-table th, .tx-table td { padding: 8px 12px; }
@@ -243,7 +248,16 @@ body.admin-on .admin-bar { display: flex; }
       </div>
       <div class="panel">
         <div class="tx-summary" id="m-summary"></div>
-        <div class="month-filter" id="m-months"></div>
+        <div class="month-filter">
+          <div class="mf-group">
+            <label for="m-year">ปี</label>
+            <select class="mf-select" id="m-year" onchange="setYear(this.value)"></select>
+          </div>
+          <div class="mf-group">
+            <label for="m-month">เดือน</label>
+            <select class="mf-select" id="m-month" onchange="setMonth(this.value)"></select>
+          </div>
+        </div>
       </div>
     </div>
     <div class="modal-body">
@@ -256,6 +270,7 @@ body.admin-on .admin-bar { display: flex; }
             <th class="num">จ่าย</th>
             <th class="num">คงเหลือ</th>
             <th>หมายเหตุ</th>
+            <th class="tx-col-act">จัดการ</th>
           </tr>
         </thead>
         <tbody id="m-tbody"></tbody>
@@ -300,7 +315,7 @@ body.admin-on .admin-bar { display: flex; }
         </div>
       </div>
       <div class="field"><label>ชื่อสินค้า</label><input type="text" id="apName" placeholder="ชื่อสินค้า"></div>
-      <div class="field"><label>ยอดยกมา (คงเหลือเริ่มต้น)</label><input type="number" id="apOpening" value="0" step="any"></div>
+      <div class="field"><label>ยอดยกมา (คงเหลือเริ่มต้น)</label><input type="number" id="apOpening" value="0" step="any" inputmode="decimal" onfocus="this.select()"></div>
       <div class="amodal-foot">
         <button class="btn btn-ghost" onclick="closeAModal('addProductModal')">ยกเลิก</button>
         <button class="btn btn-success" id="apSubmit" onclick="submitAddProduct()">บันทึกสินค้า</button>
@@ -332,14 +347,40 @@ body.admin-on .admin-bar { display: flex; }
         <div class="field"><label>เลขที่เอกสาร</label><input type="text" id="mvDoc" placeholder="เช่น PO-001"></div>
       </div>
       <div class="field-row">
-        <div class="field"><label>รับเข้า</label><input type="number" id="mvIn" value="0" step="any" min="0" oninput="updatePreview()"></div>
-        <div class="field"><label>จ่ายออก</label><input type="number" id="mvOut" value="0" step="any" min="0" oninput="updatePreview()"></div>
+        <div class="field"><label>รับเข้า</label><input type="number" id="mvIn" value="0" step="any" min="0" inputmode="decimal" onfocus="this.select()" oninput="updatePreview()"></div>
+        <div class="field"><label>จ่ายออก</label><input type="number" id="mvOut" value="0" step="any" min="0" inputmode="decimal" onfocus="this.select()" oninput="updatePreview()"></div>
       </div>
       <div class="field"><label>หมายเหตุ</label><input type="text" id="mvNote" placeholder="หมายเหตุ (ถ้ามี)"></div>
       <div class="preview-bal" id="mvPreview" style="display:none"></div>
       <div class="amodal-foot">
         <button class="btn btn-ghost" onclick="closeAModal('addMovementModal')">ปิด</button>
         <button class="btn btn-primary" id="mvSubmit" onclick="submitMovement()" disabled>บันทึกรายการ</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Admin: Edit Movement ===== -->
+<div class="amodal" id="editMovementModal">
+  <div class="amodal-card">
+    <div class="amodal-head"><h3>✏️ แก้ไขรายการรายวัน</h3><button class="close" onclick="closeAModal('editMovementModal')">✕</button></div>
+    <div class="amodal-body">
+      <div class="form-msg" id="emMsg"></div>
+      <div class="sel-card show" id="emInfo" style="margin-bottom:14px">
+        <div class="sc-code" id="emCode"></div>
+        <div class="sc-name" id="emName"></div>
+        <div class="sc-bal">วันที่: <b id="emDateLbl"></b></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>รับเข้า</label><input type="number" id="emIn" value="0" step="any" min="0" inputmode="decimal" onfocus="this.select()" oninput="updateEditPreview()"></div>
+        <div class="field"><label>จ่ายออก</label><input type="number" id="emOut" value="0" step="any" min="0" inputmode="decimal" onfocus="this.select()" oninput="updateEditPreview()"></div>
+      </div>
+      <div class="field"><label>เลขที่เอกสาร</label><input type="text" id="emDoc" placeholder="เช่น PO-001"></div>
+      <div class="field"><label>หมายเหตุ</label><input type="text" id="emNote" placeholder="หมายเหตุ (ถ้ามี)"></div>
+      <div class="preview-bal" id="emPreview" style="display:none"></div>
+      <div class="amodal-foot">
+        <button class="btn btn-ghost" onclick="closeAModal('editMovementModal')">ปิด</button>
+        <button class="btn btn-success" id="emSubmit" onclick="submitEditMovement()">บันทึกการแก้ไข</button>
       </div>
     </div>
   </div>
@@ -354,6 +395,7 @@ const cls = n => n < 0 ? 'neg' : '';
 
 let filtered = DB.products.slice();
 let currentMonth = 'all';
+let currentYear = 'all';
 let currentProduct = null;
 let dateRange = { from: '', to: '' };
 
@@ -488,15 +530,23 @@ function openProduct(idx) {
   const p = DB.products[idx];
   currentProduct = p;
   currentMonth = 'all';
+  currentYear = 'all';
   document.getElementById('m-title').textContent = p.code + ' · ' + p.name;
   document.getElementById('m-meta').innerHTML = `<span class="badge ${p.category}">${p.category}</span> · Sheet: ${escapeHtml(p.sheet)} · ${p.tx.length} วัน`;
 
-  // Month filter buttons
-  const monthBtns = ['<button class="month-btn active" data-m="all" onclick="setMonth(\'all\')">ทั้งปี</button>'];
-  for (let m = 1; m <= 12; m++) {
-    monthBtns.push(`<button class="month-btn" data-m="${m}" onclick="setMonth('${m}')">${MONTHS_TH[m-1]}</button>`);
-  }
-  document.getElementById('m-months').innerHTML = monthBtns.join('');
+  // Year dropdown — distinct years present in this product's transactions
+  const years = [...new Set(p.tx.map(t => t[0] && t[0].slice(0, 4)).filter(Boolean))].sort();
+  const yearOpts = ['<option value="all">ทุกปี</option>']
+    .concat(years.map(y => `<option value="${y}">${y}</option>`));
+  document.getElementById('m-year').innerHTML = yearOpts.join('');
+
+  // Month dropdown
+  const monthOpts = ['<option value="all">ทุกเดือน</option>']
+    .concat(MONTHS_TH.map((nm, i) => `<option value="${i + 1}">${nm}</option>`));
+  document.getElementById('m-month').innerHTML = monthOpts.join('');
+
+  document.getElementById('m-year').value = 'all';
+  document.getElementById('m-month').value = 'all';
 
   renderSummary();
   renderHistory();
@@ -504,33 +554,67 @@ function openProduct(idx) {
   document.body.style.overflow = 'hidden';
 }
 
+// Rows of a product matching the current year + month filter (chronological).
+function periodTx(p) {
+  const mStr = currentMonth === 'all' ? null : String(currentMonth).padStart(2, '0');
+  return p.tx.filter(t => {
+    if (!t[0]) return false;
+    if (currentYear !== 'all' && t[0].slice(0, 4) !== currentYear) return false;
+    if (mStr && t[0].slice(5, 7) !== mStr) return false;
+    return true;
+  });
+}
+
+// Balance brought forward into the selected period (balance just before it starts).
+function openingBalance(p, sel) {
+  // If the period has rows, opening = balance before its first row (= bal − in + out).
+  if (sel.length) {
+    const f = sel[0];
+    return (f[3] || 0) - (f[1] || 0) + (f[2] || 0);
+  }
+  // No rows in the period: use the balance of the last tx before the period boundary.
+  let boundary = null;
+  if (currentYear !== 'all' && currentMonth !== 'all') {
+    boundary = `${currentYear}-${String(currentMonth).padStart(2, '0')}-01`;
+  } else if (currentYear !== 'all') {
+    boundary = `${currentYear}-01-01`;
+  }
+  if (!boundary) return p.opening;
+  const prev = p.tx.filter(t => t[0] && t[0] < boundary);
+  return prev.length ? prev[prev.length - 1][3] : p.opening;
+}
+
+function periodLabel() {
+  const parts = [];
+  if (currentMonth !== 'all') parts.push(MONTHS_TH[Number(currentMonth) - 1]);
+  if (currentYear !== 'all') parts.push(currentYear);
+  return parts.join(' ');
+}
+
 function renderSummary() {
   const p = currentProduct;
   if (!p) return;
   let opening, totalIn, totalOut, closing, lblOpen, lblIn, lblOut, lblClose;
-  if (currentMonth === 'all') {
+  if (currentMonth === 'all' && currentYear === 'all') {
     opening = p.opening;
     totalIn = p.total_in;
     totalOut = p.total_out;
     closing = p.closing;
-    lblOpen = 'ยอดยกมา (1 ม.ค.)';
-    lblIn = 'รับเข้าทั้งปี';
-    lblOut = 'จ่ายออกทั้งปี';
+    lblOpen = 'ยอดยกมา (เริ่มต้น)';
+    lblIn = 'รับเข้าทั้งหมด';
+    lblOut = 'จ่ายออกทั้งหมด';
     lblClose = 'คงเหลือ ณ ปัจจุบัน';
   } else {
-    const mStr = String(currentMonth).padStart(2, '0');
-    const monthTx = p.tx.filter(t => t[0] && t[0].slice(5, 7) === mStr);
-    const prevTx = p.tx.filter(t => t[0] && t[0].slice(5, 7) < mStr);
-    // opening of month = balance at end of previous month, else original opening
-    opening = prevTx.length ? prevTx[prevTx.length - 1][3] : p.opening;
-    totalIn = monthTx.reduce((s, t) => s + (t[1] || 0), 0);
-    totalOut = monthTx.reduce((s, t) => s + (t[2] || 0), 0);
-    closing = monthTx.length ? monthTx[monthTx.length - 1][3] : opening;
-    const mName = MONTHS_TH[Number(currentMonth) - 1];
-    lblOpen = `ยอดยกมา (ต้น${mName})`;
-    lblIn = `รับเข้า ${mName}`;
-    lblOut = `จ่ายออก ${mName}`;
-    lblClose = `คงเหลือสิ้น${mName}`;
+    const sel = periodTx(p);
+    opening = openingBalance(p, sel);
+    totalIn = sel.reduce((s, t) => s + (t[1] || 0), 0);
+    totalOut = sel.reduce((s, t) => s + (t[2] || 0), 0);
+    closing = sel.length ? sel[sel.length - 1][3] : opening;
+    const lbl = periodLabel();
+    lblOpen = `ยอดยกมา (ต้น${lbl})`;
+    lblIn = `รับเข้า ${lbl}`;
+    lblOut = `จ่ายออก ${lbl}`;
+    lblClose = `คงเหลือสิ้น${lbl}`;
   }
   document.getElementById('m-summary').innerHTML = `
     <div class="box"><div class="lbl">${lblOpen}</div><div class="val">${fmt(opening)}</div></div>
@@ -540,11 +624,14 @@ function renderSummary() {
   `;
 }
 
+function setYear(y) {
+  currentYear = y;
+  renderSummary();
+  renderHistory();
+}
+
 function setMonth(m) {
   currentMonth = m;
-  document.querySelectorAll('.month-btn').forEach(b => {
-    b.classList.toggle('active', b.dataset.m === String(m));
-  });
   renderSummary();
   renderHistory();
 }
@@ -553,13 +640,9 @@ function renderHistory() {
   const p = currentProduct;
   if (!p) return;
   const tbody = document.getElementById('m-tbody');
-  let txs = p.tx;
-  if (currentMonth !== 'all') {
-    const mStr = String(currentMonth).padStart(2, '0');
-    txs = txs.filter(t => t[0] && t[0].slice(5, 7) === mStr);
-  }
+  let txs = (currentMonth === 'all' && currentYear === 'all') ? p.tx : periodTx(p);
   if (txs.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6" class="empty">ไม่มีข้อมูลในช่วงนี้</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="empty">ไม่มีข้อมูลในช่วงนี้</td></tr>';
     return;
   }
   tbody.innerHTML = txs.map(t => {
@@ -572,6 +655,7 @@ function renderHistory() {
       <td class="num out">${fmt(t[2])}</td>
       <td class="num bal ${cls(t[3])}">${fmt(t[3])}</td>
       <td>${escapeHtml(t[5])}</td>
+      <td class="tx-col-act"><button class="tx-edit-btn" onclick="openEditMovement('${t[0]}')">✏️ แก้ไข</button></td>
     </tr>`;
   }).join('');
 }
@@ -639,9 +723,9 @@ function toast(msg, type = '') {
   setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity .3s'; setTimeout(() => el.remove(), 300); }, 3000);
 }
 
-async function adminFetch(path, body) {
+async function adminFetch(path, body, method = 'POST') {
   const res = await fetch(path, {
-    method: 'POST',
+    method,
     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken },
     body: JSON.stringify(body || {}),
   });
@@ -880,12 +964,68 @@ document.getElementById('mvSearch').addEventListener('input', (e) => {
   renderAc(e.target.value);
 });
 document.getElementById('mvSearch').addEventListener('keydown', mvAcKeydown);
-document.querySelectorAll('.amodal').forEach(m => {
-  m.addEventListener('click', (e) => { if (e.target === m) m.classList.remove('show'); });
-});
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') document.querySelectorAll('.amodal.show').forEach(m => m.classList.remove('show'));
-});
+// Admin modals close ONLY via the ปิด / ✕ buttons — no click-outside or Escape auto-close.
+
+// ---- Edit Movement (admin, from the product history table) ----
+let emDate = null;     // ISO date of the row being edited
+let emBrought = 0;     // balance brought forward into that day (constant while editing)
+
+function openEditMovement(dateIso) {
+  if (!adminToken) return;
+  const p = currentProduct;
+  if (!p) return;
+  const t = p.tx.find(x => x[0] === dateIso);
+  if (!t) return;
+  emDate = dateIso;
+  emBrought = (t[3] || 0) - (t[1] || 0) + (t[2] || 0);  // balance − in + out
+  document.getElementById('emCode').textContent = p.code;
+  document.getElementById('emName').textContent = p.name || '(ไม่มีชื่อ)';
+  document.getElementById('emDateLbl').textContent = formatDate(dateIso);
+  document.getElementById('emIn').value = t[1] || 0;
+  document.getElementById('emOut').value = t[2] || 0;
+  document.getElementById('emDoc').value = t[4] || '';
+  document.getElementById('emNote').value = t[5] || '';
+  document.getElementById('emMsg').className = 'form-msg';
+  updateEditPreview();
+  openAModal('editMovementModal');
+  setTimeout(() => document.getElementById('emIn').focus(), 50);
+}
+
+function updateEditPreview() {
+  const prev = document.getElementById('emPreview');
+  const qin = parseFloat(document.getElementById('emIn').value) || 0;
+  const qout = parseFloat(document.getElementById('emOut').value) || 0;
+  const newBal = emBrought + qin - qout;
+  prev.style.display = 'block';
+  prev.innerHTML = `คงเหลือวันนี้ (ใหม่): <b class="${newBal < 0 ? 'neg' : ''}">${fmt(newBal)}</b> ` +
+    `<span style="color:#9ca3af;font-size:12px">= ${fmt(emBrought)} + ${fmt(qin)} − ${fmt(qout)}</span>`;
+}
+
+async function submitEditMovement() {
+  const msg = document.getElementById('emMsg');
+  const btn = document.getElementById('emSubmit');
+  const p = currentProduct;
+  if (!p || !emDate) return;
+  const qty_in = parseFloat(document.getElementById('emIn').value) || 0;
+  const qty_out = parseFloat(document.getElementById('emOut').value) || 0;
+  const doc_no = document.getElementById('emDoc').value.trim();
+  const note = document.getElementById('emNote').value.trim();
+  if (qty_in < 0 || qty_out < 0) { msg.className = 'form-msg err show'; msg.textContent = 'จำนวนห้ามติดลบ'; return; }
+  btn.disabled = true;
+  try {
+    const data = await adminFetch('/api/movements', { code: p.code, date: emDate, qty_in, qty_out, doc_no, note }, 'PUT');
+    mergeProduct(data.product);
+    currentProduct = data.product;   // refresh the open product modal with latest data
+    renderSummary();
+    renderHistory();
+    closeAModal('editMovementModal');
+    toast('แก้ไขรายการวันที่ ' + formatDate(emDate) + ' สำเร็จ', 'ok');
+  } catch (e) {
+    msg.className = 'form-msg err show'; msg.textContent = e.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
 
 updateAdminUI();
 </script>

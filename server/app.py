@@ -9,6 +9,7 @@ Admin (write) endpoints — require Authorization: Bearer <token>:
     POST /api/admin/login   -> exchange PIN for a session token
     POST /api/products      -> create a new product
     POST /api/movements     -> record/accumulate a daily in/out movement
+    PUT  /api/movements     -> edit (overwrite) an existing day's movement
 """
 import os
 import sys
@@ -317,6 +318,63 @@ def add_movement():
                 doc_no  = COALESCE(EXCLUDED.doc_no, {config.DB_SCHEMA}.stock_movements.doc_no),
                 note    = COALESCE(EXCLUDED.note,  {config.DB_SCHEMA}.stock_movements.note)
         """, (product_id, mv_date, doc_no, qty_in, qty_out, note))
+
+        recompute_product(cur, product_id)
+        product = fetch_product(cur, product_id)
+        conn.commit()
+        return jsonify(status="ok", product=product)
+    except Exception as e:
+        conn.rollback()
+        return jsonify(error="server_error", detail=str(e)), 500
+    finally:
+        conn.close()
+
+
+@app.route("/api/movements", methods=["PUT"])
+@require_admin
+def edit_movement():
+    """Edit an existing daily movement: set (overwrite) qty/doc/note for a date,
+    then recompute the running balance for the whole product."""
+    data = request.get_json(silent=True) or {}
+    code = str(data.get("code", "")).strip()
+    mv_date = str(data.get("date", "")).strip()
+    doc_no = (str(data.get("doc_no", "")).strip() or None)
+    note = (str(data.get("note", "")).strip() or None)
+    try:
+        qty_in = float(data.get("qty_in", 0) or 0)
+        qty_out = float(data.get("qty_out", 0) or 0)
+    except (TypeError, ValueError):
+        return jsonify(error="bad_request", detail="จำนวนต้องเป็นตัวเลข"), 400
+
+    if not code:
+        return jsonify(error="bad_request", detail="ต้องระบุรหัสสินค้า"), 400
+    if not mv_date:
+        return jsonify(error="bad_request", detail="ต้องระบุวันที่"), 400
+    try:
+        date.fromisoformat(mv_date)
+    except ValueError:
+        return jsonify(error="bad_request", detail="วันที่ต้องอยู่ในรูปแบบ YYYY-MM-DD"), 400
+    if qty_in < 0 or qty_out < 0:
+        return jsonify(error="bad_request", detail="จำนวนห้ามติดลบ"), 400
+
+    conn = get_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute(f"SELECT id FROM {config.DB_SCHEMA}.products WHERE code = %s", (code,))
+        row = cur.fetchone()
+        if not row:
+            return jsonify(error="not_found", detail=f"ไม่พบรหัสสินค้า {code}"), 404
+        product_id = row[0]
+
+        cur.execute(f"""
+            UPDATE {config.DB_SCHEMA}.stock_movements
+            SET qty_in = %s, qty_out = %s, doc_no = %s, note = %s
+            WHERE product_id = %s AND movement_date = %s
+        """, (qty_in, qty_out, doc_no, note, product_id, mv_date))
+        if cur.rowcount == 0:
+            conn.rollback()
+            return jsonify(error="not_found",
+                           detail=f"ไม่พบรายการของวันที่ {mv_date}"), 404
 
         recompute_product(cur, product_id)
         product = fetch_product(cur, product_id)
