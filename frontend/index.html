@@ -675,6 +675,10 @@ function renderHistory() {
   if (!p) return;
   const tbody = document.getElementById('m-tbody');
   let txs = (currentMonth === 'all' && currentYear === 'all') ? p.tx : periodTx(p);
+  // Hide future dates (after today) — show only up to today's local date.
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  txs = txs.filter(t => t[0] && t[0] <= today);
   if (txs.length === 0) {
     tbody.innerHTML = '<tr><td colspan="7" class="empty">ไม่มีข้อมูลในช่วงนี้</td></tr>';
     return;
