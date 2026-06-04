@@ -30,7 +30,7 @@ app = Flask(__name__, static_folder=None)
 # In-memory set of valid admin session tokens (cleared on restart).
 ADMIN_TOKENS = set()
 
-VALID_CATEGORIES = {"FG", "BTA", "PM", "BOX"}
+VALID_CATEGORIES = {"FG", "BTA", "PM", "BOX", "OTHER"}
 
 
 def get_conn():

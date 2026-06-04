@@ -17,3 +17,6 @@ data/raw/*.xlsx
 # Claude local state (keep dev launch config only)
 .claude/*
 !.claude/launch.json
+
+# Local backups (DB dumps + .env copies — contain secrets)
+backups/
