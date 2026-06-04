@@ -65,6 +65,9 @@ tr:hover { background: #f9fafb; cursor: pointer; }
 .badge.PM { background: #d1fae5; color: #065f46; }
 .badge.BOX { background: #e9d5ff; color: #6b21a8; }
 .badge.OTHER { background: #e5e7eb; color: #374151; }
+.mv-today { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 10px; font-size: 10px; font-weight: 700; vertical-align: middle; }
+.mv-today.mv-in { background: #d1fae5; color: #047857; }
+.mv-today.mv-out { background: #fee2e2; color: #b91c1c; }
 .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 100; align-items: center; justify-content: center; padding: 30px 20px; }
 .modal.show { display: flex; }
 .modal-content { background: white; border-radius: 12px; width: 100%; max-width: 1100px; max-height: calc(100vh - 60px); box-shadow: 0 20px 40px rgba(0,0,0,0.2); display: flex; flex-direction: column; overflow: hidden; }
@@ -170,17 +173,137 @@ body.admin-on .admin-bar { display: flex; }
 .toast.ok { background: #059669; }
 .toast.err { background: #dc2626; }
 @keyframes toastIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-@media(max-width: 768px) {
+/* ===== Layout + sidebar navigation ===== */
+.layout { display: flex; align-items: flex-start; }
+.sidebar { position: sticky; top: 0; align-self: flex-start; height: 100vh; width: 220px; flex: 0 0 220px; background: #0f172a; color: #cbd5e1; padding: 18px 12px; display: flex; flex-direction: column; gap: 6px; }
+.sidebar .brand { color: #fff; font-size: 15px; font-weight: 700; padding: 8px 10px 16px 10px; line-height: 1.35; border-bottom: 1px solid #1e293b; margin-bottom: 8px; }
+.sidebar .brand small { display: block; font-size: 11px; font-weight: 400; color: #94a3b8; margin-top: 4px; }
+.nav-item { display: flex; align-items: center; gap: 10px; padding: 11px 14px; border-radius: 8px; font-size: 14px; font-weight: 600; color: #cbd5e1; cursor: pointer; user-select: none; transition: background .15s, color .15s; }
+.nav-item:hover { background: #1e293b; color: #fff; }
+.nav-item.active { background: #2563eb; color: #fff; }
+.content { flex: 1; min-width: 0; }
+.page { display: none; }
+.page.active { display: block; }
+/* ===== Dashboard ===== */
+.dash-head { background: linear-gradient(135deg, #1e3a8a, #3b82f6); color: #fff; padding: 18px 24px; border-radius: 12px; margin-bottom: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+.dash-head h1 { font-size: 20px; margin-bottom: 4px; }
+.dash-head .sub { font-size: 12px; opacity: .9; }
+.dash-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 16px; }
+.dash-card { background: #fff; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); overflow: hidden; margin-bottom: 16px; }
+.dash-card .dc-head { padding: 12px 16px; font-size: 13px; font-weight: 700; color: #374151; border-bottom: 1px solid #f3f4f6; display: flex; justify-content: space-between; align-items: center; }
+.dash-card .dc-head .cnt { font-size: 12px; color: #6b7280; font-weight: 600; }
+.dash-card table { box-shadow: none; border-radius: 0; }
+.dash-card .scroll { max-height: 360px; overflow-y: auto; }
+.dash-empty { padding: 24px; text-align: center; color: #9ca3af; font-size: 13px; }
+.dc-hint { font-size: 10px; font-weight: 500; color: #9ca3af; margin-left: 6px; }
+/* ===== Treemap ===== */
+.treemap { position: relative; width: 100%; height: 340px; background: #f3f4f6; overflow: hidden; }
+.tm-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #9ca3af; font-size: 13px; }
+.tm-tile { position: absolute; overflow: hidden; box-sizing: border-box; border: 1px solid rgba(255,255,255,0.9); cursor: pointer; color: #fff; padding: 4px 6px; line-height: 1.2; text-shadow: 0 1px 2px rgba(0,0,0,0.28); transition: filter .12s; }
+.tm-tile:hover { filter: brightness(1.1); z-index: 2; }
+.tm-tile .tm-code { font-size: 11px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tm-tile .tm-val { font-size: 11px; font-weight: 600; opacity: .96; }
+.tm-tile .tm-name { font-size: 10px; opacity: .92; overflow: hidden; }
+@media (max-width: 980px) { .dash-grid { grid-template-columns: 1fr; } }
+
+/* ===== Mobile (≤768px) ===== */
+@media (max-width: 768px) {
+  /* Sidebar → fixed bottom tab bar */
+  .layout { flex-direction: column; }
+  .sidebar { position: fixed; top: auto; bottom: 0; left: 0; right: 0; width: 100%; height: auto; flex: 0 0 auto; flex-direction: row; gap: 0; padding: 0; z-index: 90; box-shadow: 0 -2px 10px rgba(0,0,0,0.18); }
+  .sidebar .brand { display: none; }
+  .nav-item { flex: 1; flex-direction: column; justify-content: center; gap: 2px; padding: 8px 4px; border-radius: 0; font-size: 11px; }
+  .content { padding-bottom: 64px; }
+
+  /* Top bar: don't pin on mobile so it doesn't eat the screen; let the table header stick instead */
   .app { padding: 10px; }
+  .sticky-top { position: static; padding: 0; margin: 0 0 12px 0; box-shadow: none; }
+  #ptable thead th { top: 0; }
+  header { padding: 14px 16px; }
+  header h1 { font-size: 16px; }
+  .admin-btn { top: 12px; right: 12px; padding: 5px 10px; font-size: 12px; }
+
+  /* Filters stack full-width */
+  .toolbar { flex-direction: column; align-items: stretch; gap: 8px; padding: 12px; }
+  .search-wrap { min-width: 0; width: 100%; }
+  .toolbar select, .toolbar input[type=text] { width: 100%; min-width: 0; }
+  .date-range { flex-direction: column; align-items: stretch; gap: 6px; width: 100%; }
+  .date-range span:not(.dr-lbl) { display: none; }
+  .date-range input[type=date] { width: 100%; min-width: 0; }
+  .date-range .dr-clear { align-self: flex-end; }
+
+  /* KPIs: 2 per row, tighter */
+  .kpis { grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 12px; }
+  .kpi { padding: 12px 14px; }
+  .kpi .value { font-size: 18px; }
+
+  /* Product table: hide low-priority columns (#, หมวด, ยกมา) to fit */
   table { font-size: 12px; }
-  th, td { padding: 8px 6px; }
-  .modal-content { max-width: 100%; }
+  th, td { padding: 8px 5px; }
+  #ptable th, #ptable td { padding: 8px 4px; }
+  #ptable th:nth-child(1), #ptable td:nth-child(1):not(.empty),
+  #ptable th:nth-child(2), #ptable td:nth-child(2),
+  #ptable th:nth-child(5), #ptable td:nth-child(5) { display: none; }
+  /* Fixed layout: pin code + number columns, give the rest to the name so Thai text wraps cleanly */
+  #ptable { table-layout: fixed; }
+  #ptable th:nth-child(3) { width: 76px; }
+  #ptable th:nth-child(6), #ptable th:nth-child(7), #ptable th:nth-child(8) { width: 56px; }
+  #ptable td:not(.num):not(.empty) { overflow-wrap: anywhere; word-break: break-word; }
+  #ptable td.num { white-space: nowrap; }
+  .dash-card td:not(.num) { overflow-wrap: anywhere; word-break: break-word; }
+  .dash-card td.num { white-space: nowrap; }
+
+  /* Dashboard */
+  .dash-head { padding: 14px 16px; }
+  .dash-head h1 { font-size: 17px; }
+  .treemap { height: 300px; }
+  .dash-card .dc-head { flex-wrap: wrap; gap: 4px; }
+
+  /* Modals fill the small screen */
+  .modal { padding: 10px; }
+  .modal-content { max-width: 100%; max-height: calc(100vh - 20px); }
+  .modal-header { padding: 14px 16px 10px; }
+  .modal-header h2 { font-size: 16px; }
+  .modal-body { padding: 0 16px 16px; }
+  .modal-sticky .panel { padding: 0 16px 12px; }
   .tx-summary { grid-template-columns: repeat(2, 1fr); }
+  .amodal { padding: 10px; }
+  .field-row { flex-direction: column; gap: 0; }
 }
 </style>
 </head>
 <body>
-<div class="app">
+<div class="layout">
+<aside class="sidebar">
+  <div class="brand">📦 Stock Movement<small>JLC GROUP 2026</small></div>
+  <div class="nav-item active" data-page="dashboard" onclick="switchPage('dashboard')">📊 <span>Dashboard</span></div>
+  <div class="nav-item" data-page="products" onclick="switchPage('products')">📦 <span>รายการสินค้า</span></div>
+</aside>
+<div class="content">
+
+<div class="app page active" id="page-dashboard">
+  <div class="dash-head">
+    <h1>📊 Dashboard สรุปภาพรวม</h1>
+    <div class="sub">บริษัท เจแอลซี กรุ๊ป จำกัด · สรุปความเคลื่อนไหวประจำวันที่ <span id="dashDate"></span></div>
+  </div>
+  <div class="kpis" id="dashKpis"></div>
+  <div class="dash-grid">
+    <div class="dash-card">
+      <div class="dc-head"><span>📥 รายการรับวันนี้<span class="dc-hint">ขนาด = จำนวนรับ</span></span><span class="cnt" id="dashInCnt"></span></div>
+      <div class="treemap" id="dashInTree"></div>
+    </div>
+    <div class="dash-card">
+      <div class="dc-head"><span>📤 รายการออกวันนี้<span class="dc-hint">ขนาด = จำนวนจ่าย</span></span><span class="cnt" id="dashOutCnt"></span></div>
+      <div class="treemap" id="dashOutTree"></div>
+    </div>
+  </div>
+  <div class="dash-card">
+    <div class="dc-head"><span>⚠️ สินค้าคงเหลือน้อย / ติดลบ (≤ 0)</span><span class="cnt" id="dashLowCnt"></span></div>
+    <div class="scroll"><table><thead><tr><th>รหัส</th><th>ชื่อสินค้า</th><th>หมวด</th><th class="num">คงเหลือ</th></tr></thead><tbody id="dashLowBody"></tbody></table></div>
+  </div>
+</div>
+
+<div class="app page" id="page-products">
   <div class="sticky-top" id="stickyTop">
   <header>
     <h1>📦 Stock Movement Dashboard - JLC GROUP 2026</h1>
@@ -210,6 +333,11 @@ body.admin-on .admin-bar { display: flex; }
       <option value="PM">วัสดุ/ของแถม (PM)</option>
       <option value="BOX">กล่อง (BOX)</option>
       <option value="OTHER">อื่นๆ (OTHER)</option>
+    </select>
+    <select id="todayFilter">
+      <option value="">ทั้งหมด (วันนี้)</option>
+      <option value="in">รับวันนี้ทั้งหมด</option>
+      <option value="out">ออกวันนี้ทั้งหมด</option>
     </select>
     <select id="sort">
       <option value="default">เรียงตามลำดับ</option>
@@ -249,6 +377,9 @@ body.admin-on .admin-bar { display: flex; }
     <tbody id="ptbody"></tbody>
   </table>
 </div>
+
+</div><!-- .content -->
+</div><!-- .layout -->
 
 <div class="modal" id="modal">
   <div class="modal-content">
@@ -464,6 +595,164 @@ function renderKPIs() {
   `;
 }
 
+// The product's transaction row dated today (local date), or undefined.
+function todayTx(p) {
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  return (p.tx || []).find(r => r[0] === today);
+}
+
+// Badges flagging a product that has a movement dated today (local date).
+function todayMoveBadges(p) {
+  const t = todayTx(p);
+  if (!t) return '';
+  let html = '';
+  if ((t[1] || 0) > 0) html += `<span class="mv-today mv-in" title="รับวันนี้ ${fmt(t[1])}">▼ รับ</span>`;
+  if ((t[2] || 0) > 0) html += `<span class="mv-today mv-out" title="จ่ายวันนี้ ${fmt(t[2])}">▲ จ่าย</span>`;
+  return html;
+}
+
+// ============================================================
+//  SIDEBAR NAV + DASHBOARD
+// ============================================================
+function switchPage(page) {
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.page === page));
+  document.querySelectorAll('.page').forEach(pg => pg.classList.toggle('active', pg.id === 'page-' + page));
+  if (page === 'dashboard') renderDashboard();
+  if (page === 'products') syncStickyHeight();
+}
+
+function renderDashboard() {
+  const products = DB.products || [];
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  document.getElementById('dashDate').textContent = today.split('-').reverse().join('/');
+
+  const inList = [], outList = [];
+  products.forEach(p => {
+    const t = todayTx(p);
+    if (t && (t[1] || 0) > 0) inList.push({ p, qty: t[1], bal: t[3] });
+    if (t && (t[2] || 0) > 0) outList.push({ p, qty: t[2], bal: t[3] });
+  });
+  inList.sort((a, b) => b.qty - a.qty);
+  outList.sort((a, b) => b.qty - a.qty);
+  const lowList = products.filter(p => (p.closing || 0) <= 0).sort((a, b) => (a.closing || 0) - (b.closing || 0));
+
+  const totalIn = inList.reduce((s, x) => s + x.qty, 0);
+  const totalOut = outList.reduce((s, x) => s + x.qty, 0);
+  const totalBal = products.reduce((s, p) => s + (p.closing || 0), 0);
+
+  document.getElementById('dashKpis').innerHTML = `
+    <div class="kpi in"><div class="label">📥 รับวันนี้ (รายการ)</div><div class="value">${inList.length} <span style="font-size:12px;color:#6b7280;font-weight:400">/ ${fmt(totalIn)} ชิ้น</span></div></div>
+    <div class="kpi out"><div class="label">📤 ออกวันนี้ (รายการ)</div><div class="value">${outList.length} <span style="font-size:12px;color:#6b7280;font-weight:400">/ ${fmt(totalOut)} ชิ้น</span></div></div>
+    <div class="kpi bal"><div class="label">📦 คงเหลือรวม (ชิ้น)</div><div class="value">${fmt(totalBal)}</div></div>
+    <div class="kpi"><div class="label">รวมรายการสินค้า</div><div class="value">${products.length.toLocaleString()}</div></div>
+    <div class="kpi"><div class="label">⚠️ คงเหลือ ≤ 0</div><div class="value" style="color:#dc2626">${lowList.length}</div></div>
+  `;
+
+  const idx = p => DB.products.indexOf(p);
+  document.getElementById('dashInCnt').textContent = inList.length ? `${inList.length} รายการ` : '';
+  document.getElementById('dashOutCnt').textContent = outList.length ? `${outList.length} รายการ` : '';
+  document.getElementById('dashLowCnt').textContent = lowList.length ? `${lowList.length} รายการ` : '';
+
+  // Cache for resize re-layout, then draw the two treemaps
+  dashCache.inList = inList;
+  dashCache.outList = outList;
+  renderTreemap('dashInTree', inList, 'in');
+  renderTreemap('dashOutTree', outList, 'out');
+
+  document.getElementById('dashLowBody').innerHTML = lowList.length
+    ? lowList.map(p => `<tr onclick="openProduct(${idx(p)})"><td class="code">${escapeHtml(p.code)}</td><td>${escapeHtml(p.name)}</td><td><span class="badge ${p.category}">${p.category}</span></td><td class="num bal ${cls(p.closing)}">${fmt(p.closing)}</td></tr>`).join('')
+    : '<tr><td colspan="4" class="dash-empty">ไม่มีสินค้าคงเหลือ ≤ 0</td></tr>';
+}
+
+// ---- Treemap (squarified) ----
+let dashCache = { inList: [], outList: [] };
+
+// Squarified treemap layout (Bruls et al.). Returns tiles [{x,y,w,h,item}].
+function squarify(data, rect) {
+  const out = [];
+  const nodes = data.filter(d => d.value > 0);
+  if (!nodes.length) return out;
+  const total = nodes.reduce((s, d) => s + d.value, 0);
+  const scale = (rect.w * rect.h) / total;
+  const items = nodes.map(d => ({ area: d.value * scale, item: d.item }));
+
+  function worst(row, length) {
+    let sum = 0, max = -Infinity, min = Infinity;
+    for (const r of row) { sum += r.area; if (r.area > max) max = r.area; if (r.area < min) min = r.area; }
+    const s2 = sum * sum, l2 = length * length;
+    return Math.max((l2 * max) / s2, s2 / (l2 * min));
+  }
+  function place(row, r, vertical) {
+    const sum = row.reduce((s, x) => s + x.area, 0);
+    if (vertical) {
+      const colW = sum / r.h; let yy = r.y;
+      for (const x of row) { const th = x.area / colW; out.push({ x: r.x, y: yy, w: colW, h: th, item: x.item }); yy += th; }
+      r.x += colW; r.w -= colW;
+    } else {
+      const rowH = sum / r.w; let xx = r.x;
+      for (const x of row) { const tw = x.area / rowH; out.push({ x: xx, y: r.y, w: tw, h: rowH, item: x.item }); xx += tw; }
+      r.y += rowH; r.h -= rowH;
+    }
+  }
+
+  const r = { ...rect };
+  let row = [], i = 0;
+  while (i < items.length) {
+    const vertical = r.w >= r.h;
+    const length = vertical ? r.h : r.w;
+    const node = items[i];
+    if (row.length === 0 || worst(row.concat(node), length) <= worst(row, length)) {
+      row.push(node); i++;
+    } else {
+      place(row, r, vertical); row = [];
+    }
+  }
+  if (row.length) place(row, r, r.w >= r.h);
+  return out;
+}
+
+function tmColor(kind, t) { // t in [0,1], 1 = largest → darkest
+  const L = 68 - t * 28;
+  return kind === 'in' ? `hsl(160 68% ${L}%)` : `hsl(2 70% ${L}%)`;
+}
+
+function renderTreemap(containerId, list, kind) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  if (!list.length) {
+    el.innerHTML = `<div class="tm-empty">ไม่มี${kind === 'in' ? 'รายการรับ' : 'รายการออก'}วันนี้</div>`;
+    return;
+  }
+  const W = el.clientWidth || 480, H = el.clientHeight || 340;
+  if (W < 2) return; // container hidden; will redraw when shown
+  const vals = list.map(x => x.qty);
+  const max = Math.max(...vals), min = Math.min(...vals);
+  const data = list.map(x => ({ value: x.qty, item: x }));
+  const tiles = squarify(data, { x: 0, y: 0, w: W, h: H });
+  el.innerHTML = tiles.map(tl => {
+    const x = tl.item, p = x.p;
+    const t = max === min ? 1 : (x.qty - min) / (max - min);
+    const showCode = tl.w > 40 && tl.h > 18;
+    const showVal = tl.w > 40 && tl.h > 32;
+    const showName = tl.w > 84 && tl.h > 52;
+    return `<div class="tm-tile" style="left:${tl.x}px;top:${tl.y}px;width:${tl.w}px;height:${tl.h}px;background:${tmColor(kind, t)}" title="${escapeHtml(p.code)} · ${escapeHtml(p.name)} · ${kind === 'in' ? 'รับ' : 'จ่าย'} ${fmt(x.qty)} · คงเหลือ ${fmt(x.bal)}" onclick="openProduct(${DB.products.indexOf(p)})">${showCode ? `<div class="tm-code">${escapeHtml(p.code)}</div>` : ''}${showVal ? `<div class="tm-val">${fmt(x.qty)}</div>` : ''}${showName ? `<div class="tm-name">${escapeHtml(p.name)}</div>` : ''}</div>`;
+  }).join('');
+}
+
+// Re-layout treemaps on resize (only while dashboard is visible)
+let _tmResizeTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(_tmResizeTimer);
+  _tmResizeTimer = setTimeout(() => {
+    if (document.getElementById('page-dashboard').classList.contains('active')) {
+      renderTreemap('dashInTree', dashCache.inList, 'in');
+      renderTreemap('dashOutTree', dashCache.outList, 'out');
+    }
+  }, 150);
+});
+
 function renderTable() {
   const tbody = document.getElementById('ptbody');
   const active = rangeActive();
@@ -479,7 +768,7 @@ function renderTable() {
       <td>${i + 1}</td>
       <td><span class="badge ${p.category}">${p.category}</span></td>
       <td class="code">${escapeHtml(p.code)}</td>
-      <td>${escapeHtml(p.name)}</td>
+      <td>${escapeHtml(p.name)}${todayMoveBadges(p)}</td>
       <td class="num">${fmt(s.opening)}</td>
       <td class="num in">${fmt(s.in)}</td>
       <td class="num out">${fmt(s.out)}</td>
@@ -495,6 +784,7 @@ function escapeHtml(s) {
 function applyFilters() {
   const q = document.getElementById('search').value.trim().toLowerCase();
   const cat = document.getElementById('category').value;
+  const todayMove = document.getElementById('todayFilter').value;
   const sort = document.getElementById('sort').value;
   dateRange.from = document.getElementById('dateFrom').value;
   dateRange.to = document.getElementById('dateTo').value;
@@ -509,6 +799,11 @@ function applyFilters() {
     if (cat && p.category !== cat) return false;
     if (q && !(p.code.toLowerCase().includes(q) || p.name.toLowerCase().includes(q))) return false;
     if (rangeActive() && !p._range.hasMovement) return false;
+    if (todayMove) {
+      const t = todayTx(p);
+      if (todayMove === 'in' && !(t && (t[1] || 0) > 0)) return false;
+      if (todayMove === 'out' && !(t && (t[2] || 0) > 0)) return false;
+    }
     return true;
   });
 
@@ -766,6 +1061,7 @@ document.getElementById('search').addEventListener('blur', () => {
 });
 document.getElementById('search').addEventListener('input', applyFilters);
 document.getElementById('category').addEventListener('change', applyFilters);
+document.getElementById('todayFilter').addEventListener('change', applyFilters);
 document.getElementById('sort').addEventListener('change', applyFilters);
 document.getElementById('dateFrom').addEventListener('change', applyFilters);
 document.getElementById('dateTo').addEventListener('change', applyFilters);
@@ -784,6 +1080,7 @@ async function loadData() {
     DB = await res.json();
     filtered = DB.products.slice();
     applyFilters();
+    renderDashboard();
   } catch (e) {
     tbody.innerHTML = `<tr><td colspan="8" class="empty">โหลดข้อมูลไม่สำเร็จ: ${escapeHtml(e.message)}</td></tr>`;
   }
