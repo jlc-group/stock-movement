@@ -14,13 +14,14 @@ Admin (write) endpoints — require Authorization: Bearer <token>:
 import os
 import sys
 import uuid
+import io
 from functools import wraps
 from datetime import datetime, date
 from collections import defaultdict
 
 import psycopg2
 import psycopg2.extras
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, jsonify, request, send_from_directory, send_file
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import config
@@ -196,6 +197,76 @@ def products():
         generated_at=datetime.now().isoformat(),
         product_count=len(products_out),
         products=products_out,
+    )
+
+
+@app.route("/api/products/export")
+def export_product():
+    """Stream one product's full history as a real .xlsx file."""
+    code = str(request.args.get("code", "")).strip()
+    if not code:
+        return jsonify(error="bad_request", detail="ต้องระบุรหัสสินค้า"), 400
+
+    conn = get_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute(f"SELECT id FROM {config.DB_SCHEMA}.products WHERE code = %s", (code,))
+        row = cur.fetchone()
+        if not row:
+            return jsonify(error="not_found", detail=f"ไม่พบรหัสสินค้า {code}"), 404
+        product = fetch_product(cur, row[0])
+    finally:
+        conn.close()
+
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, Alignment, PatternFill
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Stock"
+    bold = Font(bold=True)
+    head_fill = PatternFill("solid", fgColor="F3F4F6")
+    right = Alignment(horizontal="right")
+
+    ws["A1"] = f"{product['code']} · {product['name']}"
+    ws["A1"].font = Font(bold=True, size=14)
+    ws["A2"] = f"หมวด: {product['category']}  ·  Sheet: {product['sheet']}  ·  {len(product['tx'])} วัน"
+    ws["A4"] = "ยอดยกมา"; ws["B4"] = product["opening"]
+    ws["A5"] = "รับเข้าทั้งหมด"; ws["B5"] = product["total_in"]
+    ws["A6"] = "จ่ายออกทั้งหมด"; ws["B6"] = product["total_out"]
+    ws["A7"] = "คงเหลือปัจจุบัน"; ws["B7"] = product["closing"]
+    for r in range(4, 8):
+        ws[f"A{r}"].font = bold
+        ws[f"B{r}"].alignment = right
+
+    hdr = ["วันที่", "เลขที่", "รับ", "จ่าย", "คงเหลือ", "หมายเหตุ"]
+    hrow = 9
+    for i, h in enumerate(hdr, start=1):
+        c = ws.cell(row=hrow, column=i, value=h)
+        c.font = bold
+        c.fill = head_fill
+    for j, t in enumerate(product["tx"], start=hrow + 1):
+        d = t[0]
+        ws.cell(row=j, column=1, value=("/".join(reversed(d.split("-"))) if d else ""))
+        ws.cell(row=j, column=2, value=t[4])
+        ws.cell(row=j, column=3, value=t[1])
+        ws.cell(row=j, column=4, value=t[2])
+        ws.cell(row=j, column=5, value=t[3])
+        ws.cell(row=j, column=6, value=t[5])
+
+    widths = [14, 16, 12, 12, 12, 40]
+    for i, w in enumerate(widths, start=1):
+        ws.column_dimensions[chr(64 + i)].width = w
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    fname = f"stock_{code}.xlsx".replace("/", "-")
+    return send_file(
+        buf,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        as_attachment=True,
+        download_name=fname,
     )
 
 
