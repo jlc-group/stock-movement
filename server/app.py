@@ -459,4 +459,8 @@ def edit_movement():
 
 
 if __name__ == "__main__":
-    app.run(host=config.SERVER_HOST, port=config.SERVER_PORT, debug=True)
+    app.run(
+        host=config.SERVER_HOST,
+        port=config.SERVER_PORT,
+        debug=os.getenv("FLASK_DEBUG") == "1",
+    )
