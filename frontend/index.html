@@ -7,7 +7,7 @@
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: -apple-system, 'Segoe UI', 'Sarabun', Tahoma, sans-serif; background: #f4f5f7; color: #1f2937; }
-.app { max-width: 1400px; margin: 0 auto; padding: 20px; }
+.app { max-width: none; margin: 0; padding: 20px 24px; }
 .sticky-top { position: sticky; top: 0; z-index: 50; background: #f4f5f7; padding: 12px 8px 6px 8px; margin: -12px -8px 12px -8px; transition: box-shadow 0.2s; }
 .sticky-top.scrolled { box-shadow: 0 6px 18px rgba(0,0,0,0.08); }
 header { background: linear-gradient(135deg, #1e3a8a, #3b82f6); color: white; padding: 18px 24px; border-radius: 12px; margin-bottom: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); transition: padding 0.2s; }
@@ -43,7 +43,14 @@ header .sub { font-size: 12px; opacity: 0.9; }
 .kpi.out .value { color: #dc2626; }
 .kpi.bal .value { color: #2563eb; }
 table { width: 100%; border-collapse: collapse; background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
-#ptable { border-collapse: separate; border-spacing: 0; }
+#ptable { border-collapse: separate; border-spacing: 0; table-layout: auto; }
+/* Desktop column proportions: name column absorbs slack, others stay compact */
+#ptable th:nth-child(1), #ptable td:nth-child(1) { width: 52px; text-align: center; color: #94a3b8; }       /* # */
+#ptable th:nth-child(2), #ptable td:nth-child(2) { width: 96px; white-space: nowrap; }                       /* หมวด */
+#ptable th:nth-child(3), #ptable td:nth-child(3) { white-space: nowrap; }                                    /* แบรนด์ */
+#ptable th:nth-child(4), #ptable td:nth-child(4) { white-space: nowrap; }                                    /* รหัสสินค้า */
+#ptable th:nth-child(5), #ptable td:nth-child(5) { width: 100%; }                                            /* ชื่อสินค้า (takes remaining width) */
+#ptable th:nth-child(n+6), #ptable td:nth-child(n+6) { width: 130px; white-space: nowrap; }                  /* numeric columns */
 #ptable thead th { position: sticky; top: var(--sticky-h, 220px); z-index: 30; background: #f9fafb; box-shadow: inset 0 -1px 0 #e5e7eb, 0 2px 4px rgba(0,0,0,0.04); border-bottom: 0; }
 th { background: #f9fafb; padding: 12px 14px; text-align: left; font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #e5e7eb; }
 th.th-sort { cursor: pointer; user-select: none; transition: background 0.15s; }
@@ -53,6 +60,24 @@ th.th-sort.active { background: #dbeafe; color: #1d4ed8; }
 th.th-sort.active .th-arrow { opacity: 1; }
 td { padding: 12px 14px; border-bottom: 1px solid #f3f4f6; font-size: 14px; }
 tr:hover { background: #f9fafb; cursor: pointer; }
+
+/* --- UI polish: clearer clickable row in product table --- */
+#ptbody tr { transition: background 0.12s ease, box-shadow 0.12s ease; }
+#ptbody tr:hover { background: #eff6ff; box-shadow: inset 3px 0 0 #2563eb; cursor: pointer; }
+
+/* --- UI polish: smooth modal open/close (graceful fallback if @starting-style unsupported) --- */
+.modal, .amodal { opacity: 0; transition: opacity 0.2s ease, display 0.2s allow-discrete; }
+.modal.show, .amodal.show { opacity: 1; }
+.modal-content, .amodal-card { opacity: 0; transform: translateY(10px) scale(0.985); transition: opacity 0.22s ease, transform 0.22s cubic-bezier(.16,1,.3,1); }
+.modal.show .modal-content, .amodal.show .amodal-card { opacity: 1; transform: none; }
+@starting-style {
+  .modal.show, .amodal.show { opacity: 0; }
+  .modal.show .modal-content, .amodal.show .amodal-card { opacity: 0; transform: translateY(10px) scale(0.985); }
+}
+
+/* --- UI polish: smooth page transition --- */
+.page.active { animation: pageFade 0.25s ease; }
+@keyframes pageFade { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 .code { font-family: 'SF Mono', Consolas, monospace; font-weight: 600; color: #1d4ed8; }
 .num { text-align: right; font-variant-numeric: tabular-nums; }
 .num.in { color: #059669; }
@@ -196,14 +221,19 @@ body.admin-on .admin-bar { display: flex; }
 .dash-card .scroll { max-height: 360px; overflow-y: auto; }
 .dash-empty { padding: 24px; text-align: center; color: #9ca3af; font-size: 13px; }
 .dc-hint { font-size: 10px; font-weight: 500; color: #9ca3af; margin-left: 6px; }
-/* ===== Treemap ===== */
-.treemap { position: relative; width: 100%; height: 340px; background: #f3f4f6; overflow: hidden; }
-.tm-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #9ca3af; font-size: 13px; }
-.tm-tile { position: absolute; overflow: hidden; box-sizing: border-box; border: 1px solid rgba(255,255,255,0.9); cursor: pointer; color: #fff; padding: 4px 6px; line-height: 1.2; text-shadow: 0 1px 2px rgba(0,0,0,0.28); transition: filter .12s; }
-.tm-tile:hover { filter: brightness(1.1); z-index: 2; }
-.tm-tile .tm-code { font-size: 11px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tm-tile .tm-val { font-size: 11px; font-weight: 600; opacity: .96; }
-.tm-tile .tm-name { font-size: 10px; opacity: .92; overflow: hidden; }
+/* ===== Range filter + movement bars ===== */
+.dash-filter { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.dash-filter button { padding: 8px 16px; border: 1px solid #e5e7eb; background: #fff; border-radius: 8px; font-size: 13px; font-weight: 600; color: #6b7280; cursor: pointer; transition: background .15s, color .15s, border-color .15s; }
+.dash-filter button:hover { border-color: #cbd5e1; color: #374151; }
+.dash-filter button.active { background: #2563eb; border-color: #2563eb; color: #fff; }
+.dash-move table { width: 100%; }
+.dash-move td.dt { color: #6b7280; font-size: 12px; white-space: nowrap; }
+.dash-move td.code { font-weight: 700; color: #1e3a8a; white-space: nowrap; }
+.mbar-wrap { position: relative; display: flex; align-items: center; justify-content: flex-end; height: 22px; min-width: 64px; }
+.mbar { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; }
+.mbar.in { background: #059669; opacity: .16; }
+.mbar.out { background: #b45309; opacity: .16; }
+.mbar-val { position: relative; font-variant-numeric: tabular-nums; font-weight: 600; padding: 0 4px; }
 @media (max-width: 980px) { .dash-grid { grid-template-columns: 1fr; } }
 
 /* ===== Mobile (≤768px) ===== */
@@ -237,18 +267,30 @@ body.admin-on .admin-bar { display: flex; }
   .kpi { padding: 12px 14px; }
   .kpi .value { font-size: 18px; }
 
-  /* Product table: hide low-priority columns (#, หมวด, ยกมา) to fit */
+  /* Product table → horizontal scroll, pin รหัส + ชื่อ so they stay visible */
   table { font-size: 12px; }
   th, td { padding: 8px 5px; }
-  #ptable th, #ptable td { padding: 8px 4px; }
+  #ptable th, #ptable td { padding: 8px 8px; }
+  /* keep page width bounded so the wrapper (not the page) does the horizontal scrolling */
+  .content, .page { min-width: 0; max-width: 100%; }
+  .ptable-wrap { overflow: auto; max-width: 100%; max-height: calc(100dvh - 96px); border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+  /* hide low-priority left columns so รหัส becomes the leftmost (pinnable) */
   #ptable th:nth-child(1), #ptable td:nth-child(1):not(.empty),
   #ptable th:nth-child(2), #ptable td:nth-child(2),
-  #ptable th:nth-child(5), #ptable td:nth-child(5) { display: none; }
-  /* Fixed layout: pin code + number columns, give the rest to the name so Thai text wraps cleanly */
-  #ptable { table-layout: fixed; }
-  #ptable th:nth-child(3) { width: 76px; }
-  #ptable th:nth-child(6), #ptable th:nth-child(7), #ptable th:nth-child(8) { width: 56px; }
-  #ptable td:not(.num):not(.empty) { overflow-wrap: anywhere; word-break: break-word; }
+  #ptable th:nth-child(3), #ptable td:nth-child(3) { display: none; }
+  #ptable { table-layout: auto; min-width: 520px; }
+  #ptable thead th { top: 0; }
+  /* pin รหัส (col 4) at the left edge */
+  #ptable th:nth-child(4), #ptable td:nth-child(4) {
+    position: sticky; left: 0; z-index: 3; width: 86px; min-width: 86px; background: #fff; box-shadow: 1px 0 0 #f3f4f6; }
+  #ptable thead th:nth-child(4) { z-index: 33; background: #f9fafb; }
+  /* pin ชื่อสินค้า (col 5) right after the code column */
+  #ptable th:nth-child(5), #ptable td:nth-child(5) {
+    position: sticky; left: 86px; z-index: 2; width: auto; min-width: 150px; background: #fff; box-shadow: 2px 0 4px rgba(0,0,0,0.04);
+    overflow-wrap: anywhere; word-break: break-word; }
+  #ptable thead th:nth-child(5) { z-index: 32; background: #f9fafb; }
+  /* compact numeric columns so the scroll distance stays short */
+  #ptable th:nth-child(n+6), #ptable td:nth-child(n+6) { width: 66px; min-width: 66px; }
   #ptable td.num { white-space: nowrap; }
   .dash-card td:not(.num) { overflow-wrap: anywhere; word-break: break-word; }
   .dash-card td.num { white-space: nowrap; }
@@ -256,7 +298,8 @@ body.admin-on .admin-bar { display: flex; }
   /* Dashboard */
   .dash-head { padding: 14px 16px; }
   .dash-head h1 { font-size: 17px; }
-  .treemap { height: 300px; }
+  .dash-filter button { flex: 1; padding: 8px 6px; font-size: 12px; }
+  .dash-move td.dt { font-size: 11px; }
   .dash-card .dc-head { flex-wrap: wrap; gap: 4px; }
 
   /* Modals fill the small screen */
@@ -284,17 +327,24 @@ body.admin-on .admin-bar { display: flex; }
 <div class="app page active" id="page-dashboard">
   <div class="dash-head">
     <h1>📊 Dashboard สรุปภาพรวม</h1>
-    <div class="sub">บริษัท เจแอลซี กรุ๊ป จำกัด · สรุปความเคลื่อนไหวประจำวันที่ <span id="dashDate"></span></div>
+    <div class="sub">บริษัท เจแอลซี กรุ๊ป จำกัด · ช่วง <span id="dashDate"></span></div>
+  </div>
+  <div class="dash-filter" id="dashFilter">
+    <button data-r="today" onclick="setDashRange('today')">วันนี้</button>
+    <button data-r="yesterday" onclick="setDashRange('yesterday')">เมื่อวาน</button>
+    <button data-r="7d" onclick="setDashRange('7d')">7 วันย้อนหลัง</button>
+    <button data-r="month" onclick="setDashRange('month')">เดือนนี้</button>
+    <button data-r="all" onclick="setDashRange('all')">ทั้งหมด</button>
   </div>
   <div class="kpis" id="dashKpis"></div>
   <div class="dash-grid">
     <div class="dash-card">
-      <div class="dc-head"><span>📥 รายการรับวันนี้<span class="dc-hint">ขนาด = จำนวนรับ</span></span><span class="cnt" id="dashInCnt"></span></div>
-      <div class="treemap" id="dashInTree"></div>
+      <div class="dc-head"><span>📥 รายการรับ<span class="dc-hint">เรียงจากล่าสุด</span></span><span class="cnt" id="dashInCnt"></span></div>
+      <div class="scroll dash-move"><table><thead><tr><th>วันที่</th><th>รหัส</th><th>ชื่อสินค้า</th><th class="num">รับ</th><th class="num">คงเหลือ</th></tr></thead><tbody id="dashInBody"></tbody></table></div>
     </div>
     <div class="dash-card">
-      <div class="dc-head"><span>📤 รายการออกวันนี้<span class="dc-hint">ขนาด = จำนวนจ่าย</span></span><span class="cnt" id="dashOutCnt"></span></div>
-      <div class="treemap" id="dashOutTree"></div>
+      <div class="dc-head"><span>📤 รายการออก<span class="dc-hint">เรียงจากล่าสุด</span></span><span class="cnt" id="dashOutCnt"></span></div>
+      <div class="scroll dash-move"><table><thead><tr><th>วันที่</th><th>รหัส</th><th>ชื่อสินค้า</th><th class="num">ออก</th><th class="num">คงเหลือ</th></tr></thead><tbody id="dashOutBody"></tbody></table></div>
     </div>
   </div>
   <div class="dash-card">
@@ -315,6 +365,7 @@ body.admin-on .admin-bar { display: flex; }
     <span class="ab-label">🔧 โหมด Admin</span>
     <button class="btn btn-success" onclick="openAddProduct()">➕ เพิ่มสินค้าใหม่</button>
     <button class="btn btn-primary" onclick="openAddMovement()">📝 บันทึกรับ-จ่ายรายวัน</button>
+    <button class="btn btn-primary" onclick="openImport()">📥 นำเข้า Excel (รับ-จ่าย)</button>
     <span class="spacer"></span>
     <button class="btn btn-danger-ghost" onclick="adminLogout()">ออกจาก Admin</button>
   </div>
@@ -326,11 +377,20 @@ body.admin-on .admin-bar { display: flex; }
       <input type="text" id="search" autocomplete="off" placeholder="🔍 ค้นหา รหัสสินค้า หรือ ชื่อสินค้า..." />
       <div class="ac-list" id="searchAcList"></div>
     </div>
+    <select id="brand">
+      <option value="">ทุกแบรนด์</option>
+      <option value="Jula's Herb">Jula's Herb</option>
+      <option value="Jdent">Jdent</option>
+      <option value="Beauterry">Beauterry</option>
+      <option value="JNIS">JNIS</option>
+      <option value="สินค้าพรีเมี่ยม">สินค้าพรีเมี่ยม (PM)</option>
+      <option value="อื่นๆ">อื่นๆ (BOX/วัสดุ)</option>
+    </select>
     <select id="category">
       <option value="">ทุกหมวด</option>
       <option value="FG">สินค้าสำเร็จรูป (FG)</option>
       <option value="BTA">Beauterry (BTA)</option>
-      <option value="PM">วัสดุ/ของแถม (PM)</option>
+      <option value="PM">สินค้าพรีเมี่ยม (PM)</option>
       <option value="BOX">กล่อง (BOX)</option>
       <option value="OTHER">อื่นๆ (OTHER)</option>
     </select>
@@ -361,21 +421,24 @@ body.admin-on .admin-bar { display: flex; }
   </div>
 
   <div class="results-count" id="rcount"></div>
+  <div class="ptable-wrap">
   <table id="ptable">
     <thead>
       <tr>
         <th>#</th>
         <th>หมวด</th>
+        <th>แบรนด์</th>
         <th>รหัสสินค้า</th>
         <th>ชื่อสินค้า</th>
         <th class="num">ยกมา</th>
         <th class="num">รับ</th>
-        <th class="num th-sort" id="th-out" onclick="toggleOutSort()">จ่าย <span id="th-out-arrow" class="th-arrow"></span></th>
+        <th class="num th-sort" id="th-out" onclick="toggleOutSort()">ออก <span id="th-out-arrow" class="th-arrow"></span></th>
         <th class="num th-sort" id="th-bal" onclick="toggleClosingSort()">คงเหลือ <span id="th-bal-arrow" class="th-arrow"></span></th>
       </tr>
     </thead>
     <tbody id="ptbody"></tbody>
   </table>
+  </div>
 </div>
 
 </div><!-- .content -->
@@ -415,7 +478,7 @@ body.admin-on .admin-bar { display: flex; }
             <th>วันที่</th>
             <th>เลขที่</th>
             <th class="num">รับ</th>
-            <th class="num">จ่าย</th>
+            <th class="num">ออก</th>
             <th class="num">คงเหลือ</th>
             <th>หมายเหตุ</th>
             <th class="tx-col-act">จัดการ</th>
@@ -457,7 +520,7 @@ body.admin-on .admin-bar { display: flex; }
           <select id="apCategory">
             <option value="FG">สินค้าสำเร็จรูป (FG)</option>
             <option value="BTA">Beauterry (BTA)</option>
-            <option value="PM">วัสดุ/ของแถม (PM)</option>
+            <option value="PM">สินค้าพรีเมี่ยม (PM)</option>
             <option value="BOX">กล่อง (BOX)</option>
             <option value="OTHER">อื่นๆ (OTHER)</option>
           </select>
@@ -530,6 +593,59 @@ body.admin-on .admin-bar { display: flex; }
       <div class="amodal-foot">
         <button class="btn btn-ghost" onclick="closeAModal('editMovementModal')">ปิด</button>
         <button class="btn btn-success" id="emSubmit" onclick="submitEditMovement()">บันทึกการแก้ไข</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Admin: Import movements from Excel ===== -->
+<div class="amodal" id="importModal">
+  <div class="amodal-card wide">
+    <div class="amodal-head"><h3>📥 นำเข้ารับ-จ่ายจาก Excel</h3><button class="close" onclick="closeAModal('importModal')">✕</button></div>
+    <div class="amodal-body">
+      <div class="form-msg" id="imMsg"></div>
+      <p style="margin:0 0 10px;font-size:13px;color:#475569;line-height:1.6">
+        คอลัมน์ที่รองรับ: <b>รหัสสินค้า</b>, <b>วันที่</b> (DD/MM/YYYY), <b>รับเข้า</b>, <b>จ่ายออก</b>, เลขที่เอกสาร, หมายเหตุ<br>
+        คงเหลือไม่ต้องกรอก ระบบคำนวณให้เอง · รายการวันเดียวกันจะบวกสะสม
+      </p>
+      <div style="margin-bottom:12px">
+        <a class="btn btn-ghost" href="/api/movements/import-template" download>⬇️ ดาวน์โหลดไฟล์ตัวอย่าง</a>
+      </div>
+      <div class="field" id="imFileField"><label>เลือกไฟล์ Excel (.xlsx)</label>
+        <input type="file" id="imFile" accept=".xlsx" onchange="resetImport()">
+      </div>
+      <!-- missing-products panel -->
+      <div id="imMissing" style="display:none;margin-top:14px">
+        <div class="sel-card show" style="background:#fff7ed;border-color:#fed7aa">
+          <div class="sc-code">⚠️ พบรหัสสินค้าที่ยังไม่มีในระบบ</div>
+          <div class="sc-name">กรอกชื่อ/หมวด/แบรนด์ แล้วกด "สร้างสินค้า"</div>
+        </div>
+        <div id="imMissingList" style="margin-top:10px"></div>
+      </div>
+      <!-- preview table (review before commit) -->
+      <div id="imPreview" style="display:none;margin-top:14px">
+        <div style="font-size:13px;color:#475569;margin-bottom:6px" id="imPreviewHead"></div>
+        <div class="scroll" style="max-height:320px;overflow:auto;border:1px solid #e2e8f0;border-radius:8px">
+          <table style="width:100%;border-collapse:collapse;font-size:13px">
+            <thead>
+              <tr style="position:sticky;top:0;background:#f1f5f9;z-index:1">
+                <th style="text-align:left;padding:6px 8px">รหัส</th>
+                <th style="text-align:left;padding:6px 8px">ชื่อสินค้า</th>
+                <th style="text-align:left;padding:6px 8px">วันที่</th>
+                <th style="text-align:right;padding:6px 8px">รับเข้า</th>
+                <th style="text-align:right;padding:6px 8px">จ่ายออก</th>
+                <th style="text-align:left;padding:6px 8px">หมายเหตุ</th>
+              </tr>
+            </thead>
+            <tbody id="imPreviewBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="amodal-foot">
+        <button class="btn btn-ghost" onclick="closeAModal('importModal')">ปิด</button>
+        <button class="btn btn-success" id="imCreateBtn" style="display:none" onclick="createMissingThenImport()">สร้างสินค้า</button>
+        <button class="btn btn-primary" id="imSubmit" onclick="importPreview()">ตรวจสอบไฟล์</button>
+        <button class="btn btn-success" id="imCommitBtn" style="display:none" onclick="importCommit()">✓ เพิ่มข้อมูล</button>
       </div>
     </div>
   </div>
@@ -622,20 +738,43 @@ function switchPage(page) {
   if (page === 'products') syncStickyHeight();
 }
 
+let dashRange = '7d';
+function setDashRange(r) { dashRange = r; renderDashboard(); }
+
+// Resolve the active range to {from,to} ISO dates (to is capped at today) + a Thai label.
+function dashRangeInfo() {
+  const now = new Date();
+  const d = x => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+  const dm = s => s.split('-').reverse().join('/');
+  const today = d(now);
+  if (dashRange === 'today') return { from: today, to: today, label: `วันนี้ (${dm(today)})` };
+  if (dashRange === 'yesterday') { const y = new Date(now); y.setDate(now.getDate() - 1); const yd = d(y); return { from: yd, to: yd, label: `เมื่อวาน (${dm(yd)})` }; }
+  if (dashRange === '7d') { const s = new Date(now); s.setDate(now.getDate() - 6); return { from: d(s), to: today, label: `7 วันย้อนหลัง (${dm(d(s))} – ${dm(today)})` }; }
+  if (dashRange === 'month') { const s = new Date(now.getFullYear(), now.getMonth(), 1); return { from: d(s), to: today, label: `เดือนนี้ (${dm(d(s))} – ${dm(today)})` }; }
+  return { from: null, to: today, label: 'ทั้งหมด (ถึงวันนี้)' };
+}
+
 function renderDashboard() {
   const products = DB.products || [];
-  const now = new Date();
-  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-  document.getElementById('dashDate').textContent = today.split('-').reverse().join('/');
+  const { from, to, label } = dashRangeInfo();
+  document.getElementById('dashDate').textContent = label;
+  document.querySelectorAll('#dashFilter button').forEach(b => b.classList.toggle('active', b.dataset.r === dashRange));
 
+  // Collect every real movement row inside the range (one entry per record, not per product).
   const inList = [], outList = [];
   products.forEach(p => {
-    const t = todayTx(p);
-    if (t && (t[1] || 0) > 0) inList.push({ p, qty: t[1], bal: t[3] });
-    if (t && (t[2] || 0) > 0) outList.push({ p, qty: t[2], bal: t[3] });
+    (p.tx || []).forEach(t => {
+      const date = t[0];
+      if (!date) return;
+      if (from && date < from) return;
+      if (to && date > to) return;
+      if ((t[1] || 0) > 0) inList.push({ p, date, qty: t[1], bal: t[3] });
+      if ((t[2] || 0) > 0) outList.push({ p, date, qty: t[2], bal: t[3] });
+    });
   });
-  inList.sort((a, b) => b.qty - a.qty);
-  outList.sort((a, b) => b.qty - a.qty);
+  const byDateQty = (a, b) => b.date.localeCompare(a.date) || (b.qty - a.qty);
+  inList.sort(byDateQty);
+  outList.sort(byDateQty);
   const lowList = products.filter(p => (p.closing || 0) <= 0).sort((a, b) => (a.closing || 0) - (b.closing || 0));
 
   const totalIn = inList.reduce((s, x) => s + x.qty, 0);
@@ -643,8 +782,8 @@ function renderDashboard() {
   const totalBal = products.reduce((s, p) => s + (p.closing || 0), 0);
 
   document.getElementById('dashKpis').innerHTML = `
-    <div class="kpi in"><div class="label">📥 รับวันนี้ (รายการ)</div><div class="value">${inList.length} <span style="font-size:12px;color:#6b7280;font-weight:400">/ ${fmt(totalIn)} ชิ้น</span></div></div>
-    <div class="kpi out"><div class="label">📤 ออกวันนี้ (รายการ)</div><div class="value">${outList.length} <span style="font-size:12px;color:#6b7280;font-weight:400">/ ${fmt(totalOut)} ชิ้น</span></div></div>
+    <div class="kpi in"><div class="label">📥 รับ (รายการ)</div><div class="value">${inList.length} <span style="font-size:12px;color:#6b7280;font-weight:400">/ ${fmt(totalIn)} ชิ้น</span></div></div>
+    <div class="kpi out"><div class="label">📤 ออก (รายการ)</div><div class="value">${outList.length} <span style="font-size:12px;color:#6b7280;font-weight:400">/ ${fmt(totalOut)} ชิ้น</span></div></div>
     <div class="kpi bal"><div class="label">📦 คงเหลือรวม (ชิ้น)</div><div class="value">${fmt(totalBal)}</div></div>
     <div class="kpi"><div class="label">รวมรายการสินค้า</div><div class="value">${products.length.toLocaleString()}</div></div>
     <div class="kpi"><div class="label">⚠️ คงเหลือ ≤ 0</div><div class="value" style="color:#dc2626">${lowList.length}</div></div>
@@ -655,103 +794,34 @@ function renderDashboard() {
   document.getElementById('dashOutCnt').textContent = outList.length ? `${outList.length} รายการ` : '';
   document.getElementById('dashLowCnt').textContent = lowList.length ? `${lowList.length} รายการ` : '';
 
-  // Cache for resize re-layout, then draw the two treemaps
-  dashCache.inList = inList;
-  dashCache.outList = outList;
-  renderTreemap('dashInTree', inList, 'in');
-  renderTreemap('dashOutTree', outList, 'out');
+  renderMoveTable('dashInBody', inList, 'in');
+  renderMoveTable('dashOutBody', outList, 'out');
 
   document.getElementById('dashLowBody').innerHTML = lowList.length
     ? lowList.map(p => `<tr onclick="openProduct(${idx(p)})"><td class="code">${escapeHtml(p.code)}</td><td>${escapeHtml(p.name)}</td><td><span class="badge ${p.category}">${p.category}</span></td><td class="num bal ${cls(p.closing)}">${fmt(p.closing)}</td></tr>`).join('')
     : '<tr><td colspan="4" class="dash-empty">ไม่มีสินค้าคงเหลือ ≤ 0</td></tr>';
 }
 
-// ---- Treemap (squarified) ----
-let dashCache = { inList: [], outList: [] };
-
-// Squarified treemap layout (Bruls et al.). Returns tiles [{x,y,w,h,item}].
-function squarify(data, rect) {
-  const out = [];
-  const nodes = data.filter(d => d.value > 0);
-  if (!nodes.length) return out;
-  const total = nodes.reduce((s, d) => s + d.value, 0);
-  const scale = (rect.w * rect.h) / total;
-  const items = nodes.map(d => ({ area: d.value * scale, item: d.item }));
-
-  function worst(row, length) {
-    let sum = 0, max = -Infinity, min = Infinity;
-    for (const r of row) { sum += r.area; if (r.area > max) max = r.area; if (r.area < min) min = r.area; }
-    const s2 = sum * sum, l2 = length * length;
-    return Math.max((l2 * max) / s2, s2 / (l2 * min));
-  }
-  function place(row, r, vertical) {
-    const sum = row.reduce((s, x) => s + x.area, 0);
-    if (vertical) {
-      const colW = sum / r.h; let yy = r.y;
-      for (const x of row) { const th = x.area / colW; out.push({ x: r.x, y: yy, w: colW, h: th, item: x.item }); yy += th; }
-      r.x += colW; r.w -= colW;
-    } else {
-      const rowH = sum / r.w; let xx = r.x;
-      for (const x of row) { const tw = x.area / rowH; out.push({ x: xx, y: r.y, w: tw, h: rowH, item: x.item }); xx += tw; }
-      r.y += rowH; r.h -= rowH;
-    }
-  }
-
-  const r = { ...rect };
-  let row = [], i = 0;
-  while (i < items.length) {
-    const vertical = r.w >= r.h;
-    const length = vertical ? r.h : r.w;
-    const node = items[i];
-    if (row.length === 0 || worst(row.concat(node), length) <= worst(row, length)) {
-      row.push(node); i++;
-    } else {
-      place(row, r, vertical); row = [];
-    }
-  }
-  if (row.length) place(row, r, r.w >= r.h);
-  return out;
-}
-
-function tmColor(kind, t) { // t in [0,1], 1 = largest → darkest
-  const L = 68 - t * 28;
-  return kind === 'in' ? `hsl(160 68% ${L}%)` : `hsl(2 70% ${L}%)`;
-}
-
-function renderTreemap(containerId, list, kind) {
-  const el = document.getElementById(containerId);
+// Movement table with an inline proportional bar per row (replaces the treemap).
+function renderMoveTable(bodyId, list, kind) {
+  const el = document.getElementById(bodyId);
   if (!el) return;
   if (!list.length) {
-    el.innerHTML = `<div class="tm-empty">ไม่มี${kind === 'in' ? 'รายการรับ' : 'รายการออก'}วันนี้</div>`;
+    el.innerHTML = `<tr><td colspan="5" class="dash-empty">ไม่มี${kind === 'in' ? 'รายการรับ' : 'รายการออก'}ในช่วงนี้</td></tr>`;
     return;
   }
-  const W = el.clientWidth || 480, H = el.clientHeight || 340;
-  if (W < 2) return; // container hidden; will redraw when shown
-  const vals = list.map(x => x.qty);
-  const max = Math.max(...vals), min = Math.min(...vals);
-  const data = list.map(x => ({ value: x.qty, item: x }));
-  const tiles = squarify(data, { x: 0, y: 0, w: W, h: H });
-  el.innerHTML = tiles.map(tl => {
-    const x = tl.item, p = x.p;
-    const t = max === min ? 1 : (x.qty - min) / (max - min);
-    const showCode = tl.w > 40 && tl.h > 18;
-    const showVal = tl.w > 40 && tl.h > 32;
-    const showName = tl.w > 84 && tl.h > 52;
-    return `<div class="tm-tile" style="left:${tl.x}px;top:${tl.y}px;width:${tl.w}px;height:${tl.h}px;background:${tmColor(kind, t)}" title="${escapeHtml(p.code)} · ${escapeHtml(p.name)} · ${kind === 'in' ? 'รับ' : 'จ่าย'} ${fmt(x.qty)} · คงเหลือ ${fmt(x.bal)}" onclick="openProduct(${DB.products.indexOf(p)})">${showCode ? `<div class="tm-code">${escapeHtml(p.code)}</div>` : ''}${showVal ? `<div class="tm-val">${fmt(x.qty)}</div>` : ''}${showName ? `<div class="tm-name">${escapeHtml(p.name)}</div>` : ''}</div>`;
+  const max = Math.max(...list.map(x => x.qty)) || 1;
+  el.innerHTML = list.map(x => {
+    const pct = Math.max(6, Math.round(x.qty / max * 100));
+    return `<tr onclick="openProduct(${DB.products.indexOf(x.p)})" title="${escapeHtml(x.p.code)} · ${escapeHtml(x.p.name)} · ${kind === 'in' ? 'รับ' : 'จ่าย'} ${fmt(x.qty)} · คงเหลือ ${fmt(x.bal)}">
+      <td class="dt">${x.date.split('-').reverse().join('/')}</td>
+      <td class="code">${escapeHtml(x.p.code)}</td>
+      <td>${escapeHtml(x.p.name)}</td>
+      <td class="num"><div class="mbar-wrap"><div class="mbar ${kind}" style="width:${pct}%"></div><span class="mbar-val">${fmt(x.qty)}</span></div></td>
+      <td class="num">${fmt(x.bal)}</td>
+    </tr>`;
   }).join('');
 }
-
-// Re-layout treemaps on resize (only while dashboard is visible)
-let _tmResizeTimer;
-window.addEventListener('resize', () => {
-  clearTimeout(_tmResizeTimer);
-  _tmResizeTimer = setTimeout(() => {
-    if (document.getElementById('page-dashboard').classList.contains('active')) {
-      renderTreemap('dashInTree', dashCache.inList, 'in');
-      renderTreemap('dashOutTree', dashCache.outList, 'out');
-    }
-  }, 150);
-});
 
 function renderTable() {
   const tbody = document.getElementById('ptbody');
@@ -759,7 +829,7 @@ function renderTable() {
   const rangeMsg = active ? ` · ช่วง ${dateRange.from || '...'} → ${dateRange.to || '...'}` : '';
   document.getElementById('rcount').textContent = `แสดง ${filtered.length} รายการ จากทั้งหมด ${DB.products.length}${rangeMsg}`;
   if (filtered.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="8" class="empty">ไม่พบข้อมูล</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" class="empty">ไม่พบข้อมูล</td></tr>';
     return;
   }
   tbody.innerHTML = filtered.map((p, i) => {
@@ -767,6 +837,7 @@ function renderTable() {
     return `<tr onclick="openProduct(${DB.products.indexOf(p)})">
       <td>${i + 1}</td>
       <td><span class="badge ${p.category}">${p.category}</span></td>
+      <td>${escapeHtml(p.brand || '')}</td>
       <td class="code">${escapeHtml(p.code)}</td>
       <td>${escapeHtml(p.name)}${todayMoveBadges(p)}</td>
       <td class="num">${fmt(s.opening)}</td>
@@ -784,6 +855,7 @@ function escapeHtml(s) {
 function applyFilters() {
   const q = document.getElementById('search').value.trim().toLowerCase();
   const cat = document.getElementById('category').value;
+  const brand = document.getElementById('brand').value;
   const todayMove = document.getElementById('todayFilter').value;
   const sort = document.getElementById('sort').value;
   dateRange.from = document.getElementById('dateFrom').value;
@@ -796,8 +868,11 @@ function applyFilters() {
   }
 
   filtered = DB.products.filter(p => {
+    if (brand && p.brand !== brand) return false;
     if (cat && p.category !== cat) return false;
     if (q && !(p.code.toLowerCase().includes(q) || p.name.toLowerCase().includes(q))) return false;
+    // Hide products with exactly zero remaining stock; still findable when searching
+    if (!q && (p.closing || 0) === 0) return false;
     if (rangeActive() && !p._range.hasMovement) return false;
     if (todayMove) {
       const t = todayTx(p);
@@ -1060,6 +1135,7 @@ document.getElementById('search').addEventListener('blur', () => {
   setTimeout(() => document.getElementById('searchAcList').classList.remove('show'), 120);
 });
 document.getElementById('search').addEventListener('input', applyFilters);
+document.getElementById('brand').addEventListener('change', applyFilters);
 document.getElementById('category').addEventListener('change', applyFilters);
 document.getElementById('todayFilter').addEventListener('change', applyFilters);
 document.getElementById('sort').addEventListener('change', applyFilters);
@@ -1073,7 +1149,7 @@ document.getElementById('dateClear').addEventListener('click', () => {
 
 async function loadData() {
   const tbody = document.getElementById('ptbody');
-  tbody.innerHTML = '<tr><td colspan="8" class="empty">กำลังโหลดข้อมูล...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="9" class="empty">กำลังโหลดข้อมูล...</td></tr>';
   try {
     const res = await fetch('/api/products');
     if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -1082,7 +1158,7 @@ async function loadData() {
     applyFilters();
     renderDashboard();
   } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="8" class="empty">โหลดข้อมูลไม่สำเร็จ: ${escapeHtml(e.message)}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" class="empty">โหลดข้อมูลไม่สำเร็จ: ${escapeHtml(e.message)}</td></tr>`;
   }
 }
 loadData();
@@ -1215,6 +1291,171 @@ async function submitAddProduct() {
     toast('เพิ่มสินค้า ' + code + ' สำเร็จ', 'ok');
   } catch (e) {
     msg.className = 'form-msg err show'; msg.textContent = e.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ---- Import movements from Excel (preview -> commit) ----
+function resetImport() {
+  document.getElementById('imMsg').className = 'form-msg';
+  document.getElementById('imMissing').style.display = 'none';
+  document.getElementById('imMissingList').innerHTML = '';
+  document.getElementById('imPreview').style.display = 'none';
+  document.getElementById('imPreviewBody').innerHTML = '';
+  document.getElementById('imCreateBtn').style.display = 'none';
+  document.getElementById('imCommitBtn').style.display = 'none';
+  document.getElementById('imSubmit').style.display = '';
+}
+
+function openImport() {
+  document.getElementById('imFile').value = '';
+  resetImport();
+  openAModal('importModal');
+}
+
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const dmy = iso => { const [y,m,d] = (iso||'').split('-'); return d ? `${d}/${m}/${y}` : (iso||''); };
+
+// Shared upload helper. commit=false -> dry-run preview.
+async function importUpload(commit) {
+  const file = document.getElementById('imFile').files[0];
+  const fd = new FormData();
+  fd.append('file', file);
+  if (commit) fd.append('commit', '1');
+  const res = await fetch('/api/movements/import', {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + adminToken },
+    body: fd,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 401) { exitAdmin(); throw new Error('หมดเวลาเข้าสู่ระบบ กรุณาเข้า Admin ใหม่'); }
+  return { res, data };
+}
+
+function importErrText(data, status) {
+  let t = data.detail || ('HTTP ' + status);
+  if (Array.isArray(data.errors) && data.errors.length)
+    t += ' — ' + data.errors.slice(0, 5).map(e => `แถว ${e.row}: ${e.detail}`).join('; ');
+  return t;
+}
+
+// Step 1: validate + show the parsed rows for review (writes nothing).
+async function importPreview() {
+  const msg = document.getElementById('imMsg');
+  const btn = document.getElementById('imSubmit');
+  if (!document.getElementById('imFile').files[0]) {
+    msg.className = 'form-msg err show'; msg.textContent = 'กรุณาเลือกไฟล์ Excel'; return;
+  }
+  btn.disabled = true;
+  msg.className = 'form-msg show'; msg.textContent = 'กำลังตรวจสอบไฟล์...';
+  try {
+    const { res, data } = await importUpload(false);
+    if (!res.ok) { msg.className = 'form-msg err show'; msg.textContent = importErrText(data, res.status); return; }
+
+    // Render the preview table.
+    const unknown = data.unknown_codes || [];
+    document.getElementById('imPreviewBody').innerHTML = (data.rows || []).map(r => `
+      <tr style="border-top:1px solid #e2e8f0;${r.exists ? '' : 'background:#fff7ed'}">
+        <td style="padding:6px 8px;font-weight:600">${esc(r.code)}${r.exists ? '' : ' ⚠️'}</td>
+        <td style="padding:6px 8px">${esc(r.name) || (r.exists ? '' : '<i style=color:#b45309>ยังไม่มีในระบบ</i>')}</td>
+        <td style="padding:6px 8px">${esc(dmy(r.date))}</td>
+        <td style="padding:6px 8px;text-align:right;color:#059669">${r.qty_in ? fmt(r.qty_in) : '-'}</td>
+        <td style="padding:6px 8px;text-align:right;color:#b45309">${r.qty_out ? fmt(r.qty_out) : '-'}</td>
+        <td style="padding:6px 8px;color:#64748b">${esc(r.note)}</td>
+      </tr>`).join('');
+    document.getElementById('imPreviewHead').textContent =
+      `พบ ${data.total_rows} รายการ` + (unknown.length ? ` · มีรหัสใหม่ ${unknown.length} รายการ (แถบส้ม)` : '');
+    document.getElementById('imPreview').style.display = '';
+    document.getElementById('imSubmit').style.display = 'none';
+
+    if (unknown.length) {
+      // Must create the missing products before committing.
+      msg.className = 'form-msg err show'; msg.textContent = `ตรวจพบรหัสใหม่ ${unknown.length} รายการ — สร้างสินค้าก่อนเพิ่มข้อมูล`;
+      document.getElementById('imMissing').style.display = '';
+      document.getElementById('imCreateBtn').style.display = '';
+      renderMissing(unknown);
+    } else {
+      msg.className = 'form-msg show'; msg.textContent = 'ตรวจสอบเรียบร้อย — กด "เพิ่มข้อมูล" เพื่อบันทึก';
+      document.getElementById('imCommitBtn').style.display = '';
+    }
+  } catch (e) {
+    msg.className = 'form-msg err show'; msg.textContent = e.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// Step 2: actually write the movements.
+async function importCommit() {
+  const msg = document.getElementById('imMsg');
+  const btn = document.getElementById('imCommitBtn');
+  btn.disabled = true;
+  msg.className = 'form-msg show'; msg.textContent = 'กำลังเพิ่มข้อมูล...';
+  try {
+    const { res, data } = await importUpload(true);
+    if (data.status === 'needs_products') {
+      msg.className = 'form-msg err show'; msg.textContent = data.detail;
+      document.getElementById('imMissing').style.display = '';
+      document.getElementById('imCreateBtn').style.display = '';
+      document.getElementById('imCommitBtn').style.display = 'none';
+      renderMissing(data.unknown_codes);
+      return;
+    }
+    if (!res.ok) { msg.className = 'form-msg err show'; msg.textContent = importErrText(data, res.status); return; }
+    await loadData();
+    closeAModal('importModal');
+    toast(`นำเข้าสำเร็จ ${data.imported_rows} แถว (สินค้า ${data.products_affected} รายการ)`, 'ok');
+  } catch (e) {
+    msg.className = 'form-msg err show'; msg.textContent = e.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+const IMPORT_CATS = [['FG','สินค้าสำเร็จรูป (FG)'],['BTA','Beauterry (BTA)'],['PM','สินค้าพรีเมี่ยม (PM)'],['BOX','กล่อง (BOX)'],['OTHER','อื่นๆ (OTHER)']];
+const IMPORT_BRANDS = ["Jula's Herb","Jdent","Beauterry","JNIS","สินค้าพรีเมี่ยม","อื่นๆ"];
+
+function renderMissing(list) {
+  const cats = IMPORT_CATS.map(c => `<option value="${c[0]}">${c[1]}</option>`).join('');
+  const brands = ['<option value="">— อัตโนมัติจากรหัส —</option>']
+    .concat(IMPORT_BRANDS.map(b => `<option value="${b}">${b}</option>`)).join('');
+  document.getElementById('imMissingList').innerHTML = list.map((u, i) => `
+    <div class="field-row" data-code="${u.code}" style="align-items:flex-end;gap:8px;margin-bottom:8px">
+      <div class="field" style="flex:0 0 120px"><label>รหัส (${u.rows} แถว)</label>
+        <input type="text" value="${u.code}" readonly style="background:#f1f5f9"></div>
+      <div class="field"><label>ชื่อสินค้า</label><input type="text" id="im-name-${i}" placeholder="ชื่อสินค้า"></div>
+      <div class="field" style="flex:0 0 150px"><label>หมวด</label><select id="im-cat-${i}">${cats}</select></div>
+      <div class="field" style="flex:0 0 150px"><label>แบรนด์</label><select id="im-brand-${i}">${brands}</select></div>
+    </div>`).join('');
+  // default category PM if code starts with PM
+  list.forEach((u, i) => {
+    if (u.code.toUpperCase().startsWith('PM')) document.getElementById('im-cat-' + i).value = 'PM';
+  });
+  window._imMissing = list;
+}
+
+async function createMissingThenImport() {
+  const msg = document.getElementById('imMsg');
+  const btn = document.getElementById('imCreateBtn');
+  const list = window._imMissing || [];
+  btn.disabled = true;
+  try {
+    for (let i = 0; i < list.length; i++) {
+      const code = list[i].code;
+      const name = document.getElementById('im-name-' + i).value.trim();
+      const category = document.getElementById('im-cat-' + i).value;
+      const brand = document.getElementById('im-brand-' + i).value;
+      await adminFetch('/api/products', { code, name, category, brand });
+    }
+    toast(`สร้างสินค้าใหม่ ${list.length} รายการ`, 'ok');
+    document.getElementById('imMissing').style.display = 'none';
+    document.getElementById('imMissingList').innerHTML = '';
+    document.getElementById('imCreateBtn').style.display = 'none';
+    document.getElementById('imSubmit').style.display = '';
+    await importPreview();   // re-check the file; now all codes exist -> shows "เพิ่มข้อมูล"
+  } catch (e) {
+    msg.className = 'form-msg err show'; msg.textContent = 'สร้างสินค้าไม่สำเร็จ: ' + e.message;
   } finally {
     btn.disabled = false;
   }

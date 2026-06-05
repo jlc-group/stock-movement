@@ -8,6 +8,7 @@ from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import config
+from brand_map import classify_brand
 
 DB = config.DB
 
@@ -28,6 +29,7 @@ CREATE TABLE IF NOT EXISTS stock_online.products (
     code                VARCHAR(50)  NOT NULL,
     name                VARCHAR(255),
     category_code       VARCHAR(10)  NOT NULL REFERENCES stock_online.categories(code),
+    brand               VARCHAR(50),
     opening_balance     NUMERIC(15,2) DEFAULT 0,
     total_in            NUMERIC(15,2) DEFAULT 0,
     total_out           NUMERIC(15,2) DEFAULT 0,
@@ -37,6 +39,7 @@ CREATE TABLE IF NOT EXISTS stock_online.products (
 );
 CREATE INDEX IF NOT EXISTS idx_products_code      ON stock_online.products(code);
 CREATE INDEX IF NOT EXISTS idx_products_category  ON stock_online.products(category_code);
+CREATE INDEX IF NOT EXISTS idx_products_brand     ON stock_online.products(brand);
 
 -- ===== stock_movements (รายวัน) =====
 CREATE TABLE IF NOT EXISTS stock_online.stock_movements (
@@ -148,13 +151,13 @@ def main():
 
     print("→ Loading products...")
     prod_rows = [
-        (p['sheet'], p['code'], p['name'], p['category'],
+        (p['sheet'], p['code'], p['name'], p['category'], classify_brand(p['code'], p['name'], p['category']),
          p['opening'], p['total_in'], p['total_out'], p['closing'])
         for p in products
     ]
     inserted = psycopg2.extras.execute_values(cur,
         "INSERT INTO stock_online.products "
-        "(sheet_name, code, name, category_code, opening_balance, total_in, total_out, closing_balance) "
+        "(sheet_name, code, name, category_code, brand, opening_balance, total_in, total_out, closing_balance) "
         "VALUES %s RETURNING id, sheet_name",
         prod_rows, fetch=True)
     sheet_to_id = {sheet: pid for pid, sheet in inserted}

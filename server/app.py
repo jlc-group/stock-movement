@@ -25,6 +25,7 @@ from flask import Flask, jsonify, request, send_from_directory, send_file
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import config
+from brand_map import classify_brand
 
 app = Flask(__name__, static_folder=None)
 
@@ -63,7 +64,7 @@ def fetch_product(cur, product_id):
     """Return one product in the compact frontend shape (with tx list)."""
     cur.execute(f"""
         SELECT id, sheet_name, code, name, category_code,
-               opening_balance, total_in, total_out, closing_balance
+               opening_balance, total_in, total_out, closing_balance, brand
         FROM {config.DB_SCHEMA}.products
         WHERE id = %s
     """, (product_id,))
@@ -84,7 +85,7 @@ def fetch_product(cur, product_id):
     return {
         "sheet": p[1], "code": p[2], "name": p[3] or "", "category": p[4],
         "opening": num(p[5]), "total_in": num(p[6]), "total_out": num(p[7]),
-        "closing": num(p[8]), "tx": tx,
+        "closing": num(p[8]), "brand": p[9] or classify_brand(p[2], p[3], p[4]), "tx": tx,
     }
 
 
@@ -159,7 +160,7 @@ def products():
 
     cur.execute(f"""
         SELECT id, sheet_name, code, name, category_code,
-               opening_balance, total_in, total_out, closing_balance
+               opening_balance, total_in, total_out, closing_balance, brand
         FROM {config.DB_SCHEMA}.products
         ORDER BY id
     """)
@@ -186,6 +187,7 @@ def products():
         "code": p["code"],
         "name": p["name"] or "",
         "category": p["category_code"],
+        "brand": p["brand"] or classify_brand(p["code"], p["name"], p["category_code"]),
         "opening": num(p["opening_balance"]),
         "total_in": num(p["total_in"]),
         "total_out": num(p["total_out"]),
@@ -301,6 +303,7 @@ def create_product():
     code = str(data.get("code", "")).strip()
     name = str(data.get("name", "")).strip()
     category = str(data.get("category", "")).strip().upper()
+    brand = str(data.get("brand", "")).strip()
     sheet_name = str(data.get("sheet_name", "")).strip() or code
     try:
         opening = float(data.get("opening_balance", 0) or 0)
@@ -326,11 +329,11 @@ def create_product():
 
         cur.execute(f"""
             INSERT INTO {config.DB_SCHEMA}.products
-                (sheet_name, code, name, category_code,
+                (sheet_name, code, name, category_code, brand,
                  opening_balance, total_in, total_out, closing_balance)
-            VALUES (%s, %s, %s, %s, %s, 0, 0, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, 0, 0, %s)
             RETURNING id
-        """, (sheet_name, code, name, category, opening, opening))
+        """, (sheet_name, code, name, category, brand or classify_brand(code, name, category), opening, opening))
         product_id = cur.fetchone()[0]
         product = fetch_product(cur, product_id)
         conn.commit()
@@ -451,6 +454,216 @@ def edit_movement():
         product = fetch_product(cur, product_id)
         conn.commit()
         return jsonify(status="ok", product=product)
+    except Exception as e:
+        conn.rollback()
+        return jsonify(error="server_error", detail=str(e)), 500
+    finally:
+        conn.close()
+
+
+# ---- Bulk import (Excel) -----------------------------------------------
+IMPORT_HEADERS = ["รหัสสินค้า", "วันที่", "รับเข้า", "จ่ายออก", "เลขที่เอกสาร", "หมายเหตุ"]
+
+
+def _parse_import_date(v):
+    """Excel cell -> 'YYYY-MM-DD' (or None if blank/invalid)."""
+    if v is None or (isinstance(v, str) and not v.strip()):
+        return None
+    if isinstance(v, datetime):
+        return v.date().isoformat()
+    if isinstance(v, date):
+        return v.isoformat()
+    s = str(v).strip()
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%Y/%m/%d"):
+        try:
+            return datetime.strptime(s, fmt).date().isoformat()
+        except ValueError:
+            continue
+    return False  # present but unparseable
+
+
+def _parse_import_num(v):
+    """Excel cell -> float (0 for blank). Raises ValueError if non-numeric."""
+    if v is None or (isinstance(v, str) and not v.strip()):
+        return 0.0
+    return float(str(v).replace(",", "").strip())
+
+
+@app.route("/api/movements/import-template")
+def import_template():
+    """Download a blank .xlsx template with the expected header row."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "movements"
+    head_fill = PatternFill("solid", fgColor="2563EB")
+    for i, h in enumerate(IMPORT_HEADERS, start=1):
+        c = ws.cell(row=1, column=i, value=h)
+        c.font = Font(bold=True, color="FFFFFF")
+        c.fill = head_fill
+    # Example rows (illustrative only).
+    ws.append(["JH703-40G", "05/06/2026", 100, 0, "PO-001", "รับเข้าตัวอย่าง"])
+    ws.append(["JH703-40G", "06/06/2026", 0, 30, "SO-001", "จ่ายออกตัวอย่าง"])
+    for i, w in enumerate([16, 14, 10, 10, 16, 30], start=1):
+        ws.column_dimensions[chr(64 + i)].width = w
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return send_file(
+        buf,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        as_attachment=True,
+        download_name="movement_import_template.xlsx",
+    )
+
+
+@app.route("/api/movements/import", methods=["POST"])
+@require_admin
+def import_movements():
+    """Bulk-import daily in/out movements from an uploaded .xlsx.
+
+    Single sheet, header row 1: รหัสสินค้า | วันที่ | รับเข้า | จ่ายออก |
+    เลขที่เอกสาร | หมายเหตุ. Same-day rows accumulate (like POST /api/movements).
+    Writes NOTHING unless every row is valid AND every code already exists —
+    so the client can create missing products then re-upload safely.
+    """
+    from openpyxl import load_workbook
+
+    # commit=1 actually writes; otherwise it's a dry-run preview (no writes).
+    commit = str(request.form.get("commit", "")).strip() == "1"
+
+    f = request.files.get("file")
+    if not f:
+        return jsonify(error="bad_request", detail="ไม่พบไฟล์ที่อัปโหลด"), 400
+    try:
+        wb = load_workbook(io.BytesIO(f.read()), data_only=True, read_only=True)
+    except Exception:
+        return jsonify(error="bad_request", detail="อ่านไฟล์ Excel ไม่สำเร็จ (.xlsx เท่านั้น)"), 400
+    ws = wb.active
+
+    # Map columns by header text (flexible to column order).
+    header = [str(c.value).strip() if c.value is not None else "" for c in next(ws.iter_rows(min_row=1, max_row=1))]
+    def find(*keys):
+        for idx, h in enumerate(header):
+            hl = h.lower()
+            if any(k in hl for k in keys):
+                return idx
+        return -1
+    ci_code = find("รหัส", "code")
+    ci_date = find("วันที่", "date")
+    ci_in   = find("รับ", "in")
+    ci_out  = find("จ่าย", "ออก", "out")
+    ci_doc  = find("เอกสาร", "เลขที่", "doc")
+    ci_note = find("หมายเหตุ", "note")
+    if ci_code < 0 or ci_date < 0:
+        return jsonify(error="bad_request",
+                       detail="ไม่พบคอลัมน์ 'รหัสสินค้า' หรือ 'วันที่' ในไฟล์"), 400
+
+    def cell(row, idx):
+        return row[idx] if 0 <= idx < len(row) else None
+
+    rows, errors = [], []
+    for rno, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+        if row is None or all(v is None or (isinstance(v, str) and not v.strip()) for v in row):
+            continue  # skip blank line
+        code = cell(row, ci_code)
+        code = str(code).strip() if code is not None else ""
+        d = _parse_import_date(cell(row, ci_date))
+        try:
+            qin = _parse_import_num(cell(row, ci_in))
+            qout = _parse_import_num(cell(row, ci_out))
+        except ValueError:
+            errors.append({"row": rno, "detail": "จำนวนรับ/จ่ายต้องเป็นตัวเลข"})
+            continue
+        doc = cell(row, ci_doc); doc = str(doc).strip() if doc not in (None, "") else None
+        note = cell(row, ci_note); note = str(note).strip() if note not in (None, "") else None
+
+        if not code:
+            errors.append({"row": rno, "detail": "ไม่มีรหัสสินค้า"}); continue
+        if d is None:
+            errors.append({"row": rno, "detail": "ไม่มีวันที่"}); continue
+        if d is False:
+            errors.append({"row": rno, "detail": "วันที่ไม่ถูกต้อง (ใช้ YYYY-MM-DD หรือ DD/MM/YYYY)"}); continue
+        if qin < 0 or qout < 0:
+            errors.append({"row": rno, "detail": "จำนวนห้ามติดลบ"}); continue
+        if qin == 0 and qout == 0:
+            errors.append({"row": rno, "detail": "ต้องมีรับเข้าหรือจ่ายออกอย่างน้อย 1 ช่อง"}); continue
+        rows.append({"code": code, "date": d, "qty_in": qin, "qty_out": qout,
+                     "doc_no": doc, "note": note})
+
+    if errors:
+        return jsonify(error="invalid_rows",
+                       detail=f"พบข้อมูลผิดพลาด {len(errors)} แถว",
+                       errors=errors[:50]), 400
+    if not rows:
+        return jsonify(error="empty", detail="ไม่พบข้อมูลในไฟล์"), 400
+
+    conn = get_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute(f"SELECT code, id, name FROM {config.DB_SCHEMA}.products")
+        code_to_id, code_to_name = {}, {}
+        for c, i, nm in cur.fetchall():
+            code_to_id[c] = i
+            code_to_name[c] = nm or ""
+        file_codes = {r["code"] for r in rows}
+        unknown_set = {c for c in file_codes if c not in code_to_id}
+        unknown = sorted(unknown_set)
+        rows_per = defaultdict(int)
+        for r in rows:
+            if r["code"] in unknown_set:
+                rows_per[r["code"]] += 1
+
+        # Preview (dry-run): return the parsed rows for the user to review.
+        if not commit:
+            return jsonify(
+                status="preview",
+                total_rows=len(rows),
+                unknown_codes=[{"code": c, "rows": rows_per[c]} for c in unknown],
+                rows=[{
+                    "code": r["code"],
+                    "name": code_to_name.get(r["code"], ""),
+                    "exists": r["code"] not in unknown_set,
+                    "date": r["date"],
+                    "qty_in": r["qty_in"],
+                    "qty_out": r["qty_out"],
+                    "doc_no": r["doc_no"] or "",
+                    "note": r["note"] or "",
+                } for r in rows],
+            )
+
+        if unknown:
+            return jsonify(
+                status="needs_products",
+                detail=f"พบรหัสสินค้าที่ยังไม่มีในระบบ {len(unknown)} รายการ",
+                unknown_codes=[{"code": c, "rows": rows_per[c]} for c in unknown],
+                total_rows=len(rows),
+            )
+
+        affected = set()
+        for r in rows:
+            pid = code_to_id[r["code"]]
+            cur.execute(f"""
+                INSERT INTO {config.DB_SCHEMA}.stock_movements
+                    (product_id, movement_date, doc_no, qty_in, qty_out, balance, note)
+                VALUES (%s, %s, %s, %s, %s, 0, %s)
+                ON CONFLICT (product_id, movement_date) DO UPDATE SET
+                    qty_in  = {config.DB_SCHEMA}.stock_movements.qty_in  + EXCLUDED.qty_in,
+                    qty_out = {config.DB_SCHEMA}.stock_movements.qty_out + EXCLUDED.qty_out,
+                    doc_no  = COALESCE(EXCLUDED.doc_no, {config.DB_SCHEMA}.stock_movements.doc_no),
+                    note    = COALESCE(EXCLUDED.note,  {config.DB_SCHEMA}.stock_movements.note)
+            """, (pid, r["date"], r["doc_no"], r["qty_in"], r["qty_out"], r["note"]))
+            affected.add(pid)
+
+        for pid in affected:
+            recompute_product(cur, pid)
+        conn.commit()
+        return jsonify(status="ok",
+                       imported_rows=len(rows),
+                       products_affected=len(affected))
     except Exception as e:
         conn.rollback()
         return jsonify(error="server_error", detail=str(e)), 500
