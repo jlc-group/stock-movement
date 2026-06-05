@@ -164,6 +164,12 @@ body.admin-on .admin-bar { display: flex; }
 .field label { display: block; font-size: 12px; font-weight: 600; color: #6b7280; margin-bottom: 5px; }
 .field input, .field select, .field textarea { width: 100%; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; font-family: inherit; }
 .field input:focus, .field select:focus, .field textarea:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.15); }
+.field.field-in label { color: #16a34a; }
+.field.field-in input { border-color: #86efac; background: #f0fdf4; color: #15803d; font-weight: 600; }
+.field.field-in input:focus { border-color: #16a34a; box-shadow: 0 0 0 3px rgba(22,163,74,0.15); }
+.field.field-out label { color: #dc2626; }
+.field.field-out input { border-color: #fca5a5; background: #fef2f2; color: #b91c1c; font-weight: 600; }
+.field.field-out input:focus { border-color: #dc2626; box-shadow: 0 0 0 3px rgba(220,38,38,0.15); }
 .field-row { display: flex; gap: 12px; }
 .field-row .field { flex: 1; }
 .form-msg { font-size: 13px; padding: 8px 12px; border-radius: 8px; margin-bottom: 12px; display: none; }
@@ -526,6 +532,17 @@ body.admin-on .admin-bar { display: flex; }
           </select>
         </div>
       </div>
+      <div class="field"><label>แบรนด์</label>
+        <select id="apBrand">
+          <option value="">— อัตโนมัติจากรหัส —</option>
+          <option value="Jula's Herb">Jula's Herb</option>
+          <option value="Jdent">Jdent</option>
+          <option value="Beauterry">Beauterry</option>
+          <option value="JNIS">JNIS</option>
+          <option value="สินค้าพรีเมี่ยม">สินค้าพรีเมี่ยม (PM)</option>
+          <option value="อื่นๆ">อื่นๆ</option>
+        </select>
+      </div>
       <div class="field"><label>ชื่อสินค้า</label><input type="text" id="apName" placeholder="ชื่อสินค้า"></div>
       <div class="field"><label>ยอดยกมา (คงเหลือเริ่มต้น)</label><input type="number" id="apOpening" value="0" step="any" inputmode="decimal" onfocus="this.select()"></div>
       <div class="amodal-foot">
@@ -559,8 +576,8 @@ body.admin-on .admin-bar { display: flex; }
         <div class="field"><label>เลขที่เอกสาร</label><input type="text" id="mvDoc" placeholder="เช่น PO-001"></div>
       </div>
       <div class="field-row">
-        <div class="field"><label>รับเข้า</label><input type="number" id="mvIn" value="0" step="any" min="0" inputmode="decimal" onfocus="this.select()" oninput="updatePreview()"></div>
-        <div class="field"><label>จ่ายออก</label><input type="number" id="mvOut" value="0" step="any" min="0" inputmode="decimal" onfocus="this.select()" oninput="updatePreview()"></div>
+        <div class="field field-in"><label>รับเข้า</label><input type="number" id="mvIn" value="0" step="any" min="0" inputmode="decimal" onfocus="this.select()" oninput="updatePreview()"></div>
+        <div class="field field-out"><label>จ่ายออก</label><input type="number" id="mvOut" value="0" step="any" min="0" inputmode="decimal" onfocus="this.select()" oninput="updatePreview()"></div>
       </div>
       <div class="field"><label>หมายเหตุ</label><input type="text" id="mvNote" placeholder="หมายเหตุ (ถ้ามี)"></div>
       <div class="preview-bal" id="mvPreview" style="display:none"></div>
@@ -584,8 +601,8 @@ body.admin-on .admin-bar { display: flex; }
         <div class="sc-bal">วันที่: <b id="emDateLbl"></b></div>
       </div>
       <div class="field-row">
-        <div class="field"><label>รับเข้า</label><input type="number" id="emIn" value="0" step="any" min="0" inputmode="decimal" onfocus="this.select()" oninput="updateEditPreview()"></div>
-        <div class="field"><label>จ่ายออก</label><input type="number" id="emOut" value="0" step="any" min="0" inputmode="decimal" onfocus="this.select()" oninput="updateEditPreview()"></div>
+        <div class="field field-in"><label>รับเข้า</label><input type="number" id="emIn" value="0" step="any" min="0" inputmode="decimal" onfocus="this.select()" oninput="updateEditPreview()"></div>
+        <div class="field field-out"><label>จ่ายออก</label><input type="number" id="emOut" value="0" step="any" min="0" inputmode="decimal" onfocus="this.select()" oninput="updateEditPreview()"></div>
       </div>
       <div class="field"><label>เลขที่เอกสาร</label><input type="text" id="emDoc" placeholder="เช่น PO-001"></div>
       <div class="field"><label>หมายเหตุ</label><input type="text" id="emNote" placeholder="หมายเหตุ (ถ้ามี)"></div>
@@ -1269,6 +1286,7 @@ function openAddProduct() {
   document.getElementById('apCode').value = '';
   document.getElementById('apName').value = '';
   document.getElementById('apCategory').value = 'FG';
+  document.getElementById('apBrand').value = '';
   document.getElementById('apOpening').value = '0';
   document.getElementById('apMsg').className = 'form-msg';
   openAModal('addProductModal');
@@ -1281,11 +1299,12 @@ async function submitAddProduct() {
   const code = document.getElementById('apCode').value.trim();
   const name = document.getElementById('apName').value.trim();
   const category = document.getElementById('apCategory').value;
+  const brand = document.getElementById('apBrand').value;
   const opening_balance = parseFloat(document.getElementById('apOpening').value) || 0;
   if (!code) { msg.className = 'form-msg err show'; msg.textContent = 'กรุณากรอกรหัสสินค้า'; return; }
   btn.disabled = true;
   try {
-    const data = await adminFetch('/api/products', { code, name, category, opening_balance });
+    const data = await adminFetch('/api/products', { code, name, category, brand, opening_balance });
     mergeProduct(data.product);
     closeAModal('addProductModal');
     toast('เพิ่มสินค้า ' + code + ' สำเร็จ', 'ok');
