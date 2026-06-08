@@ -1024,9 +1024,20 @@ def online_sync():
         req = urllib.request.Request(url, headers={"Accept": "application/json"})
         with urllib.request.urlopen(req, timeout=30) as r:
             payload = json.loads(r.read().decode("utf-8"))
+    except urllib.error.HTTPError as he:
+        # Script-Ecom เชื่อมได้ แต่ตอบ error (ที่พบบ่อย: ยังไม่มีข้อมูลออเดอร์ของวันนั้น)
+        reason = ""
+        try:
+            reason = (json.loads(he.read().decode("utf-8")) or {}).get("error", "")
+        except Exception:
+            reason = ""
+        if not reason:
+            reason = f"HTTP {he.code}"
+        return jsonify(error="no_data",
+                       detail=f"Script-Ecom: {reason} — ลองเลือกวันที่ที่ดึงออเดอร์ไว้แล้ว หรือกดดึงออเดอร์ของวันนั้นใน Script-Ecom ก่อน"), 502
     except Exception as e:
         return jsonify(error="upstream_unreachable",
-                       detail=f"เชื่อม Script-Ecom ไม่ได้ ({url}) — เปิด start_ui.bat ของ Script-Ecom ก่อน [{e}]"), 502
+                       detail=f"เชื่อม Script-Ecom ไม่ได้ ({url}) — เปิด start_ui.bat ของ Script-Ecom ค้างไว้ก่อน [{e}]"), 502
 
     p_date = (payload.get("date") or mv_date or "").strip()
     proposed = payload.get("proposed") or []
