@@ -1085,6 +1085,43 @@ def online_sync():
         conn.close()
 
 
+@app.route("/api/online/pull", methods=["POST"])
+@require_admin
+def online_pull():
+    """สั่ง Script-Ecom ดึงออเดอร์ (ค่าเริ่มต้น set2_all = Shopee+Lazada+TikTok) — fire แล้วให้หน้าเว็บ poll สถานะ."""
+    data = request.get_json(silent=True) or {}
+    job = str(data.get("job", "set2_all")).strip() or "set2_all"
+    url = SCRIPT_ECOM_URL.rstrip("/") + "/api/run"
+    body = json.dumps({"job": job}).encode("utf-8")
+    try:
+        req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"}, method="POST")
+        with urllib.request.urlopen(req, timeout=30) as r:
+            payload = json.loads(r.read().decode("utf-8"))
+        return jsonify(status="ok", started=True, job=job, launcher=payload)
+    except urllib.error.HTTPError as he:
+        try:
+            reason = (json.loads(he.read().decode("utf-8")) or {}).get("error", f"HTTP {he.code}")
+        except Exception:
+            reason = f"HTTP {he.code}"
+        return jsonify(error="pull_failed", detail=f"Script-Ecom: {reason}"), 502
+    except Exception as e:
+        return jsonify(error="upstream_unreachable",
+                       detail=f"เชื่อม Script-Ecom ไม่ได้ — เปิด start_ui.bat ของ Script-Ecom ค้างไว้ก่อน [{e}]"), 502
+
+
+@app.route("/api/online/pull/status")
+@require_admin
+def online_pull_status():
+    """อ่านสถานะงานดึงของ Script-Ecom (proxy /api/state) ให้หน้าเว็บ poll."""
+    url = SCRIPT_ECOM_URL.rstrip("/") + "/api/state"
+    try:
+        with urllib.request.urlopen(url, timeout=15) as r:
+            payload = json.loads(r.read().decode("utf-8"))
+        return jsonify(status="ok", job=payload.get("job", {}))
+    except Exception as e:
+        return jsonify(error="upstream_unreachable", detail=str(e)), 502
+
+
 if __name__ == "__main__":
     app.run(
         host=config.SERVER_HOST,

@@ -431,11 +431,13 @@ body.admin-on .admin-bar { display: flex; }
   <div class="card" style="padding:16px">
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
       <label>วันที่: <input type="date" id="onlineDate"></label>
-      <button class="btn btn-primary" id="onlineSyncBtn" onclick="syncOnline()">⬇️ ดึงยอดออนไลน์เข้าสต็อก</button>
+      <button class="btn btn-primary" id="onlinePullBtn" onclick="pullOrders()">① ดึงออเดอร์ใหม่</button>
+      <button class="btn btn-primary" id="onlineSyncBtn" onclick="syncOnline()">② ดึงยอดเข้าสต็อก</button>
       <span id="onlineMsg" class="muted"></span>
     </div>
     <div style="margin-top:10px;color:#64748b;font-size:13px;line-height:1.7">
-      • กดแล้วระบบจะดึงยอดขายออนไลน์ของวันนั้นมาลงช่อง <b>“ออนไลน์”</b> (เซ็ตทับของเดิม ไม่บวกซ้ำ) — ช่องอื่น (หน้าร้าน/ขายส่ง/แลกแต้ม) <b>ไม่ถูกแตะ</b><br>
+      • <b>① ดึงออเดอร์ใหม่</b> = สั่งดึง Shopee/Lazada/TikTok (รอสักครู่) แล้ว <b>ซิงค์เข้าช่อง “ออนไลน์” ให้อัตโนมัติ</b> — จบในปุ่มเดียว<br>
+      • <b>② ดึงยอดเข้าสต็อก</b> = ซิงค์เฉพาะยอดที่ดึงไว้แล้ว (ไม่ดึงใหม่) — ลงช่อง “ออนไลน์” เซ็ตทับ ไม่บวกซ้ำ · ช่องอื่นไม่ถูกแตะ<br>
       • ต้องเปิด <b>Script-Ecom (start_ui.bat)</b> ค้างไว้ และกด <b>Admin</b> ใส่ PIN ที่นี่ก่อน
     </div>
   </div>
@@ -1041,7 +1043,49 @@ function renderOnlineResult(d) {
   ).join('') || '<tr><td colspan="3" style="padding:6px">—</td></tr>';
   document.getElementById('onlineSkipped').textContent =
     (d.skipped_codes && d.skipped_codes.length) ? `ข้าม (ไม่มีรหัสใน ecom_stock): ${d.skipped_codes.join(', ')}` : '';
+  const dp = document.getElementById('onlineDate');
+  if (dp && d.date) dp.value = d.date;
   card.style.display = '';
+}
+
+// ① ดึงออเดอร์ใหม่ (สั่ง Script-Ecom ผ่านหลังบ้าน) แล้วซิงค์อัตโนมัติ
+async function pullOrders() {
+  const msg = document.getElementById('onlineMsg');
+  const pBtn = document.getElementById('onlinePullBtn');
+  if (!adminToken) { msg.textContent = '⚠️ กรุณากดปุ่ม Admin (มุมขวาบน) ใส่ PIN ก่อน'; return; }
+  pBtn.disabled = true;
+  msg.textContent = 'กำลังสั่งดึงออเดอร์จาก Shopee/Lazada/TikTok...';
+  try {
+    const res = await fetch('/api/online/pull', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken },
+      body: JSON.stringify({ job: 'set2_all' })
+    });
+    const d = await res.json();
+    if (!res.ok) { msg.textContent = '❌ ' + (d.detail || 'สั่งดึงไม่สำเร็จ'); pBtn.disabled = false; return; }
+    pollPull();
+  } catch (e) { msg.textContent = '❌ ' + e.message; pBtn.disabled = false; }
+}
+
+async function pollPull() {
+  const msg = document.getElementById('onlineMsg');
+  const pBtn = document.getElementById('onlinePullBtn');
+  for (let i = 0; i < 240; i++) {
+    await new Promise(r => setTimeout(r, 3000));
+    let st;
+    try { st = await (await fetch('/api/online/pull/status', { headers: { 'Authorization': 'Bearer ' + adminToken } })).json(); }
+    catch (e) { continue; }
+    const job = (st && st.job) || {};
+    if (job.running) { msg.textContent = `กำลังดึงออเดอร์... ${job.name || ''} (${job.status || 'running'})`; continue; }
+    pBtn.disabled = false;
+    if (job.status === 'error') { msg.textContent = '❌ ดึงออเดอร์ผิดพลาด — เช็ก Script-Ecom (อาจ token หมดอายุ)'; return; }
+    msg.textContent = '✅ ดึงออเดอร์เสร็จ → กำลังซิงค์เข้าสต็อก...';
+    const dp = document.getElementById('onlineDate'); if (dp) dp.value = '';
+    await syncOnline();
+    return;
+  }
+  pBtn.disabled = false;
+  msg.textContent = 'ดึงนานเกินไป — ลองกดปุ่ม ② ดึงยอดเข้าสต็อก เองภายหลัง';
 }
 
 let dashRange = '7d';
