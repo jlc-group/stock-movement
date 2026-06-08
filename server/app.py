@@ -34,6 +34,39 @@ ADMIN_TOKENS = set()
 
 VALID_CATEGORIES = {"FG", "BTA", "PM", "BOX", "OTHER"}
 
+# ---- Channels -----------------------------------------------------------
+# Single source of truth for the movement "channel" dimension (added in the
+# 001_add_channel migration). The DB column is `channel TEXT NOT NULL DEFAULT
+# 'mixed'` with UNIQUE(product_id, movement_date, channel). 'mixed' is the
+# legacy lane that pre-migration rows landed in, so a request that omits a
+# channel keeps behaving exactly as before by defaulting to 'mixed'.
+# `dir` is advisory metadata for the frontend dropdown only (in/out/both).
+CHANNELS = [
+    {"key": "online",     "label": "ออนไลน์",          "dir": "out"},
+    {"key": "offline",    "label": "ออฟไลน์/หน้าร้าน", "dir": "out"},
+    {"key": "wholesale",  "label": "ขายส่ง",           "dir": "out"},
+    {"key": "redemption", "label": "แลกของรางวัล",     "dir": "out"},
+    {"key": "kol",        "label": "KOL",              "dir": "out"},
+    {"key": "influencer", "label": "Influencer",       "dir": "out"},
+    {"key": "return",     "label": "รับคืน",           "dir": "in"},
+    {"key": "receive",    "label": "รับเข้า",          "dir": "in"},
+    {"key": "adjust",     "label": "ปรับยอด",          "dir": "both"},
+    {"key": "mixed",      "label": "รวม (เดิม)",       "dir": "both"},
+]
+VALID_CHANNELS = {c["key"] for c in CHANNELS}
+
+
+def norm_channel(v):
+    """Normalize a request channel value.
+
+    Missing/blank -> 'mixed' (backward compatible with pre-migration callers).
+    Unknown key -> ValueError, so call sites can return a 400.
+    """
+    s = str(v or "").strip().lower() or "mixed"
+    if s not in VALID_CHANNELS:
+        raise ValueError(f"channel ไม่ถูกต้อง: {s}")
+    return s
+
 
 def get_conn():
     return psycopg2.connect(**config.DB)
@@ -72,15 +105,17 @@ def fetch_product(cur, product_id):
     if not p:
         return None
     cur.execute(f"""
-        SELECT movement_date, qty_in, qty_out, balance, doc_no, note
+        SELECT movement_date, qty_in, qty_out, balance, doc_no, note, channel
         FROM {config.DB_SCHEMA}.stock_movements
         WHERE product_id = %s
         ORDER BY movement_date, id
     """, (product_id,))
+    # channel is appended LAST (index 6) so the existing 0..5 fields keep their
+    # positions for every export/create/POST/PUT consumer of this shape.
     tx = [[
         r[0].isoformat() if r[0] else "",
         num(r[1]), num(r[2]), num(r[3]),
-        r[4] or "", r[5] or "",
+        r[4] or "", r[5] or "", r[6] or "mixed",
     ] for r in cur.fetchall()]
     return {
         "sheet": p[1], "code": p[2], "name": p[3] or "", "category": p[4],
@@ -103,6 +138,11 @@ def recompute_product(cur, product_id):
         return
     opening = float(row[0] or 0)
 
+    # After the channel migration there can be MANY rows per movement_date
+    # (one per channel). Running balance folds every channel of a day; the
+    # loop below already sums all returned rows, so the only requirement is a
+    # deterministic order. We order by (movement_date, id) — i.e. insertion
+    # order within a day — to keep cumulative balances stable across reruns.
     cur.execute(f"""
         SELECT id, qty_in, qty_out
         FROM {config.DB_SCHEMA}.stock_movements
@@ -172,16 +212,19 @@ def products():
     prod_rows = cur.fetchall()
 
     cur.execute(f"""
-        SELECT product_id, movement_date, qty_in, qty_out, balance, doc_no, note
+        SELECT product_id, movement_date, qty_in, qty_out, balance, doc_no, note, channel
         FROM {config.DB_SCHEMA}.stock_movements
-        ORDER BY product_id, movement_date
+        ORDER BY product_id, movement_date, id
     """)
+    # channel appended LAST (index 6 of each tx row), mirroring fetch_product.
+    # ORDER BY adds `id` so same-day multi-channel rows have a stable order
+    # matching recompute_product's running-balance order.
     tx_by_product = defaultdict(list)
     for r in cur.fetchall():
         tx_by_product[r[0]].append([
             r[1].isoformat() if r[1] else "",
             num(r[2]), num(r[3]), num(r[4]),
-            r[5] or "", r[6] or "",
+            r[5] or "", r[6] or "", r[7] or "mixed",
         ])
 
     cur.close()
@@ -205,6 +248,16 @@ def products():
         product_count=len(products_out),
         products=products_out,
     )
+
+
+@app.route("/api/channels")
+def channels():
+    """Canonical channel metadata for the frontend dropdown (static, no DB).
+
+    Derived from the CHANNELS module constant so the allow-list used by the
+    POST/PUT validators and the keys advertised here can never drift apart.
+    """
+    return jsonify(channels=CHANNELS)
 
 
 @app.route("/api/products/export")
@@ -545,6 +598,10 @@ def add_movement():
         qty_out = float(data.get("qty_out", 0) or 0)
     except (TypeError, ValueError):
         return jsonify(error="bad_request", detail="จำนวนต้องเป็นตัวเลข"), 400
+    try:
+        channel = norm_channel(data.get("channel"))  # missing/blank -> 'mixed'
+    except ValueError:
+        return jsonify(error="bad_request", detail="channel ไม่ถูกต้อง"), 400
 
     if not code:
         return jsonify(error="bad_request", detail="ต้องระบุรหัสสินค้า"), 400
@@ -568,17 +625,19 @@ def add_movement():
             return jsonify(error="not_found", detail=f"ไม่พบรหัสสินค้า {code}"), 404
         product_id = row[0]
 
-        # Same-day -> accumulate; different day -> new row.
+        # Same (day, channel) -> accumulate; otherwise a new row. Conflict
+        # target is the post-migration key (product_id, movement_date, channel)
+        # so each channel keeps its own lane for the same day.
         cur.execute(f"""
             INSERT INTO {config.DB_SCHEMA}.stock_movements
-                (product_id, movement_date, doc_no, qty_in, qty_out, balance, note)
-            VALUES (%s, %s, %s, %s, %s, 0, %s)
-            ON CONFLICT (product_id, movement_date) DO UPDATE SET
+                (product_id, movement_date, doc_no, qty_in, qty_out, balance, note, channel)
+            VALUES (%s, %s, %s, %s, %s, 0, %s, %s)
+            ON CONFLICT (product_id, movement_date, channel) DO UPDATE SET
                 qty_in  = {config.DB_SCHEMA}.stock_movements.qty_in  + EXCLUDED.qty_in,
                 qty_out = {config.DB_SCHEMA}.stock_movements.qty_out + EXCLUDED.qty_out,
                 doc_no  = COALESCE(EXCLUDED.doc_no, {config.DB_SCHEMA}.stock_movements.doc_no),
                 note    = COALESCE(EXCLUDED.note,  {config.DB_SCHEMA}.stock_movements.note)
-        """, (product_id, mv_date, doc_no, qty_in, qty_out, note))
+        """, (product_id, mv_date, doc_no, qty_in, qty_out, note, channel))
 
         recompute_product(cur, product_id)
         product = fetch_product(cur, product_id)
@@ -606,6 +665,10 @@ def edit_movement():
         qty_out = float(data.get("qty_out", 0) or 0)
     except (TypeError, ValueError):
         return jsonify(error="bad_request", detail="จำนวนต้องเป็นตัวเลข"), 400
+    try:
+        channel = norm_channel(data.get("channel"))  # missing/blank -> 'mixed'
+    except ValueError:
+        return jsonify(error="bad_request", detail="channel ไม่ถูกต้อง"), 400
 
     if not code:
         return jsonify(error="bad_request", detail="ต้องระบุรหัสสินค้า"), 400
@@ -627,15 +690,17 @@ def edit_movement():
             return jsonify(error="not_found", detail=f"ไม่พบรหัสสินค้า {code}"), 404
         product_id = row[0]
 
+        # Target one (day, channel) lane — without the channel predicate this
+        # would hit every channel row of the day after the migration.
         cur.execute(f"""
             UPDATE {config.DB_SCHEMA}.stock_movements
             SET qty_in = %s, qty_out = %s, doc_no = %s, note = %s
-            WHERE product_id = %s AND movement_date = %s
-        """, (qty_in, qty_out, doc_no, note, product_id, mv_date))
+            WHERE product_id = %s AND movement_date = %s AND channel = %s
+        """, (qty_in, qty_out, doc_no, note, product_id, mv_date, channel))
         if cur.rowcount == 0:
             conn.rollback()
             return jsonify(error="not_found",
-                           detail=f"ไม่พบรายการของวันที่ {mv_date}"), 404
+                           detail=f"ไม่พบรายการของวันที่ {mv_date} ช่อง {channel}"), 404
 
         recompute_product(cur, product_id)
         product = fetch_product(cur, product_id)
@@ -833,11 +898,14 @@ def import_movements():
         affected = set()
         for r in rows:
             pid = code_to_id[r["code"]]
+            # Legacy Excel import has no per-row channel -> lands in 'mixed' so
+            # totals match pre-migration behavior. Conflict target updated to
+            # the new 3-col key (the old 2-col constraint no longer exists).
             cur.execute(f"""
                 INSERT INTO {config.DB_SCHEMA}.stock_movements
-                    (product_id, movement_date, doc_no, qty_in, qty_out, balance, note)
-                VALUES (%s, %s, %s, %s, %s, 0, %s)
-                ON CONFLICT (product_id, movement_date) DO UPDATE SET
+                    (product_id, movement_date, doc_no, qty_in, qty_out, balance, note, channel)
+                VALUES (%s, %s, %s, %s, %s, 0, %s, 'mixed')
+                ON CONFLICT (product_id, movement_date, channel) DO UPDATE SET
                     qty_in  = {config.DB_SCHEMA}.stock_movements.qty_in  + EXCLUDED.qty_in,
                     qty_out = {config.DB_SCHEMA}.stock_movements.qty_out + EXCLUDED.qty_out,
                     doc_no  = COALESCE(EXCLUDED.doc_no, {config.DB_SCHEMA}.stock_movements.doc_no),
@@ -851,6 +919,79 @@ def import_movements():
         return jsonify(status="ok",
                        imported_rows=len(rows),
                        products_affected=len(affected))
+    except Exception as e:
+        conn.rollback()
+        return jsonify(error="server_error", detail=str(e)), 500
+    finally:
+        conn.close()
+
+
+@app.route("/api/online/import", methods=["POST"])
+@require_admin
+def online_import():
+    """Idempotent SET-overwrite of the 'online' channel per (product, date).
+
+    Body: { "date": "YYYY-MM-DD", "items": [ {"code": ..., "qty": ...}, ... ] }
+
+    Designed for an automated feed (e.g. Script-Ecom): it OVERWRITES qty_out in
+    the online lane (DO UPDATE SET qty_out = EXCLUDED.qty_out) instead of
+    accumulating, so re-running the same day's import is safe. It only ever
+    touches channel='online' — manually entered lanes (offline, redemption, …)
+    are untouched. Unknown codes are skipped (never auto-created).
+    """
+    data = request.get_json(silent=True) or {}
+    mv_date = str(data.get("date", "")).strip()
+    items = data.get("items")
+
+    if not mv_date:
+        return jsonify(error="bad_request", detail="ต้องระบุวันที่"), 400
+    try:
+        date.fromisoformat(mv_date)
+    except ValueError:
+        return jsonify(error="bad_request", detail="วันที่ต้องอยู่ในรูปแบบ YYYY-MM-DD"), 400
+    if not isinstance(items, list) or not items:
+        return jsonify(error="bad_request", detail="ต้องมี items[] อย่างน้อย 1 รายการ"), 400
+
+    conn = get_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute(f"SELECT code, id FROM {config.DB_SCHEMA}.products")
+        code_to_id = {c: i for c, i in cur.fetchall()}
+
+        affected = set()
+        written = 0
+        skipped = 0
+        for it in items:
+            code = str((it or {}).get("code", "")).strip()
+            try:
+                qty = float((it or {}).get("qty", 0) or 0)
+            except (TypeError, ValueError):
+                return jsonify(error="bad_request",
+                               detail=f"จำนวนของ {code or '(ไม่มีรหัส)'} ต้องเป็นตัวเลข"), 400
+            if qty < 0:
+                return jsonify(error="bad_request",
+                               detail=f"จำนวนของ {code} ห้ามติดลบ"), 400
+
+            pid = code_to_id.get(code)
+            if pid is None:  # unknown code -> skip (do not auto-create)
+                skipped += 1
+                continue
+
+            # SET-overwrite the online lane (contrast: add_movement accumulates).
+            cur.execute(f"""
+                INSERT INTO {config.DB_SCHEMA}.stock_movements
+                    (product_id, movement_date, doc_no, qty_in, qty_out, balance, note, channel)
+                VALUES (%s, %s, NULL, 0, %s, 0, NULL, 'online')
+                ON CONFLICT (product_id, movement_date, channel) DO UPDATE SET
+                    qty_out = EXCLUDED.qty_out
+            """, (pid, mv_date, qty))
+            affected.add(pid)
+            written += 1
+
+        for pid in affected:
+            recompute_product(cur, pid)
+        conn.commit()
+        return jsonify(status="ok", written=written, skipped=skipped)
     except Exception as e:
         conn.rollback()
         return jsonify(error="server_error", detail=str(e)), 500

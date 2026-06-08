@@ -90,6 +90,7 @@ tr:hover { background: #f9fafb; cursor: pointer; }
 .badge.PM { background: #d1fae5; color: #065f46; }
 .badge.BOX { background: #e9d5ff; color: #6b21a8; }
 .badge.OTHER { background: #e5e7eb; color: #374151; }
+.ch-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; white-space: nowrap; }
 .mv-today { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 10px; font-size: 10px; font-weight: 700; vertical-align: middle; }
 .mv-today.mv-in { background: #d1fae5; color: #047857; }
 .mv-today.mv-out { background: #fee2e2; color: #b91c1c; }
@@ -620,6 +621,7 @@ body.admin-on .admin-bar { display: flex; }
           <tr>
             <th>วันที่</th>
             <th>เลขที่</th>
+            <th>ช่องทาง</th>
             <th class="num">รับ</th>
             <th class="num">ออก</th>
             <th class="num">คงเหลือ</th>
@@ -712,6 +714,10 @@ body.admin-on .admin-bar { display: flex; }
         <div class="field"><label>วันที่ *</label><input type="date" id="mvDate"></div>
         <div class="field"><label>เลขที่เอกสาร</label><input type="text" id="mvDoc" placeholder="เช่น PO-001"></div>
       </div>
+      <div class="field">
+        <label>ช่องทาง (channel)</label>
+        <select id="mvChannel" onchange="onMvChannelChange()"></select>
+      </div>
       <div class="field-row">
         <div class="field field-in"><label>รับเข้า</label><input type="number" id="mvIn" value="0" step="any" min="0" inputmode="decimal" onfocus="this.select()" oninput="updatePreview()"></div>
         <div class="field field-out"><label>จ่ายออก</label><input type="number" id="mvOut" value="0" step="any" min="0" inputmode="decimal" onfocus="this.select()" oninput="updatePreview()"></div>
@@ -735,7 +741,7 @@ body.admin-on .admin-bar { display: flex; }
       <div class="sel-card show" id="emInfo" style="margin-bottom:14px">
         <div class="sc-code" id="emCode"></div>
         <div class="sc-name" id="emName"></div>
-        <div class="sc-bal">วันที่: <b id="emDateLbl"></b></div>
+        <div class="sc-bal">วันที่: <b id="emDateLbl"></b> · ช่องทาง: <span id="emChannelLbl"></span></div>
       </div>
       <div class="field-row">
         <div class="field field-in"><label>รับเข้า</label><input type="number" id="emIn" value="0" step="any" min="0" inputmode="decimal" onfocus="this.select()" oninput="updateEditPreview()"></div>
@@ -811,6 +817,62 @@ body.admin-on .admin-bar { display: flex; }
 let DB = { products: [] };
 const fmt = n => (n === 0 || n === null || n === undefined) ? '-' : Number(n).toLocaleString('en-US', {maximumFractionDigits: 2});
 const cls = n => n < 0 ? 'neg' : '';
+
+// ---- Channels (ช่องทางการเคลื่อนไหว) ----
+// Source of truth = GET /api/channels (fetched in loadData). Static fallback keeps
+// labels/dropdowns working if that call hasn't returned yet. 'mixed' = legacy rows
+// (ก่อน migration เพิ่มคอลัมน์ channel) and is also the default when none is chosen.
+const CHANNELS_FALLBACK = [
+  { key: 'online',     label: 'ขายออนไลน์',      dir: 'out' },
+  { key: 'offline',    label: 'ขายหน้าร้าน',     dir: 'out' },
+  { key: 'wholesale',  label: 'ขายส่ง',          dir: 'out' },
+  { key: 'redemption', label: 'แลกแต้ม',         dir: 'out' },
+  { key: 'kol',        label: 'KOL',             dir: 'out' },
+  { key: 'influencer', label: 'ส่ง Influ',       dir: 'out' },
+  { key: 'return',     label: 'ตีกลับ (รับคืน)', dir: 'in'  },
+  { key: 'receive',    label: 'รับเข้า',         dir: 'in'  },
+  { key: 'adjust',     label: 'ปรับยอด',         dir: 'both' },
+  { key: 'mixed',      label: 'รวม (เดิม)',      dir: 'both' },
+];
+const DEFAULT_CHANNEL = 'mixed';
+let CHANNELS = CHANNELS_FALLBACK.slice();          // [{key,label,dir}]
+let CHANNEL_MAP = Object.fromEntries(CHANNELS.map(c => [c.key, c]));
+
+// Human label for a raw channel key (falls back to the key itself for unknowns).
+function channelLabel(key) {
+  if (!key) return CHANNEL_MAP[DEFAULT_CHANNEL] ? CHANNEL_MAP[DEFAULT_CHANNEL].label : DEFAULT_CHANNEL;
+  return (CHANNEL_MAP[key] && CHANNEL_MAP[key].label) || key;
+}
+
+// Small colored pill for a channel key (in=green, out=red, both/legacy=grey).
+function channelBadge(key) {
+  const k = key || DEFAULT_CHANNEL;
+  const dir = (CHANNEL_MAP[k] && CHANNEL_MAP[k].dir) || 'both';
+  const bg = dir === 'in' ? '#d1fae5' : dir === 'out' ? '#fee2e2' : '#e5e7eb';
+  const fg = dir === 'in' ? '#047857' : dir === 'out' ? '#b91c1c' : '#374151';
+  return `<span class="ch-badge" style="background:${bg};color:${fg}">${escapeHtml(channelLabel(k))}</span>`;
+}
+
+// Fill a <select> with channel options. Returns nothing; sets value to `selected`.
+function fillChannelSelect(sel, selected) {
+  if (!sel) return;
+  sel.innerHTML = CHANNELS.map(c => `<option value="${escapeHtml(c.key)}">${escapeHtml(c.label)}</option>`).join('');
+  sel.value = selected || DEFAULT_CHANNEL;
+}
+
+async function loadChannels() {
+  try {
+    const res = await fetch('/api/channels');
+    if (!res.ok) return;
+    const data = await res.json();
+    const list = (data && data.channels) || [];
+    if (!Array.isArray(list) || !list.length) return;
+    // Ensure 'mixed' (legacy) is always selectable even if the API omits it.
+    const has = list.some(c => c.key === 'mixed');
+    CHANNELS = has ? list.slice() : list.concat([{ key: 'mixed', label: 'รวม (เดิม)', dir: 'both' }]);
+    CHANNEL_MAP = Object.fromEntries(CHANNELS.map(c => [c.key, c]));
+  } catch (e) { /* keep fallback */ }
+}
 
 let filtered = DB.products.slice();
 let currentMonth = 'all';
@@ -1417,22 +1479,24 @@ function renderHistory() {
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   txs = txs.filter(t => t[0] && t[0] <= today);
   if (txs.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="7" class="empty">ไม่มีข้อมูลในช่วงนี้</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="empty">ไม่มีข้อมูลในช่วงนี้</td></tr>';
     return;
   }
   // Show latest date first (newest → oldest)
   txs = txs.slice().sort((a, b) => (b[0] || '').localeCompare(a[0] || ''));
   tbody.innerHTML = txs.map(t => {
-    // t = [date, in, out, balance, doc, note]
+    // t = [date, in, out, balance, doc, note, channel]  (channel appended at index 6 post-migration)
     const movement = (t[1] || 0) !== 0 || (t[2] || 0) !== 0;
+    const ch = t[6] || DEFAULT_CHANNEL;
     return `<tr class="${movement ? 'tx-row-movement' : ''}">
       <td>${formatDate(t[0])}</td>
       <td>${escapeHtml(t[4])}</td>
+      <td>${channelBadge(ch)}</td>
       <td class="num in">${fmt(t[1])}</td>
       <td class="num out">${fmt(t[2])}</td>
       <td class="num bal ${cls(t[3])}">${fmt(t[3])}</td>
       <td>${escapeHtml(t[5])}</td>
-      <td class="tx-col-act"><button class="tx-edit-btn" onclick="openEditMovement('${t[0]}')">✏️ แก้ไข</button></td>
+      <td class="tx-col-act"><button class="tx-edit-btn" onclick="openEditMovement('${t[0]}', '${escapeHtml(ch)}')">✏️ แก้ไข</button></td>
     </tr>`;
   }).join('');
 }
@@ -1556,7 +1620,7 @@ async function loadData() {
   const tbody = document.getElementById('ptbody');
   tbody.innerHTML = '<tr><td colspan="9" class="empty">กำลังโหลดข้อมูล...</td></tr>';
   try {
-    const res = await fetch('/api/products');
+    const [res] = await Promise.all([fetch('/api/products'), loadChannels()]);
     if (!res.ok) throw new Error('HTTP ' + res.status);
     DB = await res.json();
     filtered = DB.products.slice();
@@ -1880,6 +1944,7 @@ function openAddMovement() {
   document.getElementById('mvOut').value = '0';
   document.getElementById('mvNote').value = '';
   document.getElementById('mvDate').value = new Date().toISOString().slice(0, 10);
+  fillChannelSelect(document.getElementById('mvChannel'), DEFAULT_CHANNEL);
   document.getElementById('mvSelCard').classList.remove('show');
   document.getElementById('mvAcList').classList.remove('show');
   document.getElementById('mvPreview').style.display = 'none';
@@ -1950,6 +2015,15 @@ function updatePreview() {
     `<span style="color:#9ca3af;font-size:12px">= ${fmt(mvSelected.closing)} + ${fmt(qin)} − ${fmt(qout)}</span>`;
 }
 
+// When the channel changes, gently steer focus to the matching qty field for
+// in/out-only channels (does not force values — adjust/mixed leave both editable).
+function onMvChannelChange() {
+  const key = document.getElementById('mvChannel').value;
+  const dir = (CHANNEL_MAP[key] && CHANNEL_MAP[key].dir) || 'both';
+  if (dir === 'in') document.getElementById('mvIn').focus();
+  else if (dir === 'out') document.getElementById('mvOut').focus();
+}
+
 function mvAcKeydown(e) {
   const list = document.getElementById('mvAcList');
   const items = list.querySelectorAll('.ac-item');
@@ -1971,11 +2045,12 @@ async function submitMovement() {
   const qty_out = parseFloat(document.getElementById('mvOut').value) || 0;
   const doc_no = document.getElementById('mvDoc').value.trim();
   const note = document.getElementById('mvNote').value.trim();
+  const channel = document.getElementById('mvChannel').value || DEFAULT_CHANNEL;
   if (!date) { msg.className = 'form-msg err show'; msg.textContent = 'กรุณาเลือกวันที่'; return; }
   if (qty_in === 0 && qty_out === 0) { msg.className = 'form-msg err show'; msg.textContent = 'กรุณากรอกรับเข้าหรือจ่ายออก'; return; }
   btn.disabled = true;
   try {
-    const data = await adminFetch('/api/movements', { code: mvSelected.code, date, qty_in, qty_out, doc_no, note });
+    const data = await adminFetch('/api/movements', { code: mvSelected.code, date, qty_in, qty_out, doc_no, note, channel });
     mergeProduct(data.product);
     mvSelected = data.product;   // keep selection updated with new balance
     document.getElementById('mvSelBal').textContent = fmt(mvSelected.closing);
@@ -2006,20 +2081,26 @@ document.getElementById('mvSearch').addEventListener('keydown', mvAcKeydown);
 // Admin modals close ONLY via the ปิด / ✕ buttons — no click-outside or Escape auto-close.
 
 // ---- Edit Movement (admin, from the product history table) ----
-let emDate = null;     // ISO date of the row being edited
-let emBrought = 0;     // balance brought forward into that day (constant while editing)
+let emDate = null;       // ISO date of the row being edited
+let emChannel = null;    // channel of the row being edited (post-migration: one row per channel per date)
+let emBrought = 0;       // balance brought forward into that day (constant while editing)
 
-function openEditMovement(dateIso) {
+function openEditMovement(dateIso, channel) {
   if (!adminToken) return;
   const p = currentProduct;
   if (!p) return;
-  const t = p.tx.find(x => x[0] === dateIso);
+  // Post-migration a product+date has one row PER channel, so we must match BOTH
+  // date and channel — matching by date alone would target the wrong row.
+  const ch = channel || DEFAULT_CHANNEL;
+  const t = p.tx.find(x => x[0] === dateIso && (x[6] || DEFAULT_CHANNEL) === ch);
   if (!t) return;
   emDate = dateIso;
-  emBrought = (t[3] || 0) - (t[1] || 0) + (t[2] || 0);  // balance − in + out
+  emChannel = ch;
+  emBrought = (t[3] || 0) - (t[1] || 0) + (t[2] || 0);  // balance − in + out (of this specific channel row)
   document.getElementById('emCode').textContent = p.code;
   document.getElementById('emName').textContent = p.name || '(ไม่มีชื่อ)';
   document.getElementById('emDateLbl').textContent = formatDate(dateIso);
+  document.getElementById('emChannelLbl').innerHTML = channelBadge(ch);
   document.getElementById('emIn').value = t[1] || 0;
   document.getElementById('emOut').value = t[2] || 0;
   document.getElementById('emDoc').value = t[4] || '';
@@ -2052,7 +2133,8 @@ async function submitEditMovement() {
   if (qty_in < 0 || qty_out < 0) { msg.className = 'form-msg err show'; msg.textContent = 'จำนวนห้ามติดลบ'; return; }
   btn.disabled = true;
   try {
-    const data = await adminFetch('/api/movements', { code: p.code, date: emDate, qty_in, qty_out, doc_no, note }, 'PUT');
+    const channel = emChannel || DEFAULT_CHANNEL;
+    const data = await adminFetch('/api/movements', { code: p.code, date: emDate, qty_in, qty_out, doc_no, note, channel }, 'PUT');
     mergeProduct(data.product);
     currentProduct = data.product;   // refresh the open product modal with latest data
     renderSummary();

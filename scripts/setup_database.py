@@ -52,8 +52,9 @@ CREATE TABLE IF NOT EXISTS stock_online.stock_movements (
     qty_out         NUMERIC(15,2) DEFAULT 0,
     balance         NUMERIC(15,2) DEFAULT 0,
     note            TEXT,
+    channel         TEXT NOT NULL DEFAULT 'mixed',
     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE (product_id, movement_date)
+    CONSTRAINT stock_movements_pdc_key UNIQUE (product_id, movement_date, channel)
 );
 CREATE INDEX IF NOT EXISTS idx_movements_product  ON stock_online.stock_movements(product_id);
 CREATE INDEX IF NOT EXISTS idx_movements_date     ON stock_online.stock_movements(movement_date);
