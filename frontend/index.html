@@ -431,14 +431,15 @@ body.admin-on .admin-bar { display: flex; }
   <div class="card" style="padding:16px">
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
       <label>วันที่: <input type="date" id="onlineDate"></label>
-      <button class="btn btn-primary" id="onlinePullBtn" onclick="pullOrders()">① ดึงออเดอร์ใหม่</button>
-      <button class="btn btn-primary" id="onlineSyncBtn" onclick="syncOnline()">② ดึงยอดเข้าสต็อก</button>
+      <button class="btn btn-primary" id="onlinePreviewBtn" onclick="previewOnline()">🔍 ดูยอดออนไลน์ที่ควรตัด</button>
+      <button class="btn" id="onlinePullBtn" onclick="pullOrders()">⟳ ดึงออเดอร์ใหม่จากแพลตฟอร์ม</button>
       <span id="onlineMsg" class="muted"></span>
     </div>
     <div style="margin-top:10px;color:#64748b;font-size:13.5px;line-height:1.9">
-      <b>วิธีใช้:</b> กดปุ่ม <b>Admin</b> (มุมขวาบน) ใส่รหัสก่อน 1 ครั้ง<br>
-      • <b>ปุ่ม ① ดึงออเดอร์ใหม่</b> — ดึงยอดขายออนไลน์ล่าสุดเข้าสต็อกให้เลย (กดปุ่มเดียว รอสักครู่)<br>
-      • <b>ปุ่ม ② ดึงยอดเข้าสต็อก</b> — ลงยอดที่ดึงมาแล้วซ้ำอีกครั้ง (ถ้าต้องการ)
+      <b>วิธีใช้ (โหมดพิสูจน์ — ยังไม่เขียนทับสต็อก):</b> กดปุ่ม <b>Admin</b> (มุมขวาบน) ใส่รหัสก่อน 1 ครั้ง<br>
+      • <b>🔍 ดูยอดออนไลน์ที่ควรตัด</b> — ระบบคำนวณยอดขายออนไลน์รายสินค้าให้ดู เอาไว้เทียบกับที่กรอกมือ <b>(ดูอย่างเดียว ไม่แตะสต็อกจริง)</b><br>
+      • <b>⟳ ดึงออเดอร์ใหม่จากแพลตฟอร์ม</b> — ถ้ายอดของวันนี้ยังไม่ถูกดึง กดอันนี้เพื่อดึง Shopee/Lazada/TikTok ก่อน แล้วระบบจะโชว์ยอดให้<br>
+      <span style="color:#94a3b8">* ช่วงนี้เป็นช่วง "พิสูจน์ความถูกต้อง" — เมื่อมั่นใจว่ายอดตรงทุกวันแล้ว ค่อยกดเขียนลงสต็อกจริง (ปุ่มอยู่ในตารางผลลัพธ์)</span>
     </div>
   </div>
   <div class="card" id="onlineResultCard" style="display:none;padding:16px;margin-top:14px">
@@ -448,12 +449,17 @@ body.admin-on .admin-bar { display: flex; }
         <thead><tr>
           <th style="text-align:left;border-bottom:1px solid #e2e8f0;padding:6px">รหัส</th>
           <th style="text-align:left;border-bottom:1px solid #e2e8f0;padding:6px">ชื่อสินค้า</th>
-          <th style="text-align:right;border-bottom:1px solid #e2e8f0;padding:6px">จ่ายออก (ออนไลน์)</th>
+          <th style="text-align:right;border-bottom:1px solid #e2e8f0;padding:6px">ยอดที่ควรตัด</th>
+          <th style="text-align:right;border-bottom:1px solid #e2e8f0;padding:6px">ช่องออนไลน์ตอนนี้</th>
         </tr></thead>
         <tbody></tbody>
       </table>
     </div>
     <div id="onlineSkipped" class="muted" style="margin-top:8px"></div>
+    <div style="margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;border-top:1px dashed #e2e8f0;padding-top:12px">
+      <button class="btn btn-ghost" id="onlineWriteBtn" onclick="writeOnline()" style="display:none">✍️ เขียนยอดนี้ลงช่อง "ออนไลน์" จริง</button>
+      <span class="muted" style="font-size:12px">ใช้เมื่อพิสูจน์แล้วว่ายอดตรง — เขียนเฉพาะช่องออนไลน์ ไม่แตะยอดที่กรอกมือ</span>
+    </div>
   </div>
 </div>
 
@@ -1007,8 +1013,60 @@ function initOnline() {
   }
 }
 
+// 🔍 โหมดพิสูจน์: ดูยอดที่ควรตัด (ไม่เขียนลง DB)
+async function previewOnline() {
+  const btn = document.getElementById('onlinePreviewBtn');
+  const msg = document.getElementById('onlineMsg');
+  if (!adminToken) { msg.textContent = '⚠️ กรุณากดปุ่ม Admin (มุมขวาบน) ใส่ PIN ก่อน'; return; }
+  const date = document.getElementById('onlineDate').value;
+  btn.disabled = true;
+  msg.textContent = 'กำลังคำนวณยอดออนไลน์ที่ควรตัด...';
+  try {
+    const res = await fetch('/api/online/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken },
+      body: JSON.stringify({ date })
+    });
+    const d = await res.json();
+    if (!res.ok) { msg.textContent = '❌ ' + (d.detail || 'ดึงไม่สำเร็จ'); btn.disabled = false; return; }
+    msg.textContent = `✅ ยอดที่ควรตัดวันที่ ${d.date} · ${d.matched} รายการ รวม ${Number(d.total_qty).toLocaleString()} ชิ้น`
+      + (d.skipped ? ` · ข้าม ${d.skipped}` : '') + ' — ยังไม่เขียนลงสต็อก';
+    renderOnlinePreview(d);
+  } catch (e) { msg.textContent = '❌ ' + e.message; }
+  btn.disabled = false;
+}
+
+function renderOnlinePreview(d) {
+  const card = document.getElementById('onlineResultCard');
+  const tbody = document.querySelector('#onlineResultTable tbody');
+  document.getElementById('onlineResultTitle').innerHTML =
+    `🔍 ยอดออนไลน์ที่ควรตัด — วันที่ ${d.date} <span style="color:#94a3b8;font-weight:400;font-size:13px">(ดูอย่างเดียว ยังไม่เขียนลงสต็อก)</span>`;
+  tbody.innerHTML = (d.items || []).map(it => {
+    const already = Number(it.already_online || 0);
+    const note = already ? `<span style="color:#16a34a">${already.toLocaleString()}</span>` : '<span style="color:#cbd5e1">—</span>';
+    return `<tr><td style="padding:6px;border-bottom:1px solid #f1f5f9"><code>${it.code}</code></td>` +
+      `<td style="padding:6px;border-bottom:1px solid #f1f5f9">${it.name || ''}</td>` +
+      `<td style="padding:6px;border-bottom:1px solid #f1f5f9;text-align:right"><b>${Number(it.qty).toLocaleString()}</b></td>` +
+      `<td style="padding:6px;border-bottom:1px solid #f1f5f9;text-align:right">${note}</td></tr>`;
+  }).join('') || '<tr><td colspan="4" style="padding:6px">— ไม่มีรายการ —</td></tr>';
+  document.getElementById('onlineSkipped').innerHTML =
+    (d.skipped_items && d.skipped_items.length)
+      ? `⚠️ ข้าม (ไม่มีรหัสนี้ใน ecom_stock): ${d.skipped_items.map(s => s.code + '×' + Number(s.qty).toLocaleString()).join(', ')}`
+      : '';
+  const wb = document.getElementById('onlineWriteBtn');
+  if (wb) wb.style.display = (d.items && d.items.length) ? '' : 'none';
+  const dp = document.getElementById('onlineDate'); if (dp && d.date) dp.value = d.date;
+  card.style.display = '';
+}
+
+// ✍️ เขียนจริง (opt-in, ต้องยืนยัน) — ใช้เมื่อพิสูจน์แล้ว
+async function writeOnline() {
+  if (!confirm('ยืนยันเขียนยอดออนไลน์นี้ลงช่อง "ออนไลน์" จริง?\n(เขียนทับเฉพาะช่องออนไลน์ ไม่กระทบยอดที่กรอกมือ)')) return;
+  await syncOnline();
+}
+
 async function syncOnline() {
-  const btn = document.getElementById('onlineSyncBtn');
+  const btn = document.getElementById('onlineWriteBtn');
   const msg = document.getElementById('onlineMsg');
   if (!adminToken) { msg.textContent = '⚠️ กรุณากดปุ่ม Admin (มุมขวาบน) ใส่ PIN ก่อน'; return; }
   const date = document.getElementById('onlineDate').value;
@@ -1034,15 +1092,17 @@ async function syncOnline() {
 function renderOnlineResult(d) {
   const card = document.getElementById('onlineResultCard');
   const tbody = document.querySelector('#onlineResultTable tbody');
-  document.getElementById('onlineResultTitle').textContent =
-    `ยอดออนไลน์ที่ลงช่อง "ออนไลน์" — วันที่ ${d.date} (${d.written} รายการ)`;
+  document.getElementById('onlineResultTitle').innerHTML =
+    `✅ เขียนลงช่อง "ออนไลน์" แล้ว — วันที่ ${d.date} (${d.written} รายการ)`;
   tbody.innerHTML = (d.items || []).map(it =>
     `<tr><td style="padding:6px;border-bottom:1px solid #f1f5f9"><code>${it.code}</code></td>` +
     `<td style="padding:6px;border-bottom:1px solid #f1f5f9">${it.name || ''}</td>` +
-    `<td style="padding:6px;border-bottom:1px solid #f1f5f9;text-align:right">${Number(it.qty).toLocaleString()}</td></tr>`
-  ).join('') || '<tr><td colspan="3" style="padding:6px">—</td></tr>';
+    `<td style="padding:6px;border-bottom:1px solid #f1f5f9;text-align:right">${Number(it.qty).toLocaleString()}</td>` +
+    `<td style="padding:6px;border-bottom:1px solid #f1f5f9;text-align:right;color:#16a34a">✅ ลงแล้ว</td></tr>`
+  ).join('') || '<tr><td colspan="4" style="padding:6px">—</td></tr>';
   document.getElementById('onlineSkipped').textContent =
     (d.skipped_codes && d.skipped_codes.length) ? `ข้าม (ไม่มีรหัสใน ecom_stock): ${d.skipped_codes.join(', ')}` : '';
+  const wb = document.getElementById('onlineWriteBtn'); if (wb) wb.style.display = 'none';
   const dp = document.getElementById('onlineDate');
   if (dp && d.date) dp.value = d.date;
   card.style.display = '';
@@ -1079,13 +1139,13 @@ async function pollPull() {
     if (job.running) { msg.textContent = `กำลังดึงออเดอร์... ${job.name || ''} (${job.status || 'running'})`; continue; }
     pBtn.disabled = false;
     if (job.status === 'error') { msg.textContent = '❌ ดึงออเดอร์ผิดพลาด — เช็ก Script-Ecom (อาจ token หมดอายุ)'; return; }
-    msg.textContent = '✅ ดึงออเดอร์เสร็จ → กำลังซิงค์เข้าสต็อก...';
+    msg.textContent = '✅ ดึงออเดอร์เสร็จ → กำลังคำนวณยอดที่ควรตัด...';
     const dp = document.getElementById('onlineDate'); if (dp) dp.value = '';
-    await syncOnline();
+    await previewOnline();
     return;
   }
   pBtn.disabled = false;
-  msg.textContent = 'ดึงนานเกินไป — ลองกดปุ่ม ② ดึงยอดเข้าสต็อก เองภายหลัง';
+  msg.textContent = 'ดึงนานเกินไป — ลองกดปุ่ม 🔍 ดูยอดออนไลน์ที่ควรตัด เองภายหลัง';
 }
 
 let dashRange = '7d';

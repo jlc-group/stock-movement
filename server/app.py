@@ -1085,6 +1085,79 @@ def online_sync():
         conn.close()
 
 
+@app.route("/api/online/preview", methods=["POST"])
+@require_admin
+def online_preview():
+    """โหมดพิสูจน์ (read-only): ดึง 'ยอดออนไลน์ที่ควรตัด' จาก Script-Ecom มาแสดงเฉยๆ — ไม่เขียนลง DB เลย.
+    ให้ admin เอาไปเทียบกับยอดที่กรอกมือ เพื่อพิสูจน์ความถูกต้องก่อนเปิดโหมดอัตโนมัติ."""
+    data = request.get_json(silent=True) or {}
+    mv_date = str(data.get("date", "")).strip()
+    url = SCRIPT_ECOM_URL.rstrip("/") + "/api/stock/propose"
+    if mv_date:
+        url += "?date=" + mv_date
+    try:
+        req = urllib.request.Request(url, headers={"Accept": "application/json"})
+        with urllib.request.urlopen(req, timeout=30) as r:
+            payload = json.loads(r.read().decode("utf-8"))
+    except urllib.error.HTTPError as he:
+        reason = ""
+        try:
+            reason = (json.loads(he.read().decode("utf-8")) or {}).get("error", "")
+        except Exception:
+            reason = ""
+        if not reason:
+            reason = f"HTTP {he.code}"
+        return jsonify(error="no_data",
+                       detail=f"Script-Ecom: {reason} — ลองเลือกวันที่ที่ดึงออเดอร์ไว้แล้ว"), 502
+    except Exception as e:
+        return jsonify(error="upstream_unreachable",
+                       detail=f"เชื่อม Script-Ecom ไม่ได้ ({url}) [{e}]"), 502
+
+    p_date = (payload.get("date") or mv_date or "").strip()
+    proposed = payload.get("proposed") or []
+    try:
+        date.fromisoformat(p_date)
+    except ValueError:
+        return jsonify(error="bad_request", detail=f"วันที่จาก Script-Ecom ไม่ถูกต้อง: {p_date}"), 400
+
+    conn = get_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute(f"SELECT code, id, name FROM {config.DB_SCHEMA}.products")
+        code_to = {c: {"id": i, "name": n} for c, i, n in cur.fetchall()}
+        # ยอดช่อง online ที่ "เคยลงไว้แล้ว" ของวันนั้น (ถ้ามี) เพื่อเทียบ
+        cur.execute(f"""
+            SELECT product_id, qty_out FROM {config.DB_SCHEMA}.stock_movements
+            WHERE movement_date = %s AND channel = 'online'
+        """, (p_date,))
+        existing = {pid: q for pid, q in cur.fetchall()}
+
+        items, skipped, total = [], [], 0
+        for it in proposed:
+            code = str((it or {}).get("code", "")).strip()
+            try:
+                qty = float((it or {}).get("qty", 0) or 0)
+            except (TypeError, ValueError):
+                qty = 0
+            info = code_to.get(code)
+            if info is None:
+                skipped.append({"code": code, "qty": qty, "name": (it or {}).get("name", "")})
+                continue
+            total += qty
+            items.append({
+                "code": code, "name": info["name"], "qty": qty,
+                "already_online": existing.get(info["id"], 0),
+            })
+        items.sort(key=lambda x: x["code"])
+        return jsonify(status="ok", date=p_date, mode="preview",
+                       total_qty=total, matched=len(items), skipped=len(skipped),
+                       items=items, skipped_items=skipped)
+    except Exception as e:
+        return jsonify(error="server_error", detail=str(e)), 500
+    finally:
+        conn.close()
+
+
 @app.route("/api/online/pull", methods=["POST"])
 @require_admin
 def online_pull():
