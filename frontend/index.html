@@ -426,7 +426,7 @@ body.admin-on .admin-bar { display: flex; }
 <div class="app page" id="page-online">
   <div class="dash-head">
     <h1>🛒 ออนไลน์ — ตัดสต็อกจากยอดขายออนไลน์</h1>
-    <div class="sub">ดึงยอดขายออนไลน์ (Shopee / Lazada / TikTok) จาก Script-Ecom มาลงช่อง “ออนไลน์” ให้อัตโนมัติ — ไม่ต้องพิมพ์มือ</div>
+    <div class="sub">ดึงยอดขายออนไลน์ (Shopee / Lazada / TikTok) มาลงสต็อกให้อัตโนมัติ — ไม่ต้องพิมพ์เอง</div>
   </div>
   <div class="card" style="padding:16px">
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
@@ -435,10 +435,10 @@ body.admin-on .admin-bar { display: flex; }
       <button class="btn btn-primary" id="onlineSyncBtn" onclick="syncOnline()">② ดึงยอดเข้าสต็อก</button>
       <span id="onlineMsg" class="muted"></span>
     </div>
-    <div style="margin-top:10px;color:#64748b;font-size:13px;line-height:1.7">
-      • <b>① ดึงออเดอร์ใหม่</b> = สั่งดึง Shopee/Lazada/TikTok (รอสักครู่) แล้ว <b>ซิงค์เข้าช่อง “ออนไลน์” ให้อัตโนมัติ</b> — จบในปุ่มเดียว<br>
-      • <b>② ดึงยอดเข้าสต็อก</b> = ซิงค์เฉพาะยอดที่ดึงไว้แล้ว (ไม่ดึงใหม่) — ลงช่อง “ออนไลน์” เซ็ตทับ ไม่บวกซ้ำ · ช่องอื่นไม่ถูกแตะ<br>
-      • ต้องเปิด <b>Script-Ecom (start_ui.bat)</b> ค้างไว้ และกด <b>Admin</b> ใส่ PIN ที่นี่ก่อน
+    <div style="margin-top:10px;color:#64748b;font-size:13.5px;line-height:1.9">
+      <b>วิธีใช้:</b> กดปุ่ม <b>Admin</b> (มุมขวาบน) ใส่รหัสก่อน 1 ครั้ง<br>
+      • <b>ปุ่ม ① ดึงออเดอร์ใหม่</b> — ดึงยอดขายออนไลน์ล่าสุดเข้าสต็อกให้เลย (กดปุ่มเดียว รอสักครู่)<br>
+      • <b>ปุ่ม ② ดึงยอดเข้าสต็อก</b> — ลงยอดที่ดึงมาแล้วซ้ำอีกครั้ง (ถ้าต้องการ)
     </div>
   </div>
   <div class="card" id="onlineResultCard" style="display:none;padding:16px;margin-top:14px">
