@@ -417,11 +417,43 @@ body.admin-on .admin-bar { display: flex; }
   <div class="brand">📦 Stock Movement<small>JLC GROUP 2026</small></div>
   <div class="nav-item active" data-page="dashboard" onclick="switchPage('dashboard')">📊 <span>Dashboard</span></div>
   <div class="nav-item" data-page="products" onclick="switchPage('products')">📦 <span>รายการสินค้า</span></div>
+  <div class="nav-item" data-page="online" onclick="switchPage('online')">🛒 <span>ออนไลน์</span></div>
   <div class="nav-item" data-page="report" onclick="switchPage('report')">📈 <span>Report</span></div>
-  <!-- Campaign ซ่อนจากเมนู — เข้าใช้งานผ่าน /campaign โดยตรง. ลบ style display:none เพื่อแสดงอีกครั้ง -->
-  <div class="nav-item" style="display:none" onclick="location.href='/campaign'">🎯 <span>Campaign</span></div>
+  <div class="nav-item" onclick="location.href='/campaign'">🎯 <span>Campaign</span></div>
 </aside>
 <div class="content">
+
+<div class="app page" id="page-online">
+  <div class="dash-head">
+    <h1>🛒 ออนไลน์ — ตัดสต็อกจากยอดขายออนไลน์</h1>
+    <div class="sub">ดึงยอดขายออนไลน์ (Shopee / Lazada / TikTok) จาก Script-Ecom มาลงช่อง “ออนไลน์” ให้อัตโนมัติ — ไม่ต้องพิมพ์มือ</div>
+  </div>
+  <div class="card" style="padding:16px">
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <label>วันที่: <input type="date" id="onlineDate"></label>
+      <button class="btn btn-primary" id="onlineSyncBtn" onclick="syncOnline()">⬇️ ดึงยอดออนไลน์เข้าสต็อก</button>
+      <span id="onlineMsg" class="muted"></span>
+    </div>
+    <div style="margin-top:10px;color:#64748b;font-size:13px;line-height:1.7">
+      • กดแล้วระบบจะดึงยอดขายออนไลน์ของวันนั้นมาลงช่อง <b>“ออนไลน์”</b> (เซ็ตทับของเดิม ไม่บวกซ้ำ) — ช่องอื่น (หน้าร้าน/ขายส่ง/แลกแต้ม) <b>ไม่ถูกแตะ</b><br>
+      • ต้องเปิด <b>Script-Ecom (start_ui.bat)</b> ค้างไว้ และกด <b>Admin</b> ใส่ PIN ที่นี่ก่อน
+    </div>
+  </div>
+  <div class="card" id="onlineResultCard" style="display:none;padding:16px;margin-top:14px">
+    <h3 id="onlineResultTitle" style="margin:0 0 10px"></h3>
+    <div style="max-height:420px;overflow:auto">
+      <table style="width:100%;border-collapse:collapse" id="onlineResultTable">
+        <thead><tr>
+          <th style="text-align:left;border-bottom:1px solid #e2e8f0;padding:6px">รหัส</th>
+          <th style="text-align:left;border-bottom:1px solid #e2e8f0;padding:6px">ชื่อสินค้า</th>
+          <th style="text-align:right;border-bottom:1px solid #e2e8f0;padding:6px">จ่ายออก (ออนไลน์)</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div id="onlineSkipped" class="muted" style="margin-top:8px"></div>
+  </div>
+</div>
 
 <div class="app page active" id="page-dashboard">
   <div class="dash-head">
@@ -961,6 +993,55 @@ function switchPage(page) {
   if (page === 'dashboard') renderDashboard();
   if (page === 'report') renderReport();
   if (page === 'products') syncStickyHeight();
+  if (page === 'online') initOnline();
+}
+
+// ===== หน้า "ออนไลน์": ดึงยอดออนไลน์จาก Script-Ecom -> ลงช่อง online =====
+function initOnline() {
+  const el = document.getElementById('onlineDate');
+  if (el && !el.value) {
+    const n = new Date();
+    el.value = n.getFullYear() + '-' + String(n.getMonth() + 1).padStart(2, '0') + '-' + String(n.getDate()).padStart(2, '0');
+  }
+}
+
+async function syncOnline() {
+  const btn = document.getElementById('onlineSyncBtn');
+  const msg = document.getElementById('onlineMsg');
+  if (!adminToken) { msg.textContent = '⚠️ กรุณากดปุ่ม Admin (มุมขวาบน) ใส่ PIN ก่อน'; return; }
+  const date = document.getElementById('onlineDate').value;
+  btn.disabled = true;
+  msg.textContent = 'กำลังดึงยอดออนไลน์จาก Script-Ecom...';
+  try {
+    const res = await fetch('/api/online/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken },
+      body: JSON.stringify({ date })
+    });
+    const d = await res.json();
+    if (!res.ok) { msg.textContent = '❌ ' + (d.detail || 'ดึงไม่สำเร็จ'); btn.disabled = false; return; }
+    msg.textContent = `✅ ดึงเข้าช่องออนไลน์แล้ว ${d.written} รายการ` + (d.skipped ? ` · ข้าม ${d.skipped}` : '');
+    renderOnlineResult(d);
+    await loadData();
+  } catch (e) {
+    msg.textContent = '❌ ' + e.message;
+  }
+  btn.disabled = false;
+}
+
+function renderOnlineResult(d) {
+  const card = document.getElementById('onlineResultCard');
+  const tbody = document.querySelector('#onlineResultTable tbody');
+  document.getElementById('onlineResultTitle').textContent =
+    `ยอดออนไลน์ที่ลงช่อง "ออนไลน์" — วันที่ ${d.date} (${d.written} รายการ)`;
+  tbody.innerHTML = (d.items || []).map(it =>
+    `<tr><td style="padding:6px;border-bottom:1px solid #f1f5f9"><code>${it.code}</code></td>` +
+    `<td style="padding:6px;border-bottom:1px solid #f1f5f9">${it.name || ''}</td>` +
+    `<td style="padding:6px;border-bottom:1px solid #f1f5f9;text-align:right">${Number(it.qty).toLocaleString()}</td></tr>`
+  ).join('') || '<tr><td colspan="3" style="padding:6px">—</td></tr>';
+  document.getElementById('onlineSkipped').textContent =
+    (d.skipped_codes && d.skipped_codes.length) ? `ข้าม (ไม่มีรหัสใน ecom_stock): ${d.skipped_codes.join(', ')}` : '';
+  card.style.display = '';
 }
 
 let dashRange = '7d';

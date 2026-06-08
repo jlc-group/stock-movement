@@ -15,6 +15,9 @@ import os
 import sys
 import uuid
 import io
+import json
+import urllib.request
+import urllib.error
 from functools import wraps
 from datetime import datetime, date
 from collections import defaultdict
@@ -26,6 +29,9 @@ from flask import Flask, jsonify, request, send_from_directory, send_file
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import config
 from brand_map import classify_brand
+
+# URL ของ Script-Ecom launcher (ใช้ในหน้า "ออนไลน์" ดึงยอดออนไลน์มาลงช่อง online)
+SCRIPT_ECOM_URL = os.getenv("SCRIPT_ECOM_URL", "http://127.0.0.1:4321")
 
 app = Flask(__name__, static_folder=None)
 
@@ -992,6 +998,75 @@ def online_import():
             recompute_product(cur, pid)
         conn.commit()
         return jsonify(status="ok", written=written, skipped=skipped)
+    except Exception as e:
+        conn.rollback()
+        return jsonify(error="server_error", detail=str(e)), 500
+    finally:
+        conn.close()
+
+
+@app.route("/api/online/sync", methods=["POST"])
+@require_admin
+def online_sync():
+    """หน้า 'ออนไลน์' กดปุ่มเดียว: ดึงยอดขายออนไลน์ล่าสุดจาก Script-Ecom แล้วลงช่อง 'online' ให้อัตโนมัติ.
+
+    body (ไม่บังคับ): { "date": "YYYY-MM-DD" } — ไม่ส่ง = วันล่าสุดที่ Script-Ecom มี.
+    เขียนเฉพาะช่อง online (SET-overwrite, ยิงซ้ำได้) — ไม่แตะช่องที่กรอกมือ.
+    """
+    data = request.get_json(silent=True) or {}
+    mv_date = str(data.get("date", "")).strip()
+
+    # 1) ดึงยอดออนไลน์ (คำนวณ+แปลงรหัสแล้ว) จาก Script-Ecom launcher
+    url = SCRIPT_ECOM_URL.rstrip("/") + "/api/stock/propose"
+    if mv_date:
+        url += "?date=" + mv_date
+    try:
+        req = urllib.request.Request(url, headers={"Accept": "application/json"})
+        with urllib.request.urlopen(req, timeout=30) as r:
+            payload = json.loads(r.read().decode("utf-8"))
+    except Exception as e:
+        return jsonify(error="upstream_unreachable",
+                       detail=f"เชื่อม Script-Ecom ไม่ได้ ({url}) — เปิด start_ui.bat ของ Script-Ecom ก่อน [{e}]"), 502
+
+    p_date = (payload.get("date") or mv_date or "").strip()
+    proposed = payload.get("proposed") or []
+    try:
+        date.fromisoformat(p_date)
+    except ValueError:
+        return jsonify(error="bad_request", detail=f"วันที่จาก Script-Ecom ไม่ถูกต้อง: {p_date}"), 400
+
+    # 2) ลงช่อง online (idempotent) — เฉพาะรหัสที่มีใน ecom_stock
+    conn = get_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute(f"SELECT code, id FROM {config.DB_SCHEMA}.products")
+        code_to_id = {c: i for c, i in cur.fetchall()}
+        affected, applied, skipped = set(), [], []
+        doc_no = "ONLINE-" + p_date.replace("-", "")
+        for it in proposed:
+            code = str((it or {}).get("code", "")).strip()
+            try:
+                qty = float((it or {}).get("qty", 0) or 0)
+            except (TypeError, ValueError):
+                qty = 0
+            pid = code_to_id.get(code)
+            if pid is None:
+                skipped.append(code)
+                continue
+            cur.execute(f"""
+                INSERT INTO {config.DB_SCHEMA}.stock_movements
+                    (product_id, movement_date, doc_no, qty_in, qty_out, balance, note, channel)
+                VALUES (%s, %s, %s, 0, %s, 0, %s, 'online')
+                ON CONFLICT (product_id, movement_date, channel) DO UPDATE SET
+                    qty_out = EXCLUDED.qty_out, doc_no = EXCLUDED.doc_no, note = EXCLUDED.note
+            """, (pid, p_date, doc_no, qty, "ตัดสต็อกออนไลน์ (auto)"))
+            affected.add(pid)
+            applied.append({"code": code, "qty": qty, "name": (it or {}).get("name", "")})
+        for pid in affected:
+            recompute_product(cur, pid)
+        conn.commit()
+        return jsonify(status="ok", date=p_date, written=len(applied),
+                       skipped=len(skipped), skipped_codes=skipped, items=applied)
     except Exception as e:
         conn.rollback()
         return jsonify(error="server_error", detail=str(e)), 500
