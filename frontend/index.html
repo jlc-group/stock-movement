@@ -449,7 +449,10 @@ body.admin-on .admin-bar { display: flex; }
         <thead><tr>
           <th style="text-align:left;border-bottom:1px solid #e2e8f0;padding:6px">รหัส</th>
           <th style="text-align:left;border-bottom:1px solid #e2e8f0;padding:6px">ชื่อสินค้า</th>
-          <th style="text-align:right;border-bottom:1px solid #e2e8f0;padding:6px">ยอดที่ควรตัด</th>
+          <th style="text-align:right;border-bottom:1px solid #e2e8f0;padding:6px">Shopee</th>
+          <th style="text-align:right;border-bottom:1px solid #e2e8f0;padding:6px">Lazada</th>
+          <th style="text-align:right;border-bottom:1px solid #e2e8f0;padding:6px">TikTok</th>
+          <th style="text-align:right;border-bottom:1px solid #e2e8f0;padding:6px">รวมที่ควรตัด</th>
           <th style="text-align:right;border-bottom:1px solid #e2e8f0;padding:6px">ช่องออนไลน์ตอนนี้</th>
         </tr></thead>
         <tbody></tbody>
@@ -1044,11 +1047,17 @@ function renderOnlinePreview(d) {
   tbody.innerHTML = (d.items || []).map(it => {
     const already = Number(it.already_online || 0);
     const note = already ? `<span style="color:#16a34a">${already.toLocaleString()}</span>` : '<span style="color:#cbd5e1">—</span>';
+    const sp = Number(it.shopee || 0);
+    const lz = Number(it.lazada || 0);
+    const tt = Number(it.tiktok || 0);
     return `<tr><td style="padding:6px;border-bottom:1px solid #f1f5f9"><code>${it.code}</code></td>` +
       `<td style="padding:6px;border-bottom:1px solid #f1f5f9">${it.name || ''}</td>` +
+      `<td style="padding:6px;border-bottom:1px solid #f1f5f9;text-align:right;color:#ea580c">${sp ? sp.toLocaleString() : '—'}</td>` +
+      `<td style="padding:6px;border-bottom:1px solid #f1f5f9;text-align:right;color:#1d4ed8">${lz ? lz.toLocaleString() : '—'}</td>` +
+      `<td style="padding:6px;border-bottom:1px solid #f1f5f9;text-align:right;color:#0f766e">${tt ? tt.toLocaleString() : '—'}</td>` +
       `<td style="padding:6px;border-bottom:1px solid #f1f5f9;text-align:right"><b>${Number(it.qty).toLocaleString()}</b></td>` +
       `<td style="padding:6px;border-bottom:1px solid #f1f5f9;text-align:right">${note}</td></tr>`;
-  }).join('') || '<tr><td colspan="4" style="padding:6px">— ไม่มีรายการ —</td></tr>';
+  }).join('') || '<tr><td colspan="7" style="padding:6px">— ไม่มีรายการ —</td></tr>';
   document.getElementById('onlineSkipped').innerHTML =
     (d.skipped_items && d.skipped_items.length)
       ? `⚠️ ข้าม (ไม่มีรหัสนี้ใน ecom_stock): ${d.skipped_items.map(s => s.code + '×' + Number(s.qty).toLocaleString()).join(', ')}`
@@ -1097,9 +1106,12 @@ function renderOnlineResult(d) {
   tbody.innerHTML = (d.items || []).map(it =>
     `<tr><td style="padding:6px;border-bottom:1px solid #f1f5f9"><code>${it.code}</code></td>` +
     `<td style="padding:6px;border-bottom:1px solid #f1f5f9">${it.name || ''}</td>` +
-    `<td style="padding:6px;border-bottom:1px solid #f1f5f9;text-align:right">${Number(it.qty).toLocaleString()}</td>` +
+    `<td style="padding:6px;border-bottom:1px solid #f1f5f9;text-align:right;color:#ea580c">${Number(it.shopee || 0) ? Number(it.shopee || 0).toLocaleString() : '—'}</td>` +
+    `<td style="padding:6px;border-bottom:1px solid #f1f5f9;text-align:right;color:#1d4ed8">${Number(it.lazada || 0) ? Number(it.lazada || 0).toLocaleString() : '—'}</td>` +
+    `<td style="padding:6px;border-bottom:1px solid #f1f5f9;text-align:right;color:#0f766e">${Number(it.tiktok || 0) ? Number(it.tiktok || 0).toLocaleString() : '—'}</td>` +
+    `<td style="padding:6px;border-bottom:1px solid #f1f5f9;text-align:right"><b>${Number(it.qty).toLocaleString()}</b></td>` +
     `<td style="padding:6px;border-bottom:1px solid #f1f5f9;text-align:right;color:#16a34a">✅ ลงแล้ว</td></tr>`
-  ).join('') || '<tr><td colspan="4" style="padding:6px">—</td></tr>';
+  ).join('') || '<tr><td colspan="7" style="padding:6px">—</td></tr>';
   document.getElementById('onlineSkipped').textContent =
     (d.skipped_codes && d.skipped_codes.length) ? `ข้าม (ไม่มีรหัสใน ecom_stock): ${d.skipped_codes.join(', ')}` : '';
   const wb = document.getElementById('onlineWriteBtn'); if (wb) wb.style.display = 'none';

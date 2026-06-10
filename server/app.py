@@ -1072,7 +1072,14 @@ def online_sync():
                     qty_out = EXCLUDED.qty_out, doc_no = EXCLUDED.doc_no, note = EXCLUDED.note
             """, (pid, p_date, doc_no, qty, "ตัดสต็อกออนไลน์ (auto)"))
             affected.add(pid)
-            applied.append({"code": code, "qty": qty, "name": (it or {}).get("name", "")})
+            applied.append({
+                "code": code,
+                "qty": qty,
+                "name": (it or {}).get("name", ""),
+                "shopee": (it or {}).get("shopee", 0) or 0,
+                "lazada": (it or {}).get("lazada", 0) or 0,
+                "tiktok": (it or {}).get("tiktok", 0) or 0,
+            })
         for pid in affected:
             recompute_product(cur, pid)
         conn.commit()
@@ -1146,6 +1153,9 @@ def online_preview():
             total += qty
             items.append({
                 "code": code, "name": info["name"], "qty": qty,
+                "shopee": (it or {}).get("shopee", 0) or 0,
+                "lazada": (it or {}).get("lazada", 0) or 0,
+                "tiktok": (it or {}).get("tiktok", 0) or 0,
                 "already_online": existing.get(info["id"], 0),
             })
         items.sort(key=lambda x: x["code"])
