@@ -1084,7 +1084,8 @@ def online_sync():
             recompute_product(cur, pid)
         conn.commit()
         return jsonify(status="ok", date=p_date, written=len(applied),
-                       skipped=len(skipped), skipped_codes=skipped, items=applied)
+                       skipped=len(skipped), skipped_codes=skipped, items=applied,
+                       platforms=payload.get("platforms") or {})
     except Exception as e:
         conn.rollback()
         return jsonify(error="server_error", detail=str(e)), 500
@@ -1161,7 +1162,8 @@ def online_preview():
         items.sort(key=lambda x: x["code"])
         return jsonify(status="ok", date=p_date, mode="preview",
                        total_qty=total, matched=len(items), skipped=len(skipped),
-                       items=items, skipped_items=skipped)
+                       items=items, skipped_items=skipped,
+                       platforms=payload.get("platforms") or {})
     except Exception as e:
         return jsonify(error="server_error", detail=str(e)), 500
     finally:

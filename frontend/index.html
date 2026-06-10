@@ -1059,9 +1059,10 @@ function renderOnlinePreview(d) {
       `<td style="padding:6px;border-bottom:1px solid #f1f5f9;text-align:right">${note}</td></tr>`;
   }).join('') || '<tr><td colspan="7" style="padding:6px">— ไม่มีรายการ —</td></tr>';
   document.getElementById('onlineSkipped').innerHTML =
-    (d.skipped_items && d.skipped_items.length)
-      ? `⚠️ ข้าม (ไม่มีรหัสนี้ใน ecom_stock): ${d.skipped_items.map(s => s.code + '×' + Number(s.qty).toLocaleString()).join(', ')}`
-      : '';
+    platformCoverageHtml(d) +
+    ((d.skipped_items && d.skipped_items.length)
+      ? `<div style="margin-top:6px">⚠️ ข้าม (ไม่มีรหัสนี้ใน ecom_stock): ${d.skipped_items.map(s => s.code + '×' + Number(s.qty).toLocaleString()).join(', ')}</div>`
+      : '');
   const wb = document.getElementById('onlineWriteBtn');
   if (wb) wb.style.display = (d.items && d.items.length) ? '' : 'none';
   const dp = document.getElementById('onlineDate'); if (dp && d.date) dp.value = d.date;
@@ -1113,11 +1114,34 @@ function renderOnlineResult(d) {
     `<td style="padding:6px;border-bottom:1px solid #f1f5f9;text-align:right;color:#16a34a">✅ ลงแล้ว</td></tr>`
   ).join('') || '<tr><td colspan="7" style="padding:6px">—</td></tr>';
   document.getElementById('onlineSkipped').textContent =
-    (d.skipped_codes && d.skipped_codes.length) ? `ข้าม (ไม่มีรหัสใน ecom_stock): ${d.skipped_codes.join(', ')}` : '';
+    '';
+  document.getElementById('onlineSkipped').innerHTML =
+    platformCoverageHtml(d) +
+    ((d.skipped_codes && d.skipped_codes.length) ? `<div style="margin-top:6px">ข้าม (ไม่มีรหัสใน ecom_stock): ${d.skipped_codes.join(', ')}</div>` : '');
   const wb = document.getElementById('onlineWriteBtn'); if (wb) wb.style.display = 'none';
   const dp = document.getElementById('onlineDate');
   if (dp && d.date) dp.value = d.date;
   card.style.display = '';
+}
+
+function platformCoverageHtml(d) {
+  const p = d.platforms || {};
+  const defs = [
+    ['shopee', 'Shopee'],
+    ['lazada', 'Lazada'],
+    ['tiktok', 'TikTok'],
+  ];
+  const have = defs.filter(([k]) => Object.prototype.hasOwnProperty.call(p, k));
+  const missing = defs.filter(([k]) => !Object.prototype.hasOwnProperty.call(p, k)).map(([, label]) => label);
+  const parts = defs.map(([k, label]) => {
+    if (!Object.prototype.hasOwnProperty.call(p, k)) return `${label}: ไม่มีข้อมูล`;
+    return `${label}: ${Number(p[k] || 0).toLocaleString()} SKU`;
+  });
+  const color = missing.length ? '#b45309' : '#0f766e';
+  const note = missing.length
+    ? `ยังไม่มีข้อมูลจาก ${missing.join(', ')} ใน ledger ของวันที่นี้`
+    : 'มีข้อมูลครบทุกแพลตฟอร์ม';
+  return `<div style="color:${color};font-size:12.5px;line-height:1.6">แพลตฟอร์มที่พบ: ${parts.join(' · ')}<br>${note}</div>`;
 }
 
 // ① ดึงออเดอร์ใหม่ (สั่ง Script-Ecom ผ่านหลังบ้าน) แล้วซิงค์อัตโนมัติ
