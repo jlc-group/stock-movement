@@ -141,6 +141,11 @@ def index():
     return send_from_directory(config.FRONTEND_DIR, "index.html")
 
 
+@app.route("/campaign")
+def campaign():
+    return send_from_directory(config.FRONTEND_DIR, "campaign.html")
+
+
 @app.route("/api/health")
 def health():
     try:
@@ -269,6 +274,188 @@ def export_product():
         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         as_attachment=True,
         download_name=fname,
+    )
+
+
+@app.route("/api/movements/export", methods=["POST"])
+def export_movements():
+    """Stream a flat daily-movement log (.xlsx) for the given product codes
+    within an optional date range. Used by the product-list page "Export"
+    button so the file honours whatever filters the user has applied: the
+    client sends the already-filtered codes plus the active date range.
+    """
+    data = request.get_json(silent=True) or {}
+    codes = data.get("codes") or []
+    codes = [str(c).strip() for c in codes if str(c).strip()]
+    date_from = str(data.get("from", "")).strip()
+    date_to = str(data.get("to", "")).strip()
+    for d in (date_from, date_to):
+        if d:
+            try:
+                date.fromisoformat(d)
+            except ValueError:
+                return jsonify(error="bad_request", detail="วันที่ต้องอยู่ในรูปแบบ YYYY-MM-DD"), 400
+    if not codes:
+        return jsonify(error="bad_request", detail="ไม่มีรายการสินค้าให้ส่งออก"), 400
+
+    where = ["p.code = ANY(%s)", "(m.qty_in <> 0 OR m.qty_out <> 0)"]
+    params = [codes]
+    if date_from:
+        where.append("m.movement_date >= %s"); params.append(date_from)
+    if date_to:
+        where.append("m.movement_date <= %s"); params.append(date_to)
+
+    conn = get_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute(f"""
+            SELECT m.movement_date, p.code, p.name, p.brand, p.category_code,
+                   m.qty_in, m.qty_out, m.balance, m.doc_no, m.note
+            FROM {config.DB_SCHEMA}.stock_movements m
+            JOIN {config.DB_SCHEMA}.products p ON p.id = m.product_id
+            WHERE {' AND '.join(where)}
+            ORDER BY m.movement_date, p.code, m.id
+        """, params)
+        rows = cur.fetchall()
+    finally:
+        conn.close()
+
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, Alignment, PatternFill
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Movements"
+    bold = Font(bold=True)
+    head_fill = PatternFill("solid", fgColor="2563EB")
+    right = Alignment(horizontal="right")
+
+    rng = (f"{'/'.join(reversed(date_from.split('-')))}" if date_from else "เริ่มต้น") + \
+          " – " + (f"{'/'.join(reversed(date_to.split('-')))}" if date_to else "ปัจจุบัน")
+    ws["A1"] = "รายงานการเคลื่อนไหวสินค้า (รับเข้า / จ่ายออก)"
+    ws["A1"].font = Font(bold=True, size=14)
+    ws["A2"] = f"ช่วงวันที่: {rng}  ·  {len(rows)} รายการ"
+
+    hdr = ["วันที่", "รหัสสินค้า", "ชื่อสินค้า", "แบรนด์", "หมวด",
+           "รับ", "ออก", "คงเหลือ", "เลขที่เอกสาร", "หมายเหตุ"]
+    hrow = 4
+    for i, h in enumerate(hdr, start=1):
+        c = ws.cell(row=hrow, column=i, value=h)
+        c.font = Font(bold=True, color="FFFFFF")
+        c.fill = head_fill
+    total_in = total_out = 0.0
+    j = hrow
+    for r in rows:
+        j += 1
+        d = r[0].isoformat() if r[0] else ""
+        ws.cell(row=j, column=1, value=("/".join(reversed(d.split("-"))) if d else ""))
+        ws.cell(row=j, column=2, value=r[1])
+        ws.cell(row=j, column=3, value=r[2] or "")
+        ws.cell(row=j, column=4, value=r[3] or "")
+        ws.cell(row=j, column=5, value=r[4] or "")
+        ws.cell(row=j, column=6, value=num(r[5]))
+        ws.cell(row=j, column=7, value=num(r[6]))
+        ws.cell(row=j, column=8, value=num(r[7]))
+        ws.cell(row=j, column=9, value=r[8] or "")
+        ws.cell(row=j, column=10, value=r[9] or "")
+        total_in += float(r[5] or 0)
+        total_out += float(r[6] or 0)
+
+    j += 1
+    ws.cell(row=j, column=5, value="รวม").font = bold
+    tin = ws.cell(row=j, column=6, value=num(total_in)); tin.font = bold; tin.alignment = right
+    tout = ws.cell(row=j, column=7, value=num(total_out)); tout.font = bold; tout.alignment = right
+
+    widths = [14, 16, 34, 16, 8, 10, 10, 12, 16, 30]
+    for i, w in enumerate(widths, start=1):
+        ws.column_dimensions[chr(64 + i)].width = w
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    tag = (date_from or "all") + "_" + (date_to or "all")
+    return send_file(
+        buf,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        as_attachment=True,
+        download_name=f"movements_{tag}.xlsx",
+    )
+
+
+@app.route("/api/report/compare-export", methods=["POST"])
+def export_report_compare():
+    """Stream the Report-page 1/3/6-month comparison as a real .xlsx.
+    The client posts the already-computed table (periods + per-product cells)
+    so the file matches the on-screen numbers exactly — no server recompute.
+    """
+    data = request.get_json(silent=True) or {}
+    periods = [str(p).strip() for p in (data.get("periods") or []) if str(p).strip()]
+    rows = data.get("rows") or []
+    if not periods or not rows:
+        return jsonify(error="bad_request", detail="ไม่มีข้อมูลให้ส่งออก"), 400
+
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, Alignment, PatternFill
+    from openpyxl.utils import get_column_letter
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Comparison"
+    bold = Font(bold=True)
+    white = Font(bold=True, color="FFFFFF")
+    grp_fill = PatternFill("solid", fgColor="2563EB")
+    sub_fill = PatternFill("solid", fgColor="EFF6FF")
+    center = Alignment(horizontal="center", vertical="center")
+    right = Alignment(horizontal="right")
+
+    ws["A1"] = "เปรียบเทียบสถิติย้อนหลัง " + " / ".join(periods)
+    ws["A1"].font = Font(bold=True, size=14)
+    ws["A2"] = (f"สร้างเมื่อ {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+                f"  ·  {len(rows)} สินค้า  ·  ออกรวม · เฉลี่ย/วัน · วันออกมากสุด")
+
+    g, s = 4, 5  # group-header row, sub-header row
+    ws.cell(row=g, column=1, value="รหัส"); ws.merge_cells(start_row=g, start_column=1, end_row=s, end_column=1)
+    ws.cell(row=g, column=2, value="ชื่อสินค้า"); ws.merge_cells(start_row=g, start_column=2, end_row=s, end_column=2)
+    for col in (1, 2):
+        hc = ws.cell(row=g, column=col); hc.font = bold; hc.fill = sub_fill; hc.alignment = center
+    for pi, plabel in enumerate(periods):
+        c0 = 3 + pi * 3
+        gc = ws.cell(row=g, column=c0, value=plabel)
+        ws.merge_cells(start_row=g, start_column=c0, end_row=g, end_column=c0 + 2)
+        gc.font = white; gc.fill = grp_fill; gc.alignment = center
+        for k, sublabel in enumerate(["ออกรวม", "เฉลี่ย/วัน", "วันออกมากสุด"]):
+            sc = ws.cell(row=s, column=c0 + k, value=sublabel)
+            sc.font = bold; sc.fill = sub_fill
+
+    j = s
+    for r in rows:
+        j += 1
+        ws.cell(row=j, column=1, value=str(r.get("code", "")))
+        ws.cell(row=j, column=2, value=str(r.get("name", "")))
+        cells = r.get("cells") or []
+        for pi in range(len(periods)):
+            c0 = 3 + pi * 3
+            cell = cells[pi] if pi < len(cells) else {}
+            oc = ws.cell(row=j, column=c0, value=num(cell.get("out", 0))); oc.alignment = right
+            ac = ws.cell(row=j, column=c0 + 1, value=num(cell.get("avg", 0))); ac.alignment = right
+            ws.cell(row=j, column=c0 + 2, value=str(cell.get("peak", "") or ""))
+
+    ws.column_dimensions["A"].width = 14
+    ws.column_dimensions["B"].width = 34
+    for pi in range(len(periods)):
+        c0 = 3 + pi * 3
+        ws.column_dimensions[get_column_letter(c0)].width = 11
+        ws.column_dimensions[get_column_letter(c0 + 1)].width = 11
+        ws.column_dimensions[get_column_letter(c0 + 2)].width = 20
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return send_file(
+        buf,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        as_attachment=True,
+        download_name="report_compare.xlsx",
     )
 
 

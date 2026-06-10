@@ -240,7 +240,95 @@ body.admin-on .admin-bar { display: flex; }
 .mbar.in { background: #059669; opacity: .16; }
 .mbar.out { background: #b45309; opacity: .16; }
 .mbar-val { position: relative; font-variant-numeric: tabular-nums; font-weight: 600; padding: 0 4px; }
-@media (max-width: 980px) { .dash-grid { grid-template-columns: 1fr; } }
+@media (max-width: 980px) { .dash-grid, .rp-chart-row { grid-template-columns: 1fr; } }
+/* ===== Report page (charts) ===== */
+.rp-chartcard { padding-bottom: 8px; }
+.rp-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 10px 16px 4px; font-size: 12px; color: #475569; }
+.rp-legend i { display: inline-block; vertical-align: middle; margin-right: 5px; }
+.rp-legend i.dot { width: 11px; height: 11px; border-radius: 50%; }
+.rp-legend i.dot.crit { background: #ef4444; } .rp-legend i.dot.warn { background: #f59e0b; } .rp-legend i.dot.ok { background: #22c55e; }
+.rp-legend .rp-leg-sep { width: 1px; height: 14px; background: #e5e7eb; margin: 0 3px; }
+.rp-legend .rp-leg-line { display: inline-flex; align-items: center; color: #64748b; }
+.rp-legend .rp-leg-line i.ln { width: 18px; height: 0; border-top: 2px dashed; margin-right: 5px; }
+.rp-legend .rp-leg-line i.ln.crit { border-color: #ef4444; } .rp-legend .rp-leg-line i.ln.warn { border-color: #f59e0b; }
+.rp-fil { display: inline-flex; align-items: center; font-size: 12px; font-weight: 600; color: #475569; background: #fff; border: 1px solid #e5e7eb; border-radius: 999px; padding: 4px 12px; cursor: pointer; transition: background .15s, border-color .15s, opacity .15s; }
+.rp-fil:hover { border-color: #cbd5e1; }
+.rp-fil.active { background: #f1f5f9; border-color: #cbd5e1; }
+.rp-fil:not(.active) { opacity: .4; text-decoration: line-through; }
+.rp-chart-row { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 18px; padding: 16px; align-items: stretch; }
+.rp-scatter-wrap { padding: 0; min-width: 0; }
+.rp-scatter-wrap svg { width: 100%; max-width: 520px; height: auto; display: block; margin: 0 auto; }
+.rp-side { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.rp-side-h { font-size: 12px; font-weight: 800; color: #334155; letter-spacing: .2px; }
+.rp-side .rp-legend { padding: 0; gap: 7px 8px; }
+.rp-scatter-wrap .pt { cursor: default; transition: r .12s, fill-opacity .12s; }
+.rp-scatter-wrap .pt:hover { fill-opacity: .96; }
+.rp-scatter-wrap .grid { stroke: #eef2f7; stroke-width: 1; }
+.rp-scatter-wrap .axis { stroke: #cbd5e1; stroke-width: 1; }
+.rp-scatter-wrap .tick { fill: #94a3b8; font-size: 10px; }
+.rp-scatter-wrap .axlabel { fill: #64748b; font-size: 11px; font-weight: 600; }
+.rp-scatter-wrap .plotbg { fill: #fafbfc; stroke: #eef2f7; }
+.rp-scatter-wrap .ref7 { stroke: #ef4444; stroke-width: 1.5; stroke-dasharray: 6 5; opacity: .6; }
+.rp-scatter-wrap .ref30 { stroke: #f59e0b; stroke-width: 1.5; stroke-dasharray: 6 5; opacity: .6; }
+.rp-scatter-wrap .ref7-lbl { fill: #ef4444; font-size: 10px; font-weight: 700; }
+.rp-scatter-wrap .ref30-lbl { fill: #d97706; font-size: 10px; font-weight: 700; }
+.rp-hover { margin: 0; padding: 12px 14px; background: #f8fafc; border: 1px solid #eef2f7; border-radius: 10px; font-size: 12px; color: #64748b; flex: 1; }
+.rp-hover .c-crit { color: #b91c1c; font-weight: 700; } .rp-hover .c-warn { color: #b45309; font-weight: 700; } .rp-hover .c-ok { color: #15803d; font-weight: 700; }
+.rph-empty { color: #94a3b8; font-size: 12px; text-align: center; padding: 22px 4px; }
+.rph-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.rph-code { font-family: 'SF Mono', Consolas, monospace; font-weight: 800; color: #0f172a; font-size: 14px; }
+.rph-badge { font-size: 10px; font-weight: 700; padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
+.rph-badge.crit { background: #fee2e2; color: #b91c1c; } .rph-badge.warn { background: #fef3c7; color: #b45309; } .rph-badge.ok { background: #dcfce7; color: #15803d; }
+.rph-name { font-size: 12px; color: #475569; margin: 3px 0 12px; line-height: 1.4; }
+.rph-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; }
+.rph-grid > div { display: flex; flex-direction: column; gap: 2px; }
+.rph-grid span { font-size: 10px; color: #94a3b8; }
+.rph-grid b { font-size: 13px; color: #1e293b; font-variant-numeric: tabular-nums; }
+.rph-foot { margin-top: 12px; padding-top: 9px; border-top: 1px dashed #e2e8f0; font-size: 11px; color: #64748b; }
+.rp-bars { padding: 8px 16px 6px; display: flex; flex-direction: column; gap: 7px; }
+.rp-bar { display: grid; grid-template-columns: 92px 1fr auto; align-items: center; gap: 10px; cursor: default; }
+.rp-bar:hover .rp-bar-code { color: #2563eb; }
+.rp-bar-code { font-weight: 700; color: #1e3a8a; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rp-bar-track { background: #f1f5f9; border-radius: 6px; height: 22px; overflow: hidden; position: relative; }
+.rp-bar-inlabel { position: absolute; left: 9px; top: 0; height: 100%; display: flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; color: #334155; text-shadow: 0 1px 2px rgba(255,255,255,.92), 0 0 2px rgba(255,255,255,.7); pointer-events: none; }
+.rp-bar-inlabel .il-stock { color: #1d4ed8; }
+.rp-bar-inlabel .il-rate { color: #b45309; }
+.rp-bar-inlabel .il-sep { color: #94a3b8; font-weight: 400; }
+.rp-bar-fill { height: 100%; border-radius: 6px; transition: width .3s ease; }
+.rp-bar-fill.crit { background: linear-gradient(90deg,#f87171,#ef4444); }
+.rp-bar-fill.warn { background: linear-gradient(90deg,#fbbf24,#f59e0b); }
+.rp-bar-fill.ok { background: linear-gradient(90deg,#4ade80,#22c55e); }
+.rp-bar-fill.burn { background: linear-gradient(90deg,#fb923c,#ea580c); }
+.rp-bar-val { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 12px; color: #334155; white-space: nowrap; }
+.rp-empty { padding: 28px; text-align: center; color: #9ca3af; font-size: 13px; }
+/* ----- Report: multi-product 1/3/6-month comparison ----- */
+.rp-cmp-pick { display: flex; gap: 10px; align-items: center; margin: 4px 16px 12px; flex-wrap: wrap; }
+.rp-cmp-search { flex: 1; min-width: 220px; }
+.rp-cmp-clear { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 9px 14px; font-size: 13px; font-weight: 600; color: #475569; cursor: pointer; font-family: inherit; }
+.rp-cmp-clear:hover { background: #f8fafc; border-color: #cbd5e1; }
+.rp-cmp-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 16px 12px; }
+.rp-chip { display: inline-flex; align-items: center; gap: 6px; background: #eff6ff; border: 1px solid #bfdbfe; color: #1e3a8a; border-radius: 999px; padding: 4px 6px 4px 11px; font-size: 12px; font-weight: 600; }
+.rp-chip i { cursor: pointer; font-style: normal; color: #64748b; background: #dbeafe; width: 17px; height: 17px; line-height: 17px; text-align: center; border-radius: 50%; font-size: 13px; }
+.rp-chip i:hover { background: #ef4444; color: #fff; }
+.rp-cmp-table { overflow-x: auto; padding: 0 16px 6px; }
+.rp-cmp-tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+.rp-cmp-tbl th, .rp-cmp-tbl td { padding: 8px 10px; border-bottom: 1px solid #f1f5f9; text-align: left; white-space: nowrap; }
+.rp-cmp-tbl thead th { background: #f8fafc; color: #475569; font-weight: 700; font-size: 12px; border-bottom: 1px solid #e2e8f0; }
+.rp-cmp-tbl th.grp { text-align: center; color: #1e3a8a; }
+.rp-cmp-tbl .glead { border-left: 1px solid #e2e8f0; }
+.rp-cmp-tbl td.code { font-family: 'SF Mono', Consolas, monospace; font-weight: 700; color: #1d4ed8; }
+.rp-cmp-tbl td.nm { max-width: 220px; overflow: hidden; text-overflow: ellipsis; color: #334155; }
+.rp-cmp-tbl td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.rp-cmp-tbl td.out { color: #dc2626; font-weight: 600; }
+.rp-cmp-tbl td.pkcell { color: #475569; } .rp-cmp-tbl td.pkcell .pk { color: #94a3b8; font-size: 12px; }
+.rp-cmp-tbl tbody tr:hover { background: #fafcff; }
+/* ----- Report: page polish (scoped to #page-report only) ----- */
+#page-report .dash-head { background: linear-gradient(135deg, #0f172a, #1e3a8a 55%, #2563eb); }
+#page-report .kpi { position: relative; overflow: hidden; padding-left: 22px; }
+#page-report .kpi::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 5px; background: #3b82f6; }
+#page-report .kpi.out::before { background: #dc2626; }
+#page-report .kpi.crit::before { background: #ef4444; }
+#page-report .kpi.warn::before { background: #f59e0b; }
 
 /* ===== Mobile (≤768px) ===== */
 @media (max-width: 768px) {
@@ -319,6 +407,7 @@ body.admin-on .admin-bar { display: flex; }
   .amodal { padding: 10px; }
   .field-row { flex-direction: column; gap: 0; }
 }
+
 </style>
 </head>
 <body>
@@ -327,6 +416,9 @@ body.admin-on .admin-bar { display: flex; }
   <div class="brand">📦 Stock Movement<small>JLC GROUP 2026</small></div>
   <div class="nav-item active" data-page="dashboard" onclick="switchPage('dashboard')">📊 <span>Dashboard</span></div>
   <div class="nav-item" data-page="products" onclick="switchPage('products')">📦 <span>รายการสินค้า</span></div>
+  <div class="nav-item" data-page="report" onclick="switchPage('report')">📈 <span>Report</span></div>
+  <!-- Campaign ซ่อนจากเมนู — เข้าใช้งานผ่าน /campaign โดยตรง. ลบ style display:none เพื่อแสดงอีกครั้ง -->
+  <div class="nav-item" style="display:none" onclick="location.href='/campaign'">🎯 <span>Campaign</span></div>
 </aside>
 <div class="content">
 
@@ -356,6 +448,50 @@ body.admin-on .admin-bar { display: flex; }
   <div class="dash-card">
     <div class="dc-head"><span>⚠️ สินค้าคงเหลือน้อย / ติดลบ (≤ 0)</span><span class="cnt" id="dashLowCnt"></span></div>
     <div class="scroll"><table><thead><tr><th>รหัส</th><th>ชื่อสินค้า</th><th>หมวด</th><th class="num">คงเหลือ</th></tr></thead><tbody id="dashLowBody"></tbody></table></div>
+  </div>
+</div>
+
+<div class="app page" id="page-report">
+  <div class="dash-head">
+    <h1>📈 Report · วิเคราะห์การออกสินค้า &amp; พยากรณ์</h1>
+    <div class="sub">ยอดออกเฉลี่ยต่อวัน · วันที่ออกมากสุด · คาดการณ์ว่าสต็อกจะอยู่ได้กี่วัน · ช่วง <span id="reportRangeLabel"></span></div>
+  </div>
+  <div class="dash-filter" id="reportFilter">
+    <button data-r="7d" onclick="setReportRange('7d')">7 วันย้อนหลัง</button>
+    <button data-r="30d" onclick="setReportRange('30d')">30 วันย้อนหลัง</button>
+    <button data-r="90d" onclick="setReportRange('90d')">90 วันย้อนหลัง</button>
+    <button data-r="all" onclick="setReportRange('all')">ทั้งหมด</button>
+  </div>
+  <div class="kpis" id="reportKpis"></div>
+
+  <div class="dash-grid">
+    <div class="dash-card rp-chartcard">
+      <div class="dc-head"><span>⏳ ใกล้หมดสต็อกเร็วที่สุด <span class="dc-hint">Top 15 · จำนวนวันที่คาดว่าจะอยู่ได้</span></span></div>
+      <div class="rp-bars" id="reportUrgent"></div>
+    </div>
+    <div class="dash-card rp-chartcard">
+      <div class="dc-head"><span>🔥 ออกมากที่สุดต่อวัน <span class="dc-hint">Top 15 · ยอดออกเฉลี่ย/วัน (ชิ้น)</span></span></div>
+      <div class="rp-bars" id="reportBurn"></div>
+    </div>
+  </div>
+
+  <div class="dash-card rp-chartcard rp-cmp">
+    <div class="dc-head">
+      <span>📊 เปรียบเทียบสถิติย้อนหลัง 1 / 3 / 6 เดือน
+        <span class="dc-hint">เลือกสินค้าได้มากกว่า 1 รายการ · ออกรวม · เฉลี่ย/วัน · วันออกมากสุด</span></span>
+      <span class="cnt" id="rpCmpCnt"></span>
+    </div>
+    <div class="rp-cmp-pick">
+      <div class="search-wrap rp-cmp-search">
+        <input type="text" id="rpCmpSearch" autocomplete="off" placeholder="🔍 ค้นหา รหัส หรือ ชื่อสินค้า แล้วคลิกเพื่อเพิ่ม..."
+          oninput="rpCmpRenderAc(this.value)" onfocus="rpCmpRenderAc(this.value)" onblur="setTimeout(rpCmpHideAc, 150)" />
+        <div class="ac-list" id="rpCmpAcList"></div>
+      </div>
+      <button type="button" class="rp-cmp-clear" onclick="rpCmpClear()">ล้างทั้งหมด</button>
+      <button type="button" class="export-btn rp-cmp-export" onclick="rpCmpExport()">⬇️ Export Excel</button>
+    </div>
+    <div class="rp-cmp-chips" id="rpCmpChips"></div>
+    <div class="rp-cmp-table" id="rpCmpTable"></div>
   </div>
 </div>
 
@@ -412,8 +548,8 @@ body.admin-on .admin-bar { display: flex; }
       <option value="closing_asc">คงเหลือน้อย → มาก</option>
       <option value="in_desc">รับมาก → น้อย</option>
       <option value="in_asc">รับน้อย → มาก</option>
-      <option value="out_desc">จ่ายมาก → น้อย</option>
-      <option value="out_asc">จ่ายน้อย → มาก</option>
+      <option value="out_desc">ออกมาก → น้อย</option>
+      <option value="out_asc">ออกน้อย → มาก</option>
       <option value="negative_first">⚠️ คงเหลือติดลบก่อน</option>
     </select>
     <div class="date-range">
@@ -423,6 +559,7 @@ body.admin-on .admin-bar { display: flex; }
       <input type="date" id="dateTo" />
       <button type="button" id="dateClear" class="dr-clear" title="ล้างช่วงวันที่">✕</button>
     </div>
+    <button type="button" class="export-btn" id="exportListBtn" onclick="exportMovements()" title="ส่งออกรายการเคลื่อนไหวตาม filter">⬇️ Export Excel</button>
   </div>
   </div>
 
@@ -735,13 +872,21 @@ function todayTx(p) {
   return (p.tx || []).find(r => r[0] === today);
 }
 
-// Badges flagging a product that has a movement dated today (local date).
+// Badges flagging in/out movement. When a date range is active they reflect the
+// range totals (matches the table columns); otherwise they reflect today only.
 function todayMoveBadges(p) {
-  const t = todayTx(p);
-  if (!t) return '';
+  let qin, qout, lbl;
+  if (rangeActive()) {
+    const s = p._range || computeRangeStats(p);
+    qin = s.in; qout = s.out; lbl = 'ในช่วง';
+  } else {
+    const t = todayTx(p);
+    if (!t) return '';
+    qin = t[1]; qout = t[2]; lbl = 'วันนี้';
+  }
   let html = '';
-  if ((t[1] || 0) > 0) html += `<span class="mv-today mv-in" title="รับวันนี้ ${fmt(t[1])}">▼ รับ</span>`;
-  if ((t[2] || 0) > 0) html += `<span class="mv-today mv-out" title="จ่ายวันนี้ ${fmt(t[2])}">▲ จ่าย</span>`;
+  if ((qin || 0) > 0) html += `<span class="mv-today mv-in" title="รับ${lbl} ${fmt(qin)}">▼ รับ</span>`;
+  if ((qout || 0) > 0) html += `<span class="mv-today mv-out" title="ออก${lbl} ${fmt(qout)}">▲ ออก</span>`;
   return html;
 }
 
@@ -752,6 +897,7 @@ function switchPage(page) {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.page === page));
   document.querySelectorAll('.page').forEach(pg => pg.classList.toggle('active', pg.id === 'page-' + page));
   if (page === 'dashboard') renderDashboard();
+  if (page === 'report') renderReport();
   if (page === 'products') syncStickyHeight();
 }
 
@@ -830,7 +976,7 @@ function renderMoveTable(bodyId, list, kind) {
   const max = Math.max(...list.map(x => x.qty)) || 1;
   el.innerHTML = list.map(x => {
     const pct = Math.max(6, Math.round(x.qty / max * 100));
-    return `<tr onclick="openProduct(${DB.products.indexOf(x.p)})" title="${escapeHtml(x.p.code)} · ${escapeHtml(x.p.name)} · ${kind === 'in' ? 'รับ' : 'จ่าย'} ${fmt(x.qty)} · คงเหลือ ${fmt(x.bal)}">
+    return `<tr onclick="openProduct(${DB.products.indexOf(x.p)})" title="${escapeHtml(x.p.code)} · ${escapeHtml(x.p.name)} · ${kind === 'in' ? 'รับ' : 'ออก'} ${fmt(x.qty)} · คงเหลือ ${fmt(x.bal)}">
       <td class="dt">${x.date.split('-').reverse().join('/')}</td>
       <td class="code">${escapeHtml(x.p.code)}</td>
       <td>${escapeHtml(x.p.name)}</td>
@@ -838,6 +984,210 @@ function renderMoveTable(bodyId, list, kind) {
       <td class="num">${fmt(x.bal)}</td>
     </tr>`;
   }).join('');
+}
+
+// ============================================================
+//  REPORT  (avg out/day · peak day · forecast days-of-stock)
+//  Self-contained: reads DB.products + p.tx only, touches no shared state.
+// ============================================================
+let reportRange = '30d';
+function setReportRange(r) { reportRange = r; renderReport(); }
+
+const RP_ISO = x => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+const RP_DM = s => s ? s.split('-').reverse().join('/') : '';
+const RP_DAYS = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 86400000); // whole calendar days a→b
+
+// Resolve the active range to {from,to,days,label}. days=null → per-product span (whole history).
+function reportWindow() {
+  const now = new Date();
+  const today = RP_ISO(now);
+  const back = n => { const s = new Date(now); s.setDate(now.getDate() - (n - 1)); return RP_ISO(s); };
+  if (reportRange === '7d') return { from: back(7), to: today, days: 7, label: `7 วันย้อนหลัง (${RP_DM(back(7))} – ${RP_DM(today)})` };
+  if (reportRange === '30d') return { from: back(30), to: today, days: 30, label: `30 วันย้อนหลัง (${RP_DM(back(30))} – ${RP_DM(today)})` };
+  if (reportRange === '90d') return { from: back(90), to: today, days: 90, label: `90 วันย้อนหลัง (${RP_DM(back(90))} – ${RP_DM(today)})` };
+  return { from: null, to: today, days: null, label: 'ทั้งหมด (ถึงวันนี้)' };
+}
+
+// Per-product metrics over the window. Daily average uses CALENDAR days across the
+// whole window (days with no out count as 0) — chosen by user.
+function computeReportStats(p, win) {
+  const txs = (p.tx || []).filter(t => t[0]);
+  let out = 0, peak = null;
+  for (const t of txs) {
+    const dt = t[0];
+    if (win.from && dt < win.from) continue;
+    if (win.to && dt > win.to) continue;
+    const q = t[2] || 0;
+    out += q;
+    if (q > 0 && (!peak || q > peak.qty)) peak = { date: dt, qty: q };
+  }
+  let days;
+  if (win.days) {
+    days = win.days;
+  } else {
+    const first = txs.length ? txs[0][0] : null; // earliest movement overall (txs are ascending)
+    days = first ? RP_DAYS(first, win.to) + 1 : 1;
+  }
+  if (days < 1) days = 1;
+  const avg = out / days;
+  const closing = p.closing || 0;
+  // forecast: how many full days the current stock lasts at avg burn rate
+  const forecast = (avg > 0 && closing > 0) ? Math.floor(closing / avg) : null;
+  return { out, avg, peak, days, closing, forecast };
+}
+
+// Urgency bucket for a forecast value (days of stock left) — used by the burn/urgent bars.
+const rpBucket = f => f === null ? 'none' : f <= 7 ? 'crit' : f <= 30 ? 'warn' : 'ok';
+
+function renderReport() {
+  const win = reportWindow();
+  const lblEl = document.getElementById('reportRangeLabel');
+  if (!lblEl) return; // page not in DOM yet
+  lblEl.textContent = win.label;
+  document.querySelectorAll('#reportFilter button').forEach(b => b.classList.toggle('active', b.dataset.r === reportRange));
+
+  // Only products that actually move out are meaningful for forecasting charts.
+  const moving = (DB.products || [])
+    .map(p => ({ p, s: computeReportStats(p, win) }))
+    .filter(r => r.s.avg > 0 && r.s.closing > 0);
+
+  // KPIs reflect the full moving set (overview, not affected by colour filter).
+  const crit = moving.filter(r => r.s.forecast <= 7).length;
+  const warn = moving.filter(r => r.s.forecast > 7 && r.s.forecast <= 30).length;
+  const totalAvg = moving.reduce((sum, r) => sum + r.s.avg, 0);
+  document.getElementById('reportKpis').innerHTML = `
+    <div class="kpi"><div class="label">สินค้าที่มีการออก</div><div class="value">${moving.length.toLocaleString()}</div></div>
+    <div class="kpi out"><div class="label">📤 ออกรวมเฉลี่ย/วัน (ชิ้น)</div><div class="value">${rpAvg(totalAvg)}</div></div>
+    <div class="kpi crit"><div class="label" style="color:#b91c1c">🔴 จะหมดใน ≤ 7 วัน</div><div class="value" style="color:#b91c1c">${crit}</div></div>
+    <div class="kpi warn"><div class="label" style="color:#b45309">🟠 จะหมดใน 8–30 วัน</div><div class="value" style="color:#b45309">${warn}</div></div>
+  `;
+
+  // Bars rank the full moving set.
+  // Urgent chart: bar length = forecast days; in-bar label shows คงเหลือ / ออกต่อวัน.
+  renderReportBars('reportUrgent', moving.slice().sort((a, b) => a.s.forecast - b.s.forecast).slice(0, 15),
+    r => r.s.forecast, v => `${Number(v).toLocaleString()} วัน`, r => rpBucket(r.s.forecast),
+    r => `<b class="il-stock">คงเหลือ ${fmt(r.s.closing)}</b><span class="il-sep">/</span><b class="il-rate">ออกต่อวัน ${Math.round(r.s.avg).toLocaleString()}</b>`);
+  // Burn-rate chart: whole-number ออก/วัน (no decimals).
+  renderReportBars('reportBurn', moving.slice().sort((a, b) => b.s.avg - a.s.avg).slice(0, 15),
+    r => r.s.avg, v => Math.round(v).toLocaleString(), () => 'burn');
+
+  rpCmpRender(); // 1/3/6-month comparison (independent of the range filter above)
+}
+
+// Horizontal proportional bars (urgent / burn-rate). valFn→number, fmtFn→label,
+// clsFn→bucket; optional inBarFn→text rendered inside the track (e.g. คงเหลือ).
+function renderReportBars(hostId, items, valFn, fmtFn, clsFn, inBarFn) {
+  const host = document.getElementById(hostId);
+  if (!items.length) { host.innerHTML = '<div class="rp-empty">ไม่มีข้อมูล</div>'; return; }
+  const max = Math.max(...items.map(valFn)) || 1;
+  host.innerHTML = items.map(r => {
+    const v = valFn(r), pct = Math.max(3, Math.round(v / max * 100));
+    const inBar = inBarFn ? `<span class="rp-bar-inlabel">${inBarFn(r)}</span>` : '';
+    return `<div class="rp-bar" title="${escapeHtml(r.p.code)} · ${escapeHtml(r.p.name)}">
+      <span class="rp-bar-code">${escapeHtml(r.p.code)}</span>
+      <span class="rp-bar-track"><span class="rp-bar-fill ${clsFn(r)}" style="width:${pct}%"></span>${inBar}</span>
+      <span class="rp-bar-val">${fmtFn(v)}</span>
+    </div>`;
+  }).join('');
+}
+
+// Average formatter: 0 → "0", else up to 2 decimals (fmt() turns 0 into "-").
+const rpAvg = n => (!n || n <= 0) ? '0' : Number(n).toLocaleString('en-US', { maximumFractionDigits: 2 });
+
+// ---- Multi-product 1/3/6-month comparison (selected products) ----
+let rpCmpSel = [];                                   // indices into DB.products
+const RP_CMP_PERIODS = [[1, '1 เดือน'], [3, '3 เดือน'], [6, '6 เดือน']];
+
+// Calendar window N months back from today → {from,to,days} (days = denominator for avg).
+function rpMonthsWindow(months) {
+  const now = new Date();
+  const to = RP_ISO(now);
+  const s = new Date(now); s.setMonth(now.getMonth() - months);
+  const from = RP_ISO(s);
+  return { from, to, days: RP_DAYS(from, to) + 1 };
+}
+
+function rpCmpRenderAc(q) {
+  const list = document.getElementById('rpCmpAcList');
+  if (!q.trim()) { list.classList.remove('show'); return; }
+  const matches = searchProducts(q).filter(p => !rpCmpSel.includes(DB.products.indexOf(p)));
+  if (!matches.length) { list.innerHTML = '<div class="ac-item ac-empty">เพิ่มครบแล้ว / ไม่พบสินค้า</div>'; list.classList.add('show'); return; }
+  list.innerHTML = matches.map(p => `
+    <div class="ac-item" onmousedown="event.preventDefault()" onclick="rpCmpAdd(${DB.products.indexOf(p)})">
+      <span class="ac-bal">คงเหลือ ${fmt(p.closing)}</span>
+      <span class="ac-code">${hl(p.code, q)}</span> &nbsp;<span class="ac-name">${hl(p.name, q)}</span>
+    </div>`).join('');
+  list.classList.add('show');
+}
+function rpCmpHideAc() { const l = document.getElementById('rpCmpAcList'); if (l) l.classList.remove('show'); }
+function rpCmpAdd(idx) {
+  if (!rpCmpSel.includes(idx)) rpCmpSel.push(idx);
+  const inp = document.getElementById('rpCmpSearch'); if (inp) inp.value = '';
+  rpCmpHideAc();
+  rpCmpRender();
+}
+function rpCmpRemove(idx) { rpCmpSel = rpCmpSel.filter(i => i !== idx); rpCmpRender(); }
+function rpCmpClear() { rpCmpSel = []; rpCmpRender(); }
+
+function rpCmpRender() {
+  const chips = document.getElementById('rpCmpChips'), tbl = document.getElementById('rpCmpTable');
+  if (!chips || !tbl) return; // page not in DOM
+  document.getElementById('rpCmpCnt').textContent = rpCmpSel.length ? `${rpCmpSel.length} สินค้า` : '';
+  chips.innerHTML = rpCmpSel.map(idx => {
+    const p = DB.products[idx];
+    return `<span class="rp-chip" title="${escapeHtml(p.name)}"><b>${escapeHtml(p.code)}</b><i onclick="rpCmpRemove(${idx})">×</i></span>`;
+  }).join('');
+  if (!rpCmpSel.length) {
+    tbl.innerHTML = '<div class="rp-empty">เลือกสินค้าด้านบนเพื่อเปรียบเทียบสถิติย้อนหลัง 1 / 3 / 6 เดือน</div>';
+    return;
+  }
+  const wins = RP_CMP_PERIODS.map(([m]) => rpMonthsWindow(m));
+  let h1 = '<th rowspan="2">รหัส</th><th rowspan="2">ชื่อสินค้า</th>';
+  RP_CMP_PERIODS.forEach(([, lbl]) => { h1 += `<th colspan="3" class="grp glead">${lbl}</th>`; });
+  let h2 = '';
+  RP_CMP_PERIODS.forEach(() => { h2 += '<th class="num glead">ออกรวม</th><th class="num">เฉลี่ย/วัน</th><th>วันออกมากสุด</th>'; });
+  const body = rpCmpSel.map(idx => {
+    const p = DB.products[idx];
+    let cells = `<td class="code">${escapeHtml(p.code)}</td><td class="nm" title="${escapeHtml(p.name)}">${escapeHtml(p.name)}</td>`;
+    wins.forEach(w => {
+      const s = computeReportStats(p, w);
+      const peak = s.peak ? `${RP_DM(s.peak.date)} <span class="pk">(${fmt(s.peak.qty)})</span>` : '—';
+      cells += `<td class="num out glead">${fmt(s.out)}</td><td class="num">${rpAvg(s.avg)}</td><td class="pkcell">${peak}</td>`;
+    });
+    return `<tr>${cells}</tr>`;
+  }).join('');
+  tbl.innerHTML = `<table class="rp-cmp-tbl"><thead><tr>${h1}</tr><tr>${h2}</tr></thead><tbody>${body}</tbody></table>`;
+}
+
+// Export the comparison table to .xlsx — sends the exact on-screen numbers to the backend.
+function rpCmpExport() {
+  if (!rpCmpSel.length) { alert('กรุณาเลือกสินค้าอย่างน้อย 1 รายการก่อนส่งออก'); return; }
+  const periods = RP_CMP_PERIODS.map(([, lbl]) => lbl);
+  const wins = RP_CMP_PERIODS.map(([m]) => rpMonthsWindow(m));
+  const rows = rpCmpSel.map(idx => {
+    const p = DB.products[idx];
+    return {
+      code: p.code, name: p.name || '',
+      cells: wins.map(w => {
+        const s = computeReportStats(p, w);
+        const peak = s.peak ? `${RP_DM(s.peak.date)} (${Number(s.peak.qty).toLocaleString()})` : '—';
+        return { out: s.out, avg: Math.round(s.avg * 100) / 100, peak };
+      })
+    };
+  });
+  fetch('/api/report/compare-export', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ periods, rows })
+  })
+    .then(r => { if (!r.ok) throw new Error('export failed'); return r.blob(); })
+    .then(blob => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'report_compare.xlsx';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    })
+    .catch(() => alert('ส่งออกไม่สำเร็จ กรุณาลองใหม่'));
 }
 
 function renderTable() {
@@ -1107,6 +1457,44 @@ function exportProduct() {
   document.body.appendChild(a);
   a.click();
   a.remove();
+}
+
+// Export every daily movement of the currently-filtered products, honouring
+// the active date range. Sends the filtered codes to the backend, downloads xlsx.
+async function exportMovements() {
+  const btn = document.getElementById('exportListBtn');
+  const codes = filtered.map(p => p.code);
+  if (codes.length === 0) { alert('ไม่มีรายการสินค้าให้ส่งออก'); return; }
+  const body = { codes, from: dateRange.from || '', to: dateRange.to || '' };
+  btn.disabled = true;
+  const label = btn.textContent;
+  btn.textContent = '⏳ กำลังสร้างไฟล์...';
+  try {
+    const res = await fetch('/api/movements/export', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      alert('ส่งออกไม่สำเร็จ: ' + (err.detail || res.status));
+      return;
+    }
+    const blob = await res.blob();
+    const tag = (dateRange.from || 'all') + '_' + (dateRange.to || 'all');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'movements_' + tag + '.xlsx';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(a.href);
+  } catch (e) {
+    alert('ส่งออกไม่สำเร็จ: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = label;
+  }
 }
 
 document.getElementById('modal').addEventListener('click', (e) => {

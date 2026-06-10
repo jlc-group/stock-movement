@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Campaign Calendar - JLC GROUP 2026</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, 'Segoe UI', 'Sarabun', Tahoma, sans-serif; background: #f4f5f7; color: #1f2937; }
+.cmp-page { max-width: 1200px; margin: 0 auto; padding: 20px 24px 60px; }
+
+/* ----- top bar ----- */
+.cmp-top { background: linear-gradient(135deg, #1e3a8a, #3b82f6); color: #fff; padding: 18px 24px; border-radius: 12px; margin-bottom: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+.cmp-top h1 { font-size: 20px; margin-bottom: 4px; }
+.cmp-top .sub { font-size: 12px; opacity: .9; max-width: 640px; line-height: 1.5; }
+.cmp-top-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.cmp-back { color: #fff; text-decoration: none; font-size: 13px; background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.4); border-radius: 8px; padding: 7px 14px; transition: background 0.15s; }
+.cmp-back:hover { background: rgba(255,255,255,0.28); }
+.admin-btn { background: rgba(255,255,255,0.15); color: white; border: 1px solid rgba(255,255,255,0.4); border-radius: 8px; padding: 7px 14px; font-size: 13px; font-family: inherit; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: background 0.15s; }
+.admin-btn:hover { background: rgba(255,255,255,0.28); }
+body.admin-on .admin-btn { background: #fbbf24; color: #78350f; border-color: #f59e0b; font-weight: 600; }
+
+/* ----- buttons ----- */
+.btn { border: none; border-radius: 8px; padding: 9px 16px; font-size: 14px; font-family: inherit; cursor: pointer; font-weight: 600; transition: filter 0.15s; }
+.btn:hover { filter: brightness(0.95); }
+.btn-primary { background: #3b82f6; color: white; }
+.btn-success { background: #10b981; color: white; }
+.btn-ghost { background: white; color: #4b5563; border: 1px solid #d1d5db; }
+.btn-danger-ghost { background: white; color: #dc2626; border: 1px solid #fca5a5; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ----- admin modal (forms) ----- */
+.amodal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 200; align-items: center; justify-content: center; padding: 30px 20px; opacity: 0; transition: opacity 0.2s ease, display 0.2s allow-discrete; }
+.amodal.show { display: flex; opacity: 1; }
+.amodal-card { background: white; border-radius: 14px; width: 100%; max-width: 460px; max-height: calc(100vh - 60px); overflow-y: auto; box-shadow: 0 20px 50px rgba(0,0,0,0.25); opacity: 0; transform: translateY(10px) scale(0.985); transition: opacity 0.22s ease, transform 0.22s cubic-bezier(.16,1,.3,1); }
+.amodal.show .amodal-card { opacity: 1; transform: none; }
+@starting-style { .amodal.show { opacity: 0; } .amodal.show .amodal-card { opacity: 0; transform: translateY(10px) scale(0.985); } }
+.amodal-card.wide { max-width: 600px; }
+.amodal-head { padding: 18px 22px 10px; display: flex; justify-content: space-between; align-items: center; }
+.amodal-head h3 { font-size: 17px; color: #111827; }
+.amodal-body { padding: 6px 22px 22px; }
+.close { background: none; border: none; font-size: 22px; cursor: pointer; color: #6b7280; padding: 0 8px; }
+.close:hover { color: #111827; }
+.field { margin-bottom: 14px; }
+.field label { display: block; font-size: 12px; font-weight: 600; color: #6b7280; margin-bottom: 5px; }
+.field input, .field select, .field textarea { width: 100%; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; font-family: inherit; }
+.field input:focus, .field select:focus, .field textarea:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.15); }
+.field-row { display: flex; gap: 12px; }
+.field-row .field { flex: 1; }
+.form-msg { font-size: 13px; padding: 8px 12px; border-radius: 8px; margin-bottom: 12px; display: none; }
+.form-msg.show { display: block; }
+.form-msg.err { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+.amodal-foot { display: flex; gap: 10px; justify-content: flex-end; margin-top: 6px; }
+
+/* ----- autocomplete ----- */
+.ac-wrap { position: relative; }
+.ac-list { position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #d1d5db; border-top: none; border-radius: 0 0 8px 8px; max-height: 260px; overflow-y: auto; z-index: 10; box-shadow: 0 8px 20px rgba(0,0,0,0.12); display: none; }
+.ac-list.show { display: block; }
+.ac-item { padding: 9px 12px; cursor: pointer; border-bottom: 1px solid #f3f4f6; font-size: 13px; }
+.ac-item:last-child { border-bottom: none; }
+.ac-item.active, .ac-item:hover { background: #eff6ff; }
+.ac-item .ac-code { font-family: 'SF Mono', Consolas, monospace; font-weight: 600; color: #1d4ed8; }
+.ac-item .ac-name { color: #374151; }
+.ac-item .ac-bal { float: right; color: #6b7280; font-variant-numeric: tabular-nums; }
+.ac-item mark { background: #fde68a; color: inherit; padding: 0 1px; border-radius: 2px; }
+.ac-empty { padding: 12px; text-align: center; color: #9ca3af; font-size: 13px; }
+
+/* ----- toast ----- */
+#toasts { position: fixed; bottom: 24px; right: 24px; z-index: 300; display: flex; flex-direction: column; gap: 10px; }
+.toast { background: #111827; color: white; padding: 12px 18px; border-radius: 10px; font-size: 14px; box-shadow: 0 8px 24px rgba(0,0,0,0.25); animation: toastIn 0.2s ease; max-width: 340px; }
+.toast.ok { background: #059669; }
+.toast.err { background: #dc2626; }
+@keyframes toastIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+/* ===== Campaign Calendar ===== */
+.cmp-toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 14px; }
+.cmp-range { display: inline-flex; background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden; }
+.cmp-range button { border: 0; background: #fff; padding: 9px 16px; font-family: inherit; font-size: 13px; font-weight: 600; color: #475569; cursor: pointer; border-left: 1px solid #f1f5f9; }
+.cmp-range button:first-child { border-left: 0; }
+.cmp-range button.active { background: #2563eb; color: #fff; }
+.cmp-nav { display: inline-flex; align-items: center; gap: 8px; }
+.cmp-nav button { height: 36px; min-width: 36px; border: 1px solid #e5e7eb; background: #fff; border-radius: 8px; cursor: pointer; font-size: 15px; color: #334155; font-family: inherit; }
+.cmp-nav button:hover { background: #f1f5f9; }
+.cmp-nav .cmp-today-btn { padding: 0 14px; font-size: 13px; font-weight: 600; }
+.cmp-add { margin-left: auto; }
+.cmp-admin { display: none !important; }
+body.admin-on .cmp-admin { display: inline-flex !important; }
+.cmp-legend { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 14px; font-size: 12px; color: #475569; align-items: center; }
+.cmp-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.cmp-legend i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+.cmp-cal { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 14px 16px 18px; margin-bottom: 18px; }
+.cmp-cal h3 { font-size: 15px; color: #0f172a; margin-bottom: 12px; }
+.cmp-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.cmp-dow { text-align: center; font-size: 11px; font-weight: 700; color: #94a3b8; padding: 4px 0; }
+.cmp-day { min-height: 88px; border: 1px solid #f1f5f9; border-radius: 8px; padding: 4px 5px; position: relative; background: #fcfcfd; }
+.cmp-day.out { background: #f8fafc; opacity: .45; }
+.cmp-day.today { border-color: #2563eb; box-shadow: 0 0 0 1px #2563eb inset; }
+.cmp-day .dnum { font-size: 12px; font-weight: 700; color: #64748b; }
+.cmp-day.today .dnum { color: #2563eb; }
+.cmp-day-add { position: absolute; top: 3px; right: 3px; width: 18px; height: 18px; line-height: 1; border: 0; border-radius: 5px; background: #eef2ff; color: #4338ca; font-size: 13px; cursor: pointer; padding: 0; display: none; align-items: center; justify-content: center; }
+body.admin-on .cmp-day:hover .cmp-day-add { display: inline-flex; }
+.cmp-chip { display: block; margin-top: 3px; padding: 3px 6px; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cmp-chip .warn { float: right; margin-left: 4px; }
+.cmp-det-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+.cmp-badge { padding: 3px 12px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+.cmp-det-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.cmp-det-table th, .cmp-det-table td { padding: 9px 10px; border-bottom: 1px solid #f1f5f9; text-align: left; }
+.cmp-det-table th { font-size: 11px; color: #6b7280; text-transform: uppercase; }
+.cmp-det-table td.num, .cmp-det-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.cmp-det-table td.code { font-weight: 700; color: #1e293b; }
+.cmp-det-table tfoot td { border-top: 2px solid #e5e7eb; border-bottom: 0; }
+.cmp-ok { color: #059669; font-weight: 600; }
+.cmp-short { color: #dc2626; font-weight: 700; }
+.cmp-fc-row { display: flex; gap: 8px; align-items: center; margin-top: 8px; padding-top: 8px; border-top: 1px solid #f1f5f9; }
+.cmp-fc-row .nm { flex: 1; font-size: 13px; line-height: 1.4; }
+.cmp-fc-row input { width: 120px; }
+.cmp-fc-row .rm { border: 0; background: #fee2e2; color: #b91c1c; border-radius: 6px; width: 30px; height: 30px; cursor: pointer; font-size: 15px; flex: 0 0 auto; }
+.cmp-empty { color: #94a3b8; font-size: 13px; padding: 18px; text-align: center; }
+
+/* ----- channel filter chips (was legend) ----- */
+.cmp-filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; }
+.cmp-fchip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid #e5e7eb; background: #fff; color: #475569; font-family: inherit; font-size: 12.5px; font-weight: 600; border-radius: 999px; padding: 6px 13px; cursor: pointer; transition: all .12s; }
+.cmp-fchip:hover { border-color: #cbd5e1; }
+.cmp-fchip i { width: 9px; height: 9px; border-radius: 50%; }
+.cmp-fchip.active { background: #0f172a; color: #fff; border-color: #0f172a; }
+.cmp-fchip.active i { box-shadow: 0 0 0 2px rgba(255,255,255,.45); }
+.cmp-legend-note { font-size: 11.5px; color: #94a3b8; margin-left: auto; }
+
+/* ----- KPI strip ----- */
+.cmp-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+.cmp-kpi { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 14px 16px; box-shadow: 0 1px 2px rgba(0,0,0,.03); }
+.cmp-kpi .k-label { font-size: 12px; color: #64748b; font-weight: 600; margin-bottom: 6px; }
+.cmp-kpi .k-val { font-size: 26px; font-weight: 800; color: #0f172a; line-height: 1; font-variant-numeric: tabular-nums; }
+.cmp-kpi .k-sub { font-size: 11px; color: #94a3b8; margin-top: 5px; }
+.cmp-kpi.bad { background: linear-gradient(180deg, #fff, #fff5f5); border-color: #fecaca; }
+.cmp-kpi.bad .k-val, .cmp-kpi.bad .k-sub { color: #dc2626; }
+.cmp-kpi.good .k-val { color: #059669; }
+
+/* ----- main + sidebar layout ----- */
+.cmp-layout { display: grid; grid-template-columns: 1fr 340px; gap: 18px; align-items: start; }
+.cmp-side { display: flex; flex-direction: column; gap: 14px; position: sticky; top: 14px; }
+.cmp-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 12px 14px; }
+.cmp-card-h { display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 700; color: #0f172a; margin-bottom: 10px; }
+.cmp-card-c { background: #fee2e2; color: #b91c1c; font-size: 12px; font-weight: 700; border-radius: 999px; padding: 1px 9px; }
+.cmp-side-empty { font-size: 12.5px; color: #64748b; padding: 8px 2px; }
+
+/* ----- shortage items + health bar ----- */
+.cmp-short-item { padding: 9px 0; border-top: 1px solid #f1f5f9; }
+.cmp-short-item:first-of-type { border-top: 0; }
+.si-top { display: flex; justify-content: space-between; align-items: baseline; }
+.si-code { font-weight: 700; color: #1e293b; font-size: 13px; }
+.si-short { color: #dc2626; font-weight: 700; font-size: 12px; }
+.si-name { font-size: 12px; color: #64748b; margin: 2px 0 6px; }
+.si-meta { font-size: 11px; color: #94a3b8; margin-top: 4px; }
+.cmp-bar { height: 7px; background: #f1f5f9; border-radius: 99px; overflow: hidden; }
+.cmp-bar.sm { height: 5px; margin-top: 5px; max-width: 170px; }
+.cmp-bar i { display: block; height: 100%; border-radius: 99px; }
+.cmp-bar i.bad { background: #ef4444; }
+.cmp-bar i.good { background: #10b981; }
+
+/* ----- agenda (upcoming) ----- */
+.cmp-ag-item { display: flex; gap: 10px; padding: 9px 4px; border-top: 1px solid #f1f5f9; cursor: pointer; border-radius: 8px; }
+.cmp-ag-item:first-of-type { border-top: 0; }
+.cmp-ag-item:hover { background: #f8fafc; }
+.ag-date { flex: 0 0 50px; text-align: left; border-left: 3px solid var(--ch, #94a3b8); padding-left: 8px; }
+.ag-date b { display: block; font-size: 14px; color: #0f172a; }
+.ag-date small { font-size: 10px; color: #94a3b8; }
+.ag-body { flex: 1; min-width: 0; }
+.ag-name { font-size: 13px; font-weight: 600; color: #0f172a; }
+.ag-warn { margin-left: 4px; }
+.ag-meta { font-size: 11px; color: #64748b; margin-top: 3px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.ag-badge { font-size: 10px; font-weight: 700; border-radius: 999px; padding: 1px 8px; }
+
+/* ----- richer chip (overrides earlier .cmp-chip) ----- */
+.cmp-chip { display: flex; align-items: center; gap: 4px; border-left: 3px solid var(--ch, #94a3b8); }
+.cmp-chip .chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+.cmp-chip .chip-meta { font-size: 9px; font-weight: 700; opacity: .75; flex: 0 0 auto; }
+.cmp-chip .warn { float: none; flex: 0 0 auto; }
+.cmp-chip.cont { opacity: .9; border-left-style: dashed; }
+.cmp-chip.cont .chip-name { font-style: italic; }
+
+/* ----- color swatches + dot ----- */
+.cmp-swatches { display: flex; flex-wrap: wrap; gap: 8px; }
+.cmp-swatch { width: 26px; height: 26px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px #e5e7eb; cursor: pointer; padding: 0; transition: transform .1s; }
+.cmp-swatch:hover { transform: scale(1.12); }
+.cmp-swatch.active { box-shadow: 0 0 0 2px #0f172a; transform: scale(1.1); }
+.cmp-dot { width: 11px; height: 11px; border-radius: 50%; display: inline-block; }
+
+/* ----- week view ----- */
+.cmp-week { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.cmp-wday { border: 1px solid #f1f5f9; border-radius: 8px; min-height: 150px; display: flex; flex-direction: column; background: #fcfcfd; }
+.cmp-wday.today { border-color: #2563eb; box-shadow: 0 0 0 1px #2563eb inset; }
+.wd-head { display: flex; align-items: center; gap: 5px; padding: 6px 8px; border-bottom: 1px solid #f1f5f9; }
+.wd-dow { font-size: 10px; color: #94a3b8; font-weight: 700; }
+.wd-num { font-size: 14px; font-weight: 700; color: #334155; }
+.cmp-wday.today .wd-num { color: #2563eb; }
+.wd-body { padding: 6px; display: flex; flex-direction: column; gap: 4px; flex: 1; }
+.cmp-wempty { color: #cbd5e1; font-size: 12px; text-align: center; margin: auto; }
+.cmp-wday .cmp-day-add { position: static; display: inline-flex; margin-left: auto; }
+
+@media (max-width: 980px) {
+  .cmp-layout { grid-template-columns: 1fr; }
+  .cmp-side { position: static; }
+  .cmp-kpis { grid-template-columns: repeat(2, 1fr); }
+  .cmp-week { overflow-x: auto; grid-template-columns: repeat(7, minmax(120px, 1fr)); }
+}
+@media (max-width: 768px) {
+  .cmp-page { padding: 14px; }
+  .cmp-day { min-height: 60px; }
+  .cmp-chip { font-size: 10px; padding: 2px 4px; }
+  .cmp-add { margin-left: 0; }
+}
+</style>
+</head>
+<body>
+<div class="cmp-page">
+  <header class="cmp-top">
+    <div>
+      <h1>🎯 Campaign Calendar</h1>
+      <div class="sub">วางแผนแคมเปญล่วงหน้า · ตั้งเป้ายอดออกสินค้า (forecast) · เทียบกับสต็อกคงเหลือปัจจุบัน · ⚠️ = ของอาจไม่พอ ต้องสั่งเพิ่ม</div>
+    </div>
+    <div class="cmp-top-actions">
+      <a class="cmp-back" href="/">← กลับหน้าหลัก</a>
+      <button class="admin-btn" id="adminBtn" onclick="onAdminBtn()">🔑 <span id="adminBtnText">Admin</span></button>
+    </div>
+  </header>
+
+  <div class="cmp-toolbar">
+    <div class="cmp-range" id="cmpView">
+      <button data-v="month" class="active" onclick="setCmpView('month')">เดือน</button>
+      <button data-v="week" onclick="setCmpView('week')">สัปดาห์</button>
+    </div>
+    <div class="cmp-range" id="cmpRange">
+      <button data-m="1" onclick="setCmpMonths(1)">1 เดือน</button>
+      <button data-m="3" onclick="setCmpMonths(3)">3 เดือน</button>
+      <button data-m="6" onclick="setCmpMonths(6)">6 เดือน</button>
+    </div>
+    <div class="cmp-nav">
+      <button onclick="cmpShift(-1)" title="ก่อนหน้า">‹</button>
+      <button class="cmp-today-btn" onclick="cmpGoToday()">วันนี้</button>
+      <button onclick="cmpShift(1)" title="ถัดไป">›</button>
+    </div>
+    <button class="btn btn-success cmp-add cmp-admin" onclick="openCampaignEdit()">➕ เพิ่มแคมเปญ</button>
+  </div>
+  <div class="cmp-filters" id="cmpFilters"></div>
+  <div class="cmp-kpis" id="cmpKpis"></div>
+  <div class="cmp-layout">
+    <div class="cmp-main"><div id="cmpCalendar"></div></div>
+    <aside class="cmp-side">
+      <div class="cmp-card" id="cmpShortage"></div>
+      <div class="cmp-card" id="cmpAgenda"></div>
+    </aside>
+  </div>
+</div>
+
+<!-- ===== Admin: Login ===== -->
+<div class="amodal" id="loginModal">
+  <div class="amodal-card" style="max-width:380px">
+    <div class="amodal-head"><h3>🔑 เข้าสู่โหมด Admin</h3><button class="close" onclick="closeAModal('loginModal')">✕</button></div>
+    <div class="amodal-body">
+      <div class="form-msg err" id="loginMsg"></div>
+      <div class="field">
+        <label>กรอก PIN</label>
+        <input type="password" id="loginPin" placeholder="••••" autocomplete="off" onkeydown="if(event.key==='Enter')doLogin()">
+      </div>
+      <div class="amodal-foot">
+        <button class="btn btn-ghost" onclick="closeAModal('loginModal')">ยกเลิก</button>
+        <button class="btn btn-primary" id="loginSubmit" onclick="doLogin()">เข้าสู่ระบบ</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Campaign: detail (view forecast vs stock) ===== -->
+<div class="amodal" id="campaignDetailModal">
+  <div class="amodal-card wide">
+    <div class="amodal-head"><h3 id="cmpDetTitle">แคมเปญ</h3><button class="close" onclick="closeAModal('campaignDetailModal')">✕</button></div>
+    <div class="amodal-body">
+      <div class="cmp-det-head" id="cmpDetMeta"></div>
+      <div id="cmpDetBody"></div>
+      <div class="amodal-foot">
+        <button class="btn btn-danger-ghost cmp-admin" onclick="cmpDetDelete()">🗑️ ลบ</button>
+        <button class="btn btn-primary cmp-admin" onclick="cmpDetEdit()">✏️ แก้ไข</button>
+        <button class="btn btn-ghost" onclick="closeAModal('campaignDetailModal')">ปิด</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Campaign: add / edit (admin only) ===== -->
+<div class="amodal" id="campaignEditModal">
+  <div class="amodal-card wide">
+    <div class="amodal-head"><h3 id="cmpEditTitle">➕ เพิ่มแคมเปญ</h3><button class="close" onclick="closeAModal('campaignEditModal')">✕</button></div>
+    <div class="amodal-body">
+      <div class="field-row">
+        <div class="field"><label>ชื่อแคมเปญ *</label><input type="text" id="cmpName" placeholder="เช่น Lazada Payday, TikTok 6.6"></div>
+        <div class="field"><label>ช่องทาง</label>
+          <select id="cmpChannel" onchange="onCmpChannelChange()">
+            <option value="lazada">Lazada</option>
+            <option value="tiktok">TikTok</option>
+            <option value="shopee">Shopee</option>
+            <option value="other">อื่นๆ</option>
+          </select>
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>วันเริ่ม *</label><input type="date" id="cmpStart"></div>
+        <div class="field"><label>วันสิ้นสุด <span style="font-weight:400;color:#94a3b8">(เว้นว่าง = วันเดียว)</span></label><input type="date" id="cmpEnd"></div>
+      </div>
+      <div class="field"><label>สีแคมเปญ <span style="font-weight:400;color:#94a3b8">(ใช้แยกเวลาแคมเปญทับวันกัน)</span></label><div class="cmp-swatches" id="cmpSwatches"></div></div>
+      <div class="field">
+        <label>เพิ่มสินค้าที่ตั้งเป้าจะออก (forecast)</label>
+        <div class="ac-wrap">
+          <input type="text" id="cmpFcSearch" placeholder="🔍 ค้นหารหัส/ชื่อสินค้า แล้วคลิกเพื่อเพิ่ม..." autocomplete="off"
+            oninput="cmpFcRenderAc(this.value)" onfocus="cmpFcRenderAc(this.value)" onblur="setTimeout(cmpFcHideAc,150)">
+          <div class="ac-list" id="cmpFcAcList"></div>
+        </div>
+      </div>
+      <div id="cmpFcList"></div>
+      <div class="amodal-foot">
+        <button class="btn btn-danger-ghost" id="cmpDelBtn" style="display:none" onclick="cmpEditDelete()">🗑️ ลบ</button>
+        <button class="btn btn-ghost" onclick="closeAModal('campaignEditModal')">ปิด</button>
+        <button class="btn btn-success" onclick="saveCampaign()">บันทึกแคมเปญ</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toasts"></div>
+
+<script>
+// ============================================================
+//  Standalone Campaign page — talks to the same backend (/api)
+//  Data lives ONLY in localStorage (no pgSQL writes). Stock compare
+//  reads the current closing balance from /api/products (read-only).
+// ============================================================
+let DB = { products: [] };
+const fmt = n => (n === 0 || n === null || n === undefined) ? '-' : Number(n).toLocaleString('en-US', { maximumFractionDigits: 2 });
+
+function escapeHtml(s) {
+  return String(s || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function hl(text, q) {
+  text = String(text || '');
+  if (!q) return escapeHtml(text);
+  const i = text.toLowerCase().indexOf(q.toLowerCase());
+  if (i < 0) return escapeHtml(text);
+  return escapeHtml(text.slice(0, i)) + '<mark>' + escapeHtml(text.slice(i, i + q.length)) + '</mark>' + escapeHtml(text.slice(i + q.length));
+}
+function searchProducts(q) {
+  q = q.trim().toLowerCase();
+  if (!q) return [];
+  const starts = [], contains = [];
+  for (const p of DB.products) {
+    const code = p.code.toLowerCase(), name = (p.name || '').toLowerCase();
+    if (code.startsWith(q) || name.startsWith(q)) starts.push(p);
+    else if (code.includes(q) || name.includes(q)) contains.push(p);
+  }
+  return starts.concat(contains).slice(0, 10);
+}
+function toast(msg, type = '') {
+  const box = document.getElementById('toasts');
+  const el = document.createElement('div');
+  el.className = 'toast ' + type;
+  el.textContent = msg;
+  box.appendChild(el);
+  setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity .3s'; setTimeout(() => el.remove(), 300); }, 3000);
+}
+function openAModal(id) { document.getElementById(id).classList.add('show'); }
+function closeAModal(id) { document.getElementById(id).classList.remove('show'); }
+
+// ---------- Admin (same PIN flow as the main app) ----------
+let adminToken = sessionStorage.getItem('adminToken') || '';
+function updateAdminUI() {
+  const on = !!adminToken;
+  document.body.classList.toggle('admin-on', on);
+  document.getElementById('adminBtnText').textContent = on ? 'Admin: เปิด' : 'Admin';
+}
+function onAdminBtn() {
+  if (adminToken) { adminLogout(); return; }
+  document.getElementById('loginPin').value = '';
+  document.getElementById('loginMsg').classList.remove('show');
+  openAModal('loginModal');
+  setTimeout(() => document.getElementById('loginPin').focus(), 50);
+}
+async function doLogin() {
+  const pin = document.getElementById('loginPin').value.trim();
+  const msg = document.getElementById('loginMsg');
+  const btn = document.getElementById('loginSubmit');
+  if (!pin) { msg.textContent = 'กรุณากรอก PIN'; msg.classList.add('show'); return; }
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/admin/login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'PIN ไม่ถูกต้อง');
+    adminToken = data.token;
+    sessionStorage.setItem('adminToken', adminToken);
+    updateAdminUI();
+    closeAModal('loginModal');
+    toast('เข้าสู่โหมด Admin แล้ว', 'ok');
+  } catch (e) {
+    msg.textContent = e.message; msg.classList.add('show');
+  } finally {
+    btn.disabled = false;
+  }
+}
+async function adminLogout() {
+  try { await fetch('/api/admin/logout', { method: 'POST', headers: { 'Authorization': 'Bearer ' + adminToken } }); } catch (e) {}
+  adminToken = '';
+  sessionStorage.removeItem('adminToken');
+  updateAdminUI();
+  toast('ออกจากโหมด Admin แล้ว');
+}
+
+// ---------- Campaign data (localStorage only) ----------
+const CMP_KEY = 'stock_campaigns_v1';
+const CMP_CHANNELS = [
+  { id: 'lazada', name: 'Lazada', color: '#0f146e', bg: '#e6e9fb' },
+  { id: 'tiktok', name: 'TikTok', color: '#0c5c5c', bg: '#dbf6f6' },
+  { id: 'shopee', name: 'Shopee', color: '#b8410e', bg: '#fde6da' },
+  { id: 'other',  name: 'อื่นๆ',  color: '#475569', bg: '#eef2f7' },
+];
+// per-campaign color palette (Tailwind 600-level: readable on its own light tint)
+const CMP_PALETTE = ['#2563eb', '#0891b2', '#0d9488', '#16a34a', '#65a30d', '#ca8a04', '#ea580c', '#dc2626', '#db2777', '#9333ea', '#4f46e5', '#475569'];
+const CMP_CH_DEFAULT = { lazada: '#2563eb', tiktok: '#0d9488', shopee: '#ea580c', other: '#475569' };
+const CMP_DOW = ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'];
+const CMP_MONTH_TH = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+
+let cmpView = 'month';
+let cmpFilter = null;          // channel id, or null = all
+let cmpMonths = 1;
+let cmpAnchor = new Date();
+let campaigns = cmpLoad();
+// one-time cleanup: ลบข้อมูล demo ที่เคย seed ไว้ (id ขึ้นต้น 'demo'); ปลอดภัยกับข้อมูลจริง (id จริงขึ้นต้น 'c'). ลบบล็อกนี้ได้ภายหลัง.
+(function () { try { const n = campaigns.length; campaigns = campaigns.filter(c => !String(c.id || '').startsWith('demo')); localStorage.removeItem('stock_campaigns_seeded_demo_v1'); if (campaigns.length !== n) cmpSave(); } catch (e) {} })();
+let cmpEditId = null;
+let cmpDetailId = null;
+let cmpForecastDraft = [];
+let cmpColorDraft = null;
+let cmpColorTouched = false;
+
+function cmpLoad() {
+  let arr; try { arr = JSON.parse(localStorage.getItem(CMP_KEY)) || []; } catch (e) { arr = []; }
+  // normalize legacy single-date campaigns → start/end range
+  return arr.map(c => { const start = c.start || c.date; const end = c.end || c.start || c.date; const o = { ...c, start, end }; delete o.date; return o; });
+}
+function cmpSave() { localStorage.setItem(CMP_KEY, JSON.stringify(campaigns)); }
+function cmpUid() { return 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+
+function cmpChannel(id) { return CMP_CHANNELS.find(c => c.id === id) || CMP_CHANNELS[3]; }
+function cmpN(n) { return Number(n || 0).toLocaleString('en-US'); }
+
+const cmpISO = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const cmpDM = iso => iso.split('-').reverse().join('/');
+function cmpStartOfMonth(d) { return new Date(d.getFullYear(), d.getMonth(), 1); }
+
+function cmpClosing(code) { const p = DB.products.find(x => x.code === code); return p ? (p.closing || 0) : 0; }
+function cmpName(code) { const p = DB.products.find(x => x.code === code); return p ? (p.name || '') : ''; }
+function cmpStartD(c) { return c.start || c.date; }
+function cmpEndD(c) { return c.end || c.start || c.date; }
+function cmpColor(c) { return c.color || CMP_CH_DEFAULT[c.channel] || cmpChannel(c.channel).color; }
+function cmpTint(hex) { return /^#[0-9a-fA-F]{6}$/.test(hex) ? hex + '22' : hex; }
+function cmpSpanDays(c) { const s = new Date(cmpStartD(c) + 'T00:00:00'), e = new Date(cmpEndD(c) + 'T00:00:00'); return Math.round((e - s) / 86400000) + 1; }
+// campaigns covering a given day (start ≤ day ≤ end)
+function campaignsOn(iso) { return campaigns.filter(c => cmpStartD(c) <= iso && iso <= cmpEndD(c)).sort((a, b) => cmpStartD(a).localeCompare(cmpStartD(b)) || a.name.localeCompare(b.name)); }
+function cmpShortage(c) { return (c.forecasts || []).some(f => Number(f.qty || 0) > cmpClosing(f.code)); }
+
+// ---------- view controls ----------
+function setCmpView(v) { cmpView = v; renderCampaign(); }
+function setCmpMonths(n) { cmpMonths = n; renderCampaign(); }
+function setCmpFilter(ch) { cmpFilter = ch; renderCampaign(); }
+function cmpShift(d) {
+  if (cmpView === 'week') cmpAnchor = new Date(cmpAnchor.getFullYear(), cmpAnchor.getMonth(), cmpAnchor.getDate() + d * 7);
+  else cmpAnchor = new Date(cmpAnchor.getFullYear(), cmpAnchor.getMonth() + d, 1);
+  renderCampaign();
+}
+function cmpGoToday() { cmpAnchor = new Date(); renderCampaign(); }
+
+// ---------- period + aggregation helpers ----------
+function cmpFilterPass(c) { return !cmpFilter || c.channel === cmpFilter; }
+function cmpWeekStart(d) { const s = new Date(d.getFullYear(), d.getMonth(), d.getDate()); s.setDate(s.getDate() - s.getDay()); return s; }
+function cmpPeriod() {
+  if (cmpView === 'week') { const s = cmpWeekStart(cmpAnchor); const e = new Date(s); e.setDate(e.getDate() + 6); return { start: s, end: e }; }
+  const s = new Date(cmpAnchor.getFullYear(), cmpAnchor.getMonth(), 1);
+  const e = new Date(cmpAnchor.getFullYear(), cmpAnchor.getMonth() + cmpMonths, 0);
+  return { start: s, end: e };
+}
+function cmpPeriodLabel() {
+  const { start, end } = cmpPeriod();
+  if (cmpView === 'week') return cmpDM(cmpISO(start)) + ' – ' + cmpDM(cmpISO(end));
+  return CMP_MONTH_TH[start.getMonth()] + ' ' + start.getFullYear() + (cmpMonths > 1 ? ' +' + (cmpMonths - 1) + ' ด.' : '');
+}
+// a campaign counts for the period if its [start,end] overlaps the visible period
+function cmpPeriodCampaigns() {
+  const { start, end } = cmpPeriod(); const ps = cmpISO(start), pe = cmpISO(end);
+  return campaigns.filter(c => cmpFilterPass(c) && cmpStartD(c) <= pe && cmpEndD(c) >= ps);
+}
+function cmpDaysUntil(iso) { const t = new Date(); t.setHours(0, 0, 0, 0); const d = new Date(iso + 'T00:00:00'); return Math.round((d - t) / 86400000); }
+// sum forecast per product across a list of campaigns → { code: {code,name,qty} }
+function cmpAggForecast(list) {
+  const m = {};
+  list.forEach(c => (c.forecasts || []).forEach(f => {
+    const code = f.code; if (!code) return;
+    if (!m[code]) m[code] = { code, name: cmpName(code) || f.name || '', qty: 0 };
+    m[code].qty += Number(f.qty || 0);
+  }));
+  return m;
+}
+
+// ---------- chip (shared by month + week) ----------
+function cmpChipHtml(c, iso) {
+  const color = cmpColor(c);
+  const multi = cmpStartD(c) !== cmpEndD(c);
+  const isStart = iso ? iso === cmpStartD(c) : true;
+  const warn = cmpShortage(c) ? '<span class="warn">⚠️</span>' : '';
+  const cnt = (c.forecasts || []).length;
+  const total = (c.forecasts || []).reduce((s, f) => s + Number(f.qty || 0), 0);
+  const meta = cnt ? `<span class="chip-meta">${cnt}·${cmpN(total)}</span>` : '';
+  const cls = 'cmp-chip' + (multi && !isStart ? ' cont' : '');
+  const nm = (multi && !isStart ? '↳ ' : '') + escapeHtml(c.name);
+  // warn/meta only on the start day to keep continuation days tidy
+  const tail = isStart ? warn + meta : '';
+  return `<span class="${cls}" style="--ch:${color};background:${cmpTint(color)};color:${color}" onclick="event.stopPropagation();openCampaignDetail('${c.id}')" title="${escapeHtml(c.name)}"><span class="chip-name">${nm}</span>${tail}</span>`;
+}
+
+// ---------- orchestrator ----------
+function renderCampaign() {
+  document.querySelectorAll('#cmpView button').forEach(b => b.classList.toggle('active', b.dataset.v === cmpView));
+  document.querySelectorAll('#cmpRange button').forEach(b => b.classList.toggle('active', Number(b.dataset.m) === cmpMonths));
+  const rangeEl = document.getElementById('cmpRange');
+  if (rangeEl) rangeEl.style.display = cmpView === 'month' ? 'inline-flex' : 'none';
+  renderFilters();
+  renderKpis();
+  const wrap = document.getElementById('cmpCalendar');
+  if (wrap) {
+    if (cmpView === 'week') wrap.innerHTML = renderCmpWeek(cmpAnchor);
+    else { let html = ''; for (let i = 0; i < cmpMonths; i++) html += renderCmpMonth(new Date(cmpAnchor.getFullYear(), cmpAnchor.getMonth() + i, 1)); wrap.innerHTML = html; }
+  }
+  renderShortagePanel();
+  renderAgenda();
+}
+
+function renderFilters() {
+  const box = document.getElementById('cmpFilters'); if (!box) return;
+  const all = `<button class="cmp-fchip ${!cmpFilter ? 'active' : ''}" onclick="setCmpFilter(null)">ทั้งหมด</button>`;
+  const chs = CMP_CHANNELS.map(c => `<button class="cmp-fchip ${cmpFilter === c.id ? 'active' : ''}" onclick="setCmpFilter('${c.id}')"><i style="background:${c.color}"></i>${c.name}</button>`).join('');
+  box.innerHTML = all + chs + '<span class="cmp-legend-note">⚠️ = ของอาจไม่พอ ต้องสั่งเพิ่ม</span>';
+}
+
+function renderKpis() {
+  const list = cmpPeriodCampaigns();
+  const codes = Object.values(cmpAggForecast(list));
+  let totalFc = 0, shortN = 0, okN = 0, shortQty = 0;
+  codes.forEach(p => {
+    totalFc += p.qty;
+    const closing = cmpClosing(p.code);
+    if (p.qty > closing) { shortN++; shortQty += p.qty - closing; } else okN++;
+  });
+  const cards = [
+    { label: 'แคมเปญในช่วงนี้', val: cmpN(list.length), sub: cmpPeriodLabel(), tone: '' },
+    { label: 'ยอด forecast รวม', val: cmpN(totalFc), sub: 'ชิ้น', tone: '' },
+    { label: 'สินค้าของไม่พอ', val: cmpN(shortN), sub: shortN ? 'ต้องสั่งเพิ่ม ' + cmpN(shortQty) + ' ชิ้น' : 'ครบทุกตัว', tone: shortN ? 'bad' : 'good' },
+    { label: 'สินค้าเพียงพอ', val: cmpN(okN), sub: 'พร้อมขาย', tone: 'good' },
+  ];
+  const box = document.getElementById('cmpKpis');
+  if (box) box.innerHTML = cards.map(c => `<div class="cmp-kpi ${c.tone}"><div class="k-label">${c.label}</div><div class="k-val">${c.val}</div><div class="k-sub">${escapeHtml(c.sub)}</div></div>`).join('');
+}
+
+function renderShortagePanel() {
+  const list = cmpPeriodCampaigns();
+  const shorts = Object.values(cmpAggForecast(list))
+    .map(p => ({ ...p, closing: cmpClosing(p.code), short: p.qty - cmpClosing(p.code) }))
+    .filter(p => p.short > 0)
+    .sort((a, b) => b.short - a.short);
+  const box = document.getElementById('cmpShortage'); if (!box) return;
+  let html = `<div class="cmp-card-h"><span>⚠️ ของอาจไม่พอ — ต้องสั่งเพิ่ม</span>${shorts.length ? `<span class="cmp-card-c">${shorts.length}</span>` : ''}</div>`;
+  if (!shorts.length) {
+    html += '<div class="cmp-side-empty">✓ สต็อกเพียงพอสำหรับทุกแคมเปญในช่วงนี้</div>';
+  } else {
+    html += shorts.map(p => {
+      const pct = p.qty ? Math.max(0, Math.min(100, p.closing / p.qty * 100)) : 0;
+      return `<div class="cmp-short-item">
+        <div class="si-top"><span class="si-code">${escapeHtml(p.code)}</span><span class="si-short">สั่งเพิ่ม ${cmpN(p.short)}</span></div>
+        <div class="si-name">${escapeHtml(p.name)}</div>
+        <div class="cmp-bar"><i class="bad" style="width:${pct}%"></i></div>
+        <div class="si-meta">มี ${cmpN(p.closing)} · ต้องใช้ ${cmpN(p.qty)} ชิ้น</div>
+      </div>`;
+    }).join('');
+  }
+  box.innerHTML = html;
+}
+
+function renderAgenda() {
+  const todayISO = cmpISO(new Date());
+  const up = campaigns.filter(c => cmpFilterPass(c) && cmpEndD(c) >= todayISO)
+    .sort((a, b) => cmpStartD(a).localeCompare(cmpStartD(b))).slice(0, 8);
+  const box = document.getElementById('cmpAgenda'); if (!box) return;
+  let html = '<div class="cmp-card-h"><span>📅 แคมเปญที่กำลังจะมาถึง</span></div>';
+  if (!up.length) {
+    html += '<div class="cmp-side-empty">ยังไม่มีแคมเปญในอนาคต — กด “เพิ่มแคมเปญ” เพื่อเริ่มวางแผน</div>';
+  } else {
+    html += up.map(c => {
+      const ch = cmpChannel(c.channel);
+      const color = cmpColor(c);
+      const ongoing = cmpStartD(c) <= todayISO && todayISO <= cmpEndD(c);
+      const days = cmpDaysUntil(cmpStartD(c));
+      const cd = ongoing ? 'กำลังจัด' : (days <= 0 ? 'วันนี้' : (days === 1 ? 'พรุ่งนี้' : 'อีก ' + days + ' วัน'));
+      const span = cmpSpanDays(c);
+      const dateLbl = span > 1 ? `${cmpDM(cmpStartD(c)).slice(0, 5)}–${cmpDM(cmpEndD(c)).slice(0, 5)}` : cmpDM(cmpStartD(c)).slice(0, 5);
+      const cnt = (c.forecasts || []).length;
+      const total = (c.forecasts || []).reduce((s, f) => s + Number(f.qty || 0), 0);
+      const warn = cmpShortage(c) ? '<span class="ag-warn">⚠️</span>' : '';
+      const spanBadge = span > 1 ? ` · ${span} วัน` : '';
+      return `<div class="cmp-ag-item" onclick="openCampaignDetail('${c.id}')" style="--ch:${color}">
+        <div class="ag-date"><b>${dateLbl}</b><small>${cd}</small></div>
+        <div class="ag-body">
+          <div class="ag-name">${escapeHtml(c.name)}${warn}</div>
+          <div class="ag-meta"><span class="ag-badge" style="background:${ch.bg};color:${ch.color}">${ch.name}</span>${cnt} สินค้า · ${cmpN(total)} ชิ้น${spanBadge}</div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+  box.innerHTML = html;
+}
+
+function renderCmpMonth(m) {
+  const y = m.getFullYear(), mo = m.getMonth();
+  const startDow = new Date(y, mo, 1).getDay();
+  const daysIn = new Date(y, mo + 1, 0).getDate();
+  const totalCells = Math.ceil((startDow + daysIn) / 7) * 7;
+  const todayISO = cmpISO(new Date());
+  const cur = new Date(y, mo, 1); cur.setDate(cur.getDate() - startDow);
+  let cells = '';
+  for (let k = 0; k < totalCells; k++) {
+    const day = new Date(cur), iso = cmpISO(day), inMonth = day.getMonth() === mo;
+    const cls = ['cmp-day'];
+    if (!inMonth) cls.push('out');
+    if (iso === todayISO) cls.push('today');
+    const chips = campaignsOn(iso).filter(cmpFilterPass).map(c => cmpChipHtml(c, iso)).join('');
+    cells += `<div class="${cls.join(' ')}">
+      <div class="dnum">${day.getDate()}</div>
+      <button class="cmp-day-add" onclick="openCampaignEdit(null,'${iso}')" title="เพิ่มแคมเปญวันนี้">+</button>
+      ${chips}
+    </div>`;
+    cur.setDate(cur.getDate() + 1);
+  }
+  const dow = CMP_DOW.map(d => `<div class="cmp-dow">${d}</div>`).join('');
+  return `<div class="cmp-cal"><h3>${CMP_MONTH_TH[mo]} ${y}</h3><div class="cmp-grid">${dow}${cells}</div></div>`;
+}
+
+function renderCmpWeek(anchor) {
+  const s = cmpWeekStart(anchor);
+  const todayISO = cmpISO(new Date());
+  let cells = '';
+  for (let k = 0; k < 7; k++) {
+    const day = new Date(s); day.setDate(s.getDate() + k);
+    const iso = cmpISO(day);
+    const cls = ['cmp-wday']; if (iso === todayISO) cls.push('today');
+    const chips = campaignsOn(iso).filter(cmpFilterPass).map(c => cmpChipHtml(c, iso)).join('') || '<div class="cmp-wempty">—</div>';
+    cells += `<div class="${cls.join(' ')}">
+      <div class="wd-head"><span class="wd-dow">${CMP_DOW[day.getDay()]}</span><span class="wd-num">${day.getDate()}</span>
+        <button class="cmp-day-add" onclick="openCampaignEdit(null,'${iso}')" title="เพิ่มแคมเปญ">+</button></div>
+      <div class="wd-body">${chips}</div>
+    </div>`;
+  }
+  const e = new Date(s); e.setDate(e.getDate() + 6);
+  return `<div class="cmp-cal"><h3>สัปดาห์ ${cmpDM(cmpISO(s))} – ${cmpDM(cmpISO(e))}</h3><div class="cmp-week">${cells}</div></div>`;
+}
+
+// ---- Detail (view-only for everyone; admin sees edit/delete via .cmp-admin) ----
+function openCampaignDetail(id) {
+  const c = campaigns.find(x => x.id === id);
+  if (!c) return;
+  cmpDetailId = id;
+  const ch = cmpChannel(c.channel);
+  document.getElementById('cmpDetTitle').textContent = c.name;
+  const color = cmpColor(c);
+  const span = cmpSpanDays(c);
+  const dateTxt = span > 1 ? `${cmpDM(cmpStartD(c))} – ${cmpDM(cmpEndD(c))} (${span} วัน)` : cmpDM(cmpStartD(c));
+  document.getElementById('cmpDetMeta').innerHTML =
+    `<span class="cmp-dot" style="background:${color}"></span>` +
+    `<span class="cmp-badge" style="background:${ch.bg};color:${ch.color}">${ch.name}</span>` +
+    `<span style="color:#64748b;font-size:13px">📅 ${dateTxt}</span>`;
+  const fcs = c.forecasts || [];
+  let body;
+  if (!fcs.length) {
+    body = '<div class="cmp-empty">ยังไม่มีสินค้าพยากรณ์ในแคมเปญนี้</div>';
+  } else {
+    const rows = fcs.map(f => {
+      const closing = cmpClosing(f.code), qty = Number(f.qty || 0);
+      const short = qty > closing;
+      const pct = qty ? Math.max(0, Math.min(100, closing / qty * 100)) : 100;
+      const status = short
+        ? `<span class="cmp-short">⚠️ ต้องสั่งเพิ่ม ${cmpN(qty - closing)}</span>`
+        : '<span class="cmp-ok">✓ เพียงพอ</span>';
+      return `<tr><td class="code">${escapeHtml(f.code)}</td>` +
+        `<td>${escapeHtml(cmpName(f.code) || f.name || '')}<div class="cmp-bar sm"><i class="${short ? 'bad' : 'good'}" style="width:${pct}%"></i></div></td>` +
+        `<td class="num">${cmpN(qty)}</td><td class="num">${cmpN(closing)}</td><td>${status}</td></tr>`;
+    }).join('');
+    const totalFc = fcs.reduce((s, f) => s + Number(f.qty || 0), 0);
+    body = `<table class="cmp-det-table"><thead><tr><th>รหัส</th><th>ชื่อสินค้า</th>` +
+      `<th class="num">Forecast ออก</th><th class="num">คงเหลือปัจจุบัน</th><th>สถานะ</th></tr></thead>` +
+      `<tbody>${rows}</tbody><tfoot><tr><td colspan="2"><b>รวม forecast</b></td>` +
+      `<td class="num"><b>${cmpN(totalFc)}</b></td><td colspan="2"></td></tr></tfoot></table>`;
+  }
+  document.getElementById('cmpDetBody').innerHTML = body;
+  openAModal('campaignDetailModal');
+}
+function cmpDetEdit() { const id = cmpDetailId; if (!id) return; closeAModal('campaignDetailModal'); openCampaignEdit(id); }
+function cmpDetDelete() {
+  if (!cmpDetailId || !adminToken) return;
+  if (!confirm('ลบแคมเปญนี้?')) return;
+  campaigns = campaigns.filter(c => c.id !== cmpDetailId); cmpSave();
+  closeAModal('campaignDetailModal'); renderCampaign(); toast('ลบแคมเปญแล้ว', 'ok');
+}
+
+// ---- Add / edit (admin only) ----
+function openCampaignEdit(id, presetDate) {
+  if (!adminToken) { toast('ต้องเข้าโหมด Admin ก่อนแก้ไขแคมเปญ', 'err'); return; }
+  cmpEditId = id || null;
+  const c = id ? campaigns.find(x => x.id === id) : null;
+  document.getElementById('cmpEditTitle').textContent = c ? '✏️ แก้ไขแคมเปญ' : '➕ เพิ่มแคมเปญ';
+  document.getElementById('cmpName').value = c ? c.name : '';
+  const channel = c ? c.channel : 'lazada';
+  document.getElementById('cmpChannel').value = channel;
+  const start = c ? cmpStartD(c) : (presetDate || cmpISO(new Date()));
+  const end = c ? cmpEndD(c) : '';
+  document.getElementById('cmpStart').value = start;
+  document.getElementById('cmpEnd').value = (end && end !== start) ? end : '';
+  cmpColorTouched = !!(c && c.color);
+  cmpColorDraft = (c && c.color) ? c.color : (CMP_CH_DEFAULT[channel] || CMP_PALETTE[0]);
+  renderCmpSwatches();
+  cmpForecastDraft = c ? (c.forecasts || []).map(f => ({ ...f })) : [];
+  document.getElementById('cmpFcSearch').value = '';
+  document.getElementById('cmpDelBtn').style.display = c ? 'inline-flex' : 'none';
+  cmpFcHideAc();
+  renderCmpForecastDraft();
+  openAModal('campaignEditModal');
+}
+function renderCmpSwatches() {
+  const box = document.getElementById('cmpSwatches'); if (!box) return;
+  box.innerHTML = CMP_PALETTE.map(col =>
+    `<button type="button" class="cmp-swatch${col === cmpColorDraft ? ' active' : ''}" style="background:${col}" onclick="pickCmpColor('${col}')" title="${col}"></button>`
+  ).join('');
+}
+function pickCmpColor(col) { cmpColorDraft = col; cmpColorTouched = true; renderCmpSwatches(); }
+function onCmpChannelChange() {
+  if (cmpColorTouched) return;
+  const ch = document.getElementById('cmpChannel').value;
+  cmpColorDraft = CMP_CH_DEFAULT[ch] || CMP_PALETTE[0];
+  renderCmpSwatches();
+}
+function cmpFcRenderAc(q) {
+  const list = document.getElementById('cmpFcAcList');
+  if (!q.trim()) { list.classList.remove('show'); return; }
+  const matches = searchProducts(q).filter(p => !cmpForecastDraft.some(f => f.code === p.code));
+  if (!matches.length) { list.innerHTML = '<div class="ac-item ac-empty">ไม่พบสินค้า / เพิ่มแล้ว</div>'; list.classList.add('show'); return; }
+  list.innerHTML = matches.map(p => `
+    <div class="ac-item" onmousedown="event.preventDefault()" onclick="cmpFcAdd(${DB.products.indexOf(p)})">
+      <span class="ac-bal">คงเหลือ ${fmt(p.closing)}</span>
+      <span class="ac-code">${hl(p.code, q)}</span> &nbsp;<span class="ac-name">${hl(p.name, q)}</span>
+    </div>`).join('');
+  list.classList.add('show');
+}
+function cmpFcHideAc() { const l = document.getElementById('cmpFcAcList'); if (l) l.classList.remove('show'); }
+function cmpFcAdd(idx) {
+  const p = DB.products[idx];
+  if (p && !cmpForecastDraft.some(f => f.code === p.code)) cmpForecastDraft.push({ code: p.code, name: p.name || '', qty: 0 });
+  document.getElementById('cmpFcSearch').value = '';
+  cmpFcHideAc();
+  renderCmpForecastDraft();
+}
+function cmpFcRemove(i) { cmpForecastDraft.splice(i, 1); renderCmpForecastDraft(); }
+function renderCmpForecastDraft() {
+  const box = document.getElementById('cmpFcList');
+  if (!cmpForecastDraft.length) { box.innerHTML = '<div class="cmp-empty">ยังไม่ได้เลือกสินค้า — ค้นหาด้านบนเพื่อเพิ่มเป้า forecast</div>'; return; }
+  box.innerHTML = cmpForecastDraft.map((f, i) => {
+    const closing = cmpClosing(f.code);
+    return `<div class="cmp-fc-row">
+      <div class="nm"><b>${escapeHtml(f.code)}</b> <span style="color:#64748b">${escapeHtml(cmpName(f.code) || f.name)}</span><br><small style="color:#94a3b8">คงเหลือปัจจุบัน ${cmpN(closing)} ชิ้น</small></div>
+      <input type="number" min="0" step="any" inputmode="decimal" value="${f.qty}" onfocus="this.select()" oninput="cmpForecastDraft[${i}].qty = Number(this.value) || 0">
+      <button type="button" class="rm" onclick="cmpFcRemove(${i})" title="ลบ">×</button>
+    </div>`;
+  }).join('');
+}
+function saveCampaign() {
+  if (!adminToken) { toast('ต้องเข้าโหมด Admin ก่อน', 'err'); return; }
+  const name = document.getElementById('cmpName').value.trim();
+  const channel = document.getElementById('cmpChannel').value;
+  const start = document.getElementById('cmpStart').value;
+  let end = document.getElementById('cmpEnd').value || start;
+  if (!name) { toast('กรุณากรอกชื่อแคมเปญ', 'err'); return; }
+  if (!start) { toast('กรุณาเลือกวันเริ่ม', 'err'); return; }
+  if (end < start) { toast('วันสิ้นสุดต้องไม่ก่อนวันเริ่ม', 'err'); return; }
+  const color = cmpColorDraft || CMP_CH_DEFAULT[channel] || CMP_PALETTE[0];
+  const forecasts = cmpForecastDraft.filter(f => f.code).map(f => ({ code: f.code, name: f.name || '', qty: Number(f.qty) || 0 }));
+  if (cmpEditId) {
+    const c = campaigns.find(x => x.id === cmpEditId);
+    if (c) { c.name = name; c.channel = channel; c.start = start; c.end = end; c.color = color; c.forecasts = forecasts; delete c.date; }
+  } else {
+    campaigns.push({ id: cmpUid(), name, channel, start, end, color, forecasts });
+  }
+  cmpSave();
+  closeAModal('campaignEditModal');
+  renderCampaign();
+  toast('บันทึกแคมเปญแล้ว', 'ok');
+}
+function cmpEditDelete() {
+  if (!cmpEditId || !adminToken) return;
+  if (!confirm('ลบแคมเปญนี้?')) return;
+  campaigns = campaigns.filter(c => c.id !== cmpEditId); cmpSave();
+  closeAModal('campaignEditModal'); renderCampaign(); toast('ลบแคมเปญแล้ว', 'ok');
+}
+
+// ---------- init ----------
+async function loadProducts() {
+  try {
+    const res = await fetch('/api/products');
+    const data = await res.json();
+    DB.products = data.products || [];
+  } catch (e) {
+    toast('โหลดข้อมูลสินค้าไม่สำเร็จ', 'err');
+  }
+  renderCampaign();
+}
+updateAdminUI();
+renderCampaign();
+loadProducts();
+</script>
+</body>
+</html>
