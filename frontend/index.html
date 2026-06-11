@@ -1017,6 +1017,20 @@ function initOnline() {
 }
 
 // 🔍 โหมดพิสูจน์: ดูยอดที่ควรตัด (ไม่เขียนลง DB)
+async function readApiJson(res) {
+  const text = await res.text();
+  const ct = (res.headers.get('content-type') || '').toLowerCase();
+  if (ct.includes('application/json')) {
+    try { return text ? JSON.parse(text) : {}; }
+    catch (e) { throw new Error('คำตอบจาก server ไม่ใช่ JSON ที่ถูกต้อง'); }
+  }
+  const titleMatch = /<title[^>]*>([^<]+)<\/title>/i.exec(text);
+  const title = titleMatch ? titleMatch[1].trim() : '';
+  const plain = text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  const detail = title || plain.slice(0, 160) || `HTTP ${res.status}`;
+  throw new Error(`server ตอบกลับไม่ใช่ JSON (${res.status}) ${detail}`);
+}
+
 async function previewOnline() {
   const btn = document.getElementById('onlinePreviewBtn');
   const msg = document.getElementById('onlineMsg');
@@ -1030,7 +1044,7 @@ async function previewOnline() {
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken },
       body: JSON.stringify({ date })
     });
-    const d = await res.json();
+    const d = await readApiJson(res);
     if (!res.ok) { msg.textContent = '❌ ' + (d.detail || 'ดึงไม่สำเร็จ'); btn.disabled = false; return; }
     msg.textContent = `✅ ยอดที่ควรตัดวันที่ ${d.date} · ${d.matched} รายการ รวม ${Number(d.total_qty).toLocaleString()} ชิ้น`
       + (d.skipped ? ` · ข้าม ${d.skipped}` : '') + ' — ยังไม่เขียนลงสต็อก';
@@ -1088,7 +1102,7 @@ async function syncOnline() {
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken },
       body: JSON.stringify({ date })
     });
-    const d = await res.json();
+    const d = await readApiJson(res);
     if (!res.ok) { msg.textContent = '❌ ' + (d.detail || 'ดึงไม่สำเร็จ'); btn.disabled = false; return; }
     msg.textContent = `✅ ดึงเข้าช่องออนไลน์แล้ว ${d.written} รายการ` + (d.skipped ? ` · ข้าม ${d.skipped}` : '');
     renderOnlineResult(d);
@@ -1157,7 +1171,7 @@ async function pullOrders() {
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken },
       body: JSON.stringify({ job: 'set2_all' })
     });
-    const d = await res.json();
+    const d = await readApiJson(res);
     if (!res.ok) { msg.textContent = '❌ ' + (d.detail || 'สั่งดึงไม่สำเร็จ'); pBtn.disabled = false; return; }
     pollPull();
   } catch (e) { msg.textContent = '❌ ' + e.message; pBtn.disabled = false; }
@@ -1169,7 +1183,7 @@ async function pollPull() {
   for (let i = 0; i < 240; i++) {
     await new Promise(r => setTimeout(r, 3000));
     let st;
-    try { st = await (await fetch('/api/online/pull/status', { headers: { 'Authorization': 'Bearer ' + adminToken } })).json(); }
+    try { st = await readApiJson(await fetch('/api/online/pull/status', { headers: { 'Authorization': 'Bearer ' + adminToken } })); }
     catch (e) { continue; }
     const job = (st && st.job) || {};
     if (job.running) { msg.textContent = `กำลังดึงออเดอร์... ${job.name || ''} (${job.status || 'running'})`; continue; }
