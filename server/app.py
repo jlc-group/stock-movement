@@ -39,6 +39,8 @@ SCRIPT_ECOM_APP_DIR = os.getenv(
     r"D:\AI_WORKSPACE\AI_Project\Github\Script-Ecom\JLC App\app",
 )
 PRINT_PLATFORMS = ("shopee", "lazada", "tiktok")
+PRINT_STATUS_PATH = config.PROCESSED_DIR / "online_print_status.json"
+PDF_PAGE_COUNT_CACHE = {}
 
 app = Flask(__name__, static_folder=None)
 
@@ -133,6 +135,47 @@ def parse_print_filename(filename, platform, folder_date):
         if m:
             category = m.group(1)
     return {"carrier": carrier, "sku": sku, "pack_qty": qty, "category": category}
+
+
+def pdf_page_count(path):
+    try:
+        stat = path.stat()
+        key = (str(path), stat.st_mtime, stat.st_size)
+        if key in PDF_PAGE_COUNT_CACHE:
+            return PDF_PAGE_COUNT_CACHE[key]
+    except Exception:
+        key = None
+    try:
+        from pypdf import PdfReader
+        count = len(PdfReader(str(path)).pages)
+    except Exception:
+        count = 1
+    if key:
+        PDF_PAGE_COUNT_CACHE[key] = count
+    return count
+
+
+def print_status_key(date_iso, platform, filename):
+    return f"{date_iso}|{platform}|{filename}"
+
+
+def load_print_statuses():
+    try:
+        if PRINT_STATUS_PATH.exists():
+            with open(PRINT_STATUS_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+    return {}
+
+
+def save_print_statuses(statuses):
+    config.PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+    tmp = PRINT_STATUS_PATH.with_suffix(".tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(statuses, f, ensure_ascii=False, indent=2, sort_keys=True)
+    os.replace(tmp, PRINT_STATUS_PATH)
 
 
 # ---- Admin auth ---------------------------------------------------------
@@ -1267,6 +1310,7 @@ def online_print_files():
 
     groups = []
     total = 0
+    statuses = load_print_statuses()
     for platform in PRINT_PLATFORMS:
         pdir = script_ecom_print_dir(date_iso, platform)
         files = []
@@ -1277,15 +1321,67 @@ def online_print_files():
                 except OSError:
                     size = 0
                 meta = parse_print_filename(path.name, platform, day)
+                key = print_status_key(date_iso, platform, path.name)
+                status = statuses.get(key) or {}
                 files.append({
                     "file": path.name,
                     "label": path.stem,
                     "size": size,
+                    "orders": pdf_page_count(path),
+                    "print_status": status.get("status") or "new",
+                    "opened_at": status.get("opened_at") or "",
+                    "printed_at": status.get("printed_at") or "",
                     **meta,
                 })
         total += len(files)
         groups.append({"platform": platform, "count": len(files), "files": files})
     return jsonify(status="ok", date=date_iso, folder_date=day, total=total, groups=groups)
+
+
+@app.route("/api/online/print-status", methods=["POST"])
+@require_admin
+def online_print_status():
+    data = request.get_json(silent=True) or {}
+    date_iso = str(data.get("date", "")).strip()
+    platform = str(data.get("platform", "")).strip().lower()
+    filename = os.path.basename(str(data.get("file", "")).strip())
+    action = str(data.get("action", "")).strip().lower()
+    if action not in {"opened", "printed", "reset"}:
+        return jsonify(error="bad_request", detail="invalid action"), 400
+    if not filename or not filename.lower().endswith(".pdf"):
+        return jsonify(error="bad_request", detail="file must be a PDF filename"), 400
+    try:
+        pdir = script_ecom_print_dir(date_iso, platform).resolve()
+    except ValueError:
+        return jsonify(error="bad_request", detail="invalid date or platform"), 400
+    path = (pdir / filename).resolve()
+    if path.parent != pdir or not path.exists():
+        return jsonify(error="not_found", detail="print file not found"), 404
+
+    statuses = load_print_statuses()
+    key = print_status_key(date_iso, platform, filename)
+    now = datetime.now().isoformat(timespec="seconds")
+    current = statuses.get(key) or {}
+    if action == "reset":
+        statuses.pop(key, None)
+        result = {"status": "new", "opened_at": "", "printed_at": ""}
+    else:
+        if action == "opened" and current.get("status") != "printed":
+            current["status"] = "opened"
+            current["opened_at"] = current.get("opened_at") or now
+        if action == "printed":
+            current["status"] = "printed"
+            current["opened_at"] = current.get("opened_at") or now
+            current["printed_at"] = now
+        current["updated_at"] = now
+        statuses[key] = current
+        result = {
+            "status": current.get("status") or "new",
+            "opened_at": current.get("opened_at") or "",
+            "printed_at": current.get("printed_at") or "",
+        }
+    save_print_statuses(statuses)
+    return jsonify(ok=True, **result)
 
 
 @app.route("/api/online/print-file")

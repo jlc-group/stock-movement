@@ -1308,12 +1308,15 @@ function onlinePrintSummary(files) {
   const bySku = new Map();
   for (const f of files) {
     const key = f.sku || f.label || f.file;
-    if (!bySku.has(key)) bySku.set(key, { sku: key, category: f.category || 'OTHER', files: [], platforms: new Set(), carriers: new Set(), labels: 0 });
+    if (!bySku.has(key)) bySku.set(key, { sku: key, category: f.category || 'OTHER', files: [], platforms: new Set(), carriers: new Set(), labels: 0, orders: 0, printed: 0, opened: 0 });
     const row = bySku.get(key);
     row.files.push(f);
     row.platforms.add(f.platform);
     row.carriers.add(f.carrier || '-');
     row.labels += 1;
+    row.orders += Number(f.orders || 1);
+    if (f.print_status === 'printed') row.printed += 1;
+    else if (f.print_status === 'opened') row.opened += 1;
   }
   return [...bySku.values()].sort((a, b) => a.category.localeCompare(b.category) || a.sku.localeCompare(b.sku, 'th'));
 }
@@ -1346,13 +1349,15 @@ function renderOnlinePrintBrowser() {
   const skuRows = onlinePrintSummary(filtered);
   const categories = onlinePrintOptionList(allFiles, 'category');
   const carriers = onlinePrintOptionList(allFiles, 'carrier');
+  const orderTotal = filtered.reduce((sum, f) => sum + Number(f.orders || 1), 0);
+  const printedTotal = filtered.filter(f => f.print_status === 'printed').length;
   const platformCounts = (d.groups || []).map(g => `${labels[g.platform] || g.platform}: ${Number(g.count || 0).toLocaleString()}`).join(' · ');
   box.innerHTML = `
     <div style="border-top:1px dashed #e2e8f0;padding-top:10px">
       <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap">
         <div>
           <div style="font-weight:700">ใบปะหน้าแยก SKU</div>
-          <div class="muted" style="font-size:12.5px">${Number(d.total || allFiles.length).toLocaleString()} ไฟล์ · ${skuRows.length.toLocaleString()} SKU ที่แสดง · ${platformCounts}</div>
+          <div class="muted" style="font-size:12.5px">${Number(d.total || allFiles.length).toLocaleString()} ไฟล์ · ${orderTotal.toLocaleString()} ออเดอร์ · พิมพ์แล้ว ${printedTotal.toLocaleString()} ไฟล์ · ${skuRows.length.toLocaleString()} SKU ที่แสดง · ${platformCounts}</div>
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
           <button type="button" class="btn ${onlinePrintFilters.mode === 'sku' ? 'btn-primary' : 'btn-ghost'}" onclick="onlinePrintToggleMode('sku')">ดูเฉพาะ SKU</button>
@@ -1390,11 +1395,13 @@ function renderOnlinePrintSkuList(rows, labels) {
       <summary style="cursor:pointer;padding:10px 12px;font-weight:700">${escapeHtml(category)} · ${items.length.toLocaleString()} SKU</summary>
       <div style="padding:0 12px 10px">
         <table style="width:100%;border-collapse:collapse">
-          <thead><tr><th>SKU</th><th style="text-align:right">จำนวนไฟล์</th><th>แพลตฟอร์ม</th><th>ขนส่ง</th><th></th></tr></thead>
+          <thead><tr><th>SKU</th><th style="text-align:right">ไฟล์</th><th style="text-align:right">ออเดอร์</th><th>สถานะ</th><th>แพลตฟอร์ม</th><th>ขนส่ง</th><th></th></tr></thead>
           <tbody>${items.map(row => `
             <tr>
               <td><code>${escapeHtml(row.sku)}</code></td>
               <td style="text-align:right">${row.labels.toLocaleString()}</td>
+              <td style="text-align:right">${row.orders.toLocaleString()}</td>
+              <td>${onlinePrintStatusBadge(row.printed, row.opened, row.labels)}</td>
               <td>${[...row.platforms].map(p => labels[p] || p).join(', ')}</td>
               <td>${[...row.carriers].join(', ')}</td>
               <td style="text-align:right"><details><summary style="cursor:pointer;color:#2563eb">ไฟล์</summary><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">${renderOnlinePrintButtons(row.files)}</div></details></td>
@@ -1409,8 +1416,31 @@ function renderOnlinePrintFileList(files, labels) {
   return `<div style="display:flex;gap:6px;flex-wrap:wrap">${renderOnlinePrintButtons(files, labels)}</div>`;
 }
 
+function onlinePrintStatusBadge(printed, opened, total) {
+  if (printed >= total) return '<span style="color:#16a34a;font-weight:700">พิมพ์แล้ว</span>';
+  if (printed > 0) return `<span style="color:#b45309;font-weight:700">พิมพ์แล้ว ${printed}/${total}</span>`;
+  if (opened > 0) return `<span style="color:#2563eb;font-weight:700">เปิดแล้ว ${opened}/${total}</span>`;
+  return '<span style="color:#64748b">ยังไม่พิมพ์</span>';
+}
+
+function onlinePrintFileStatusText(status) {
+  if (status === 'printed') return 'พิมพ์แล้ว';
+  if (status === 'opened') return 'เปิดแล้ว';
+  return 'ยังไม่พิมพ์';
+}
+
+function onlinePrintFileStatusColor(status) {
+  if (status === 'printed') return '#dcfce7';
+  if (status === 'opened') return '#dbeafe';
+  return 'white';
+}
+
 function renderOnlinePrintButtons(files) {
-  return files.map(f => `<button type="button" class="btn btn-ghost" style="font-size:12px;padding:6px 8px" data-platform="${escapeHtml(f.platform)}" data-file="${escapeHtml(f.file)}" onclick="openOnlinePrintFile(this.dataset.platform, this.dataset.file)">${escapeHtml(f.carrier || '')} ${escapeHtml(f.sku || f.label || f.file)} x${Number(f.pack_qty || 1).toLocaleString()}</button>`).join('');
+  return files.map(f => `
+    <span style="display:inline-flex;gap:4px;align-items:center;border:1px solid #d1d5db;border-radius:8px;padding:3px;background:${onlinePrintFileStatusColor(f.print_status)}">
+      <button type="button" class="btn btn-ghost" style="font-size:12px;padding:5px 7px;background:white" data-platform="${escapeHtml(f.platform)}" data-file="${escapeHtml(f.file)}" onclick="openOnlinePrintFile(this.dataset.platform, this.dataset.file)">${escapeHtml(f.carrier || '')} ${escapeHtml(f.sku || f.label || f.file)} x${Number(f.pack_qty || 1).toLocaleString()} · ${Number(f.orders || 1).toLocaleString()} ออเดอร์ · ${onlinePrintFileStatusText(f.print_status)}</button>
+      <button type="button" class="btn btn-success" style="font-size:12px;padding:5px 7px" data-platform="${escapeHtml(f.platform)}" data-file="${escapeHtml(f.file)}" onclick="markOnlinePrintStatus(this.dataset.platform, this.dataset.file, 'printed')">พิมพ์แล้ว</button>
+    </span>`).join('');
 }
 
 async function openOnlinePrintFile(platform, file) {
@@ -1429,9 +1459,39 @@ async function openOnlinePrintFile(platform, file) {
     const blob = await res.blob();
     const objectUrl = URL.createObjectURL(blob);
     window.open(objectUrl, '_blank');
+    await markOnlinePrintStatus(platform, file, 'opened', true);
     setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
   } catch (e) {
     if (msg) msg.textContent = 'เปิดใบปะหน้าไม่สำเร็จ: ' + e.message;
+  }
+}
+
+async function markOnlinePrintStatus(platform, file, action, silent) {
+  const msg = document.getElementById('onlineMsg');
+  const date = (onlineLastData && onlineLastData.date) || ((document.getElementById('onlineDate') || {}).value || '');
+  try {
+    const res = await fetch('/api/online/print-status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken },
+      body: JSON.stringify({ date, platform, file, action })
+    });
+    const d = await readApiJson(res);
+    if (!res.ok) throw new Error(d.detail || 'อัปเดตสถานะไม่สำเร็จ');
+    if (onlinePrintData) {
+      for (const g of (onlinePrintData.groups || [])) {
+        if (g.platform !== platform) continue;
+        for (const f of (g.files || [])) {
+          if (f.file !== file) continue;
+          f.print_status = d.status || 'new';
+          f.opened_at = d.opened_at || '';
+          f.printed_at = d.printed_at || '';
+        }
+      }
+      renderOnlinePrintBrowser();
+    }
+    if (!silent && msg) msg.textContent = action === 'printed' ? 'บันทึกสถานะพิมพ์แล้ว' : 'บันทึกสถานะแล้ว';
+  } catch (e) {
+    if (msg) msg.textContent = 'อัปเดตสถานะไม่สำเร็จ: ' + e.message;
   }
 }
 
