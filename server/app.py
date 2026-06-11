@@ -19,6 +19,7 @@ import json
 import re
 import urllib.request
 import urllib.error
+import urllib.parse
 from functools import wraps
 from datetime import datetime, date
 from collections import defaultdict
@@ -176,6 +177,18 @@ def save_print_statuses(statuses):
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(statuses, f, ensure_ascii=False, indent=2, sort_keys=True)
     os.replace(tmp, PRINT_STATUS_PATH)
+
+
+def script_ecom_json(path, method="GET", payload=None, timeout=30):
+    url = SCRIPT_ECOM_URL.rstrip("/") + path
+    data = None
+    headers = {"Accept": "application/json"}
+    if payload is not None:
+        data = json.dumps(payload).encode("utf-8")
+        headers["Content-Type"] = "application/json"
+    req = urllib.request.Request(url, data=data, headers=headers, method=method)
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return json.loads(r.read().decode("utf-8"))
 
 
 # ---- Admin auth ---------------------------------------------------------
@@ -1297,6 +1310,50 @@ def online_pull_status():
         with urllib.request.urlopen(url, timeout=15) as r:
             payload = json.loads(r.read().decode("utf-8"))
         return jsonify(status="ok", job=payload.get("job", {}))
+    except Exception as e:
+        return jsonify(error="upstream_unreachable", detail=str(e)), 424
+
+
+@app.route("/api/online/batches")
+@require_admin
+def online_batches():
+    date_iso = str(request.args.get("date", "")).strip()
+    path = "/api/stock/batches"
+    if date_iso:
+        path += "?date=" + urllib.parse.quote(date_iso)
+    try:
+        return jsonify(script_ecom_json(path, timeout=15))
+    except urllib.error.HTTPError as he:
+        try:
+            reason = (json.loads(he.read().decode("utf-8")) or {}).get("error", f"HTTP {he.code}")
+        except Exception:
+            reason = f"HTTP {he.code}"
+        return jsonify(error="batch_failed", detail=f"Script-Ecom: {reason}"), 424
+    except Exception as e:
+        return jsonify(error="upstream_unreachable", detail=str(e)), 424
+
+
+@app.route("/api/online/batches", methods=["POST"])
+@require_admin
+def online_create_batch():
+    data = request.get_json(silent=True) or {}
+    date_iso = str(data.get("date", "")).strip()
+    label = str(data.get("label", "")).strip()
+    note = str(data.get("note", "")).strip()
+    try:
+        payload = script_ecom_json(
+            "/api/stock/batches",
+            method="POST",
+            payload={"date": date_iso, "label": label, "note": note},
+            timeout=30,
+        )
+        return jsonify(payload)
+    except urllib.error.HTTPError as he:
+        try:
+            reason = (json.loads(he.read().decode("utf-8")) or {}).get("error", f"HTTP {he.code}")
+        except Exception:
+            reason = f"HTTP {he.code}"
+        return jsonify(error="batch_failed", detail=f"Script-Ecom: {reason}"), 424
     except Exception as e:
         return jsonify(error="upstream_unreachable", detail=str(e)), 424
 
