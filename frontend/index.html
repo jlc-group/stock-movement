@@ -1306,15 +1306,20 @@ function onlinePrintFilteredFiles() {
 
 function onlinePrintSummary(files) {
   const bySku = new Map();
+  const stockQty = onlineStockQtyMap();
   for (const f of files) {
-    const key = f.sku || f.label || f.file;
-    if (!bySku.has(key)) bySku.set(key, { sku: key, category: f.category || 'OTHER', files: [], platforms: new Set(), carriers: new Set(), labels: 0, orders: 0, printed: 0, opened: 0 });
+    const norm = normalizePrintStockSku(f.sku || f.label || f.file);
+    const key = norm.stockSku || f.sku || f.label || f.file;
+    if (!bySku.has(key)) bySku.set(key, { sku: key, packageSkus: new Set(), category: f.category || 'OTHER', files: [], platforms: new Set(), carriers: new Set(), labels: 0, orders: 0, fileUnits: 0, stockQty: stockQty.get(key) || 0, printed: 0, opened: 0 });
     const row = bySku.get(key);
+    row.packageSkus.add(norm.packageSku);
     row.files.push(f);
     row.platforms.add(f.platform);
     row.carriers.add(f.carrier || '-');
     row.labels += 1;
     row.orders += Number(f.orders || 1);
+    row.fileUnits += Number(f.orders || 1) * norm.unitQty;
+    row.stockQty = stockQty.get(key) || row.stockQty || 0;
     if (f.print_status === 'printed') row.printed += 1;
     else if (f.print_status === 'opened') row.opened += 1;
   }
@@ -1333,6 +1338,25 @@ function onlinePrintToggleMode(mode) {
 
 function onlinePrintOptionList(files, key) {
   return [...new Set(files.map(f => f[key]).filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b), 'th'));
+}
+
+function normalizePrintStockSku(sku) {
+  const s = String(sku || '').trim();
+  const pack = /^(.+G)X(\d+)$/i.exec(s);
+  if (pack) return { stockSku: pack[1], unitQty: Number(pack[2] || 1), packageSku: s };
+  return { stockSku: s, unitQty: Number(s.endsWith('X2') ? 2 : 1), packageSku: s };
+}
+
+function onlineStockQtyMap() {
+  const map = new Map();
+  for (const it of ((onlineLastData && onlineLastData.items) || [])) {
+    const source = String(it.source_sku || '').trim();
+    const code = String(it.code || '').trim();
+    const fallback = code.startsWith('JH') ? code.slice(2) : code;
+    const key = source || fallback;
+    if (key) map.set(key, Number(it.qty || 0));
+  }
+  return map;
 }
 
 function renderOnlinePrintBrowser() {
@@ -1395,12 +1419,14 @@ function renderOnlinePrintSkuList(rows, labels) {
       <summary style="cursor:pointer;padding:10px 12px;font-weight:700">${escapeHtml(category)} · ${items.length.toLocaleString()} SKU</summary>
       <div style="padding:0 12px 10px">
         <table style="width:100%;border-collapse:collapse">
-          <thead><tr><th>SKU</th><th style="text-align:right">ไฟล์</th><th style="text-align:right">ออเดอร์</th><th>สถานะ</th><th>แพลตฟอร์ม</th><th>ขนส่ง</th><th></th></tr></thead>
+          <thead><tr><th>SKU</th><th style="text-align:right">ไฟล์</th><th style="text-align:right">ออเดอร์</th><th style="text-align:right">ชิ้นตัดสต็อก</th><th style="text-align:right">ชิ้นจากไฟล์ตรง</th><th>สถานะ</th><th>แพลตฟอร์ม</th><th>ขนส่ง</th><th></th></tr></thead>
           <tbody>${items.map(row => `
             <tr>
               <td><code>${escapeHtml(row.sku)}</code></td>
               <td style="text-align:right">${row.labels.toLocaleString()}</td>
               <td style="text-align:right">${row.orders.toLocaleString()}</td>
+              <td style="text-align:right;font-weight:700">${row.stockQty ? row.stockQty.toLocaleString() : '-'}</td>
+              <td style="text-align:right">${row.fileUnits.toLocaleString()}${row.stockQty && row.stockQty !== row.fileUnits ? ` <span style="color:#b45309" title="ส่วนต่างมักอยู่ในไฟล์ MIX / หลายสินค้า">(+${(row.stockQty - row.fileUnits).toLocaleString()} MIX)</span>` : ''}</td>
               <td>${onlinePrintStatusBadge(row.printed, row.opened, row.labels)}</td>
               <td>${[...row.platforms].map(p => labels[p] || p).join(', ')}</td>
               <td>${[...row.carriers].join(', ')}</td>

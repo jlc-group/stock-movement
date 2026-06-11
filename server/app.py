@@ -1166,6 +1166,7 @@ def online_sync():
             affected.add(pid)
             applied.append({
                 "code": code,
+                "source_sku": (it or {}).get("sku", ""),
                 "qty": qty,
                 "name": (it or {}).get("name", ""),
                 "shopee": (it or {}).get("shopee", 0) or 0,
@@ -1246,6 +1247,7 @@ def online_preview():
             total += qty
             items.append({
                 "code": code, "name": info["name"], "qty": qty,
+                "source_sku": (it or {}).get("sku", ""),
                 "shopee": (it or {}).get("shopee", 0) or 0,
                 "lazada": (it or {}).get("lazada", 0) or 0,
                 "tiktok": (it or {}).get("tiktok", 0) or 0,
