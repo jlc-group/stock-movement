@@ -16,6 +16,7 @@ import sys
 import uuid
 import io
 import json
+import re
 import urllib.request
 import urllib.error
 from functools import wraps
@@ -101,6 +102,37 @@ def script_ecom_print_dir(date_iso, platform):
     if platform not in PRINT_PLATFORMS:
         raise ValueError("invalid_platform")
     return Path(SCRIPT_ECOM_APP_DIR) / "tmp" / day / platform / "print"
+
+
+def parse_print_filename(filename, platform, folder_date):
+    stem = Path(filename).stem
+    suffix = f"_{folder_date}_{platform}"
+    base = stem
+    if suffix in base:
+        base = base.split(suffix, 1)[0]
+    parts = base.split("_", 1)
+    carrier = parts[0] if len(parts) == 2 else ""
+    sku_part = parts[1] if len(parts) == 2 else base
+    qty = 1
+    qty_match = re.search(r"_x(\d+)$", sku_part, flags=re.IGNORECASE)
+    if qty_match:
+        qty = int(qty_match.group(1))
+        sku = sku_part[:qty_match.start()]
+    else:
+        sku = sku_part
+    category = "OTHER"
+    upper = sku.upper()
+    if upper.startswith("SET_"):
+        category = "SET"
+    elif upper.startswith("DUO_"):
+        category = "DUO"
+    elif upper.startswith("MIX"):
+        category = "MIX"
+    else:
+        m = re.match(r"([A-Z]+)", upper)
+        if m:
+            category = m.group(1)
+    return {"carrier": carrier, "sku": sku, "pack_qty": qty, "category": category}
 
 
 # ---- Admin auth ---------------------------------------------------------
@@ -1244,7 +1276,13 @@ def online_print_files():
                     size = path.stat().st_size
                 except OSError:
                     size = 0
-                files.append({"file": path.name, "label": path.stem, "size": size})
+                meta = parse_print_filename(path.name, platform, day)
+                files.append({
+                    "file": path.name,
+                    "label": path.stem,
+                    "size": size,
+                    **meta,
+                })
         total += len(files)
         groups.append({"platform": platform, "count": len(files), "files": files})
     return jsonify(status="ok", date=date_iso, folder_date=day, total=total, groups=groups)

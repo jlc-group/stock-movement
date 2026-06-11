@@ -1021,6 +1021,8 @@ function initOnline() {
 let onlineLastData = null;
 let onlineLastMode = 'preview';
 let onlineSort = { key: 'code', dir: 'asc' };
+let onlinePrintData = null;
+let onlinePrintFilters = { platform: 'all', category: 'all', carrier: 'all', query: '', mode: 'sku' };
 
 function ensureOnlineControls() {
   const table = document.getElementById('onlineResultTable');
@@ -1282,24 +1284,133 @@ async function toggleOnlinePrintFiles() {
 }
 
 function renderOnlinePrintFiles(d) {
+  onlinePrintData = d;
+  renderOnlinePrintBrowser();
+}
+
+function onlinePrintAllFiles() {
+  if (!onlinePrintData) return [];
+  return (onlinePrintData.groups || []).flatMap(g => (g.files || []).map(f => ({ ...f, platform: g.platform })));
+}
+
+function onlinePrintFilteredFiles() {
+  const q = String(onlinePrintFilters.query || '').trim().toLowerCase();
+  return onlinePrintAllFiles().filter(f => {
+    if (onlinePrintFilters.platform !== 'all' && f.platform !== onlinePrintFilters.platform) return false;
+    if (onlinePrintFilters.category !== 'all' && f.category !== onlinePrintFilters.category) return false;
+    if (onlinePrintFilters.carrier !== 'all' && f.carrier !== onlinePrintFilters.carrier) return false;
+    if (q && !String(f.sku || '').toLowerCase().includes(q) && !String(f.file || '').toLowerCase().includes(q)) return false;
+    return true;
+  });
+}
+
+function onlinePrintSummary(files) {
+  const bySku = new Map();
+  for (const f of files) {
+    const key = f.sku || f.label || f.file;
+    if (!bySku.has(key)) bySku.set(key, { sku: key, category: f.category || 'OTHER', files: [], platforms: new Set(), carriers: new Set(), labels: 0 });
+    const row = bySku.get(key);
+    row.files.push(f);
+    row.platforms.add(f.platform);
+    row.carriers.add(f.carrier || '-');
+    row.labels += 1;
+  }
+  return [...bySku.values()].sort((a, b) => a.category.localeCompare(b.category) || a.sku.localeCompare(b.sku, 'th'));
+}
+
+function onlinePrintSetFilter(key, value) {
+  onlinePrintFilters[key] = value;
+  renderOnlinePrintBrowser();
+}
+
+function onlinePrintToggleMode(mode) {
+  onlinePrintFilters.mode = mode;
+  renderOnlinePrintBrowser();
+}
+
+function onlinePrintOptionList(files, key) {
+  return [...new Set(files.map(f => f[key]).filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b), 'th'));
+}
+
+function renderOnlinePrintBrowser() {
   const box = document.getElementById('onlinePrintFiles');
   if (!box) return;
   const labels = { shopee: 'Shopee', lazada: 'Lazada', tiktok: 'TikTok' };
-  if (!d.total) {
+  const d = onlinePrintData || {};
+  const allFiles = onlinePrintAllFiles();
+  if (!allFiles.length) {
     box.innerHTML = `<div class="muted">ยังไม่พบไฟล์ใบปะหน้าของวันที่ ${escapeHtml(d.date || '')} - ให้กดดึงออเดอร์ใหม่ก่อน</div>`;
     return;
   }
+  const filtered = onlinePrintFilteredFiles();
+  const skuRows = onlinePrintSummary(filtered);
+  const categories = onlinePrintOptionList(allFiles, 'category');
+  const carriers = onlinePrintOptionList(allFiles, 'carrier');
+  const platformCounts = (d.groups || []).map(g => `${labels[g.platform] || g.platform}: ${Number(g.count || 0).toLocaleString()}`).join(' · ');
   box.innerHTML = `
     <div style="border-top:1px dashed #e2e8f0;padding-top:10px">
-      <div style="font-weight:700;margin-bottom:8px">ใบปะหน้าแยก SKU (${Number(d.total).toLocaleString()} ไฟล์)</div>
-      ${(d.groups || []).map(g => `
-        <div style="margin:8px 0">
-          <div style="font-size:12.5px;color:#64748b;margin-bottom:5px">${labels[g.platform] || g.platform}: ${Number(g.count || 0).toLocaleString()} ไฟล์</div>
-          <div style="display:flex;gap:6px;flex-wrap:wrap">
-            ${(g.files || []).map(f => `<button type="button" class="btn btn-ghost" style="font-size:12px;padding:6px 8px" data-platform="${escapeHtml(g.platform)}" data-file="${escapeHtml(f.file)}" onclick="openOnlinePrintFile(this.dataset.platform, this.dataset.file)">${escapeHtml(f.label || f.file)}</button>`).join('') || '<span class="muted">ไม่มีไฟล์</span>'}
-          </div>
-        </div>`).join('')}
+      <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap">
+        <div>
+          <div style="font-weight:700">ใบปะหน้าแยก SKU</div>
+          <div class="muted" style="font-size:12.5px">${Number(d.total || allFiles.length).toLocaleString()} ไฟล์ · ${skuRows.length.toLocaleString()} SKU ที่แสดง · ${platformCounts}</div>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button type="button" class="btn ${onlinePrintFilters.mode === 'sku' ? 'btn-primary' : 'btn-ghost'}" onclick="onlinePrintToggleMode('sku')">ดูเฉพาะ SKU</button>
+          <button type="button" class="btn ${onlinePrintFilters.mode === 'files' ? 'btn-primary' : 'btn-ghost'}" onclick="onlinePrintToggleMode('files')">ดูไฟล์ทั้งหมด</button>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,minmax(140px,1fr));gap:8px;margin:10px 0">
+        <select onchange="onlinePrintSetFilter('platform', this.value)">
+          <option value="all"${onlinePrintFilters.platform === 'all' ? ' selected' : ''}>ทุกแพลตฟอร์ม</option>
+          ${(d.groups || []).map(g => `<option value="${escapeHtml(g.platform)}"${onlinePrintFilters.platform === g.platform ? ' selected' : ''}>${labels[g.platform] || g.platform}</option>`).join('')}
+        </select>
+        <select onchange="onlinePrintSetFilter('category', this.value)">
+          <option value="all"${onlinePrintFilters.category === 'all' ? ' selected' : ''}>ทุกหมวด SKU</option>
+          ${categories.map(c => `<option value="${escapeHtml(c)}"${onlinePrintFilters.category === c ? ' selected' : ''}>${escapeHtml(c)}</option>`).join('')}
+        </select>
+        <select onchange="onlinePrintSetFilter('carrier', this.value)">
+          <option value="all"${onlinePrintFilters.carrier === 'all' ? ' selected' : ''}>ทุกขนส่ง</option>
+          ${carriers.map(c => `<option value="${escapeHtml(c)}"${onlinePrintFilters.carrier === c ? ' selected' : ''}>${escapeHtml(c)}</option>`).join('')}
+        </select>
+        <input value="${escapeHtml(onlinePrintFilters.query)}" placeholder="ค้นหา SKU / ชื่อไฟล์" oninput="onlinePrintSetFilter('query', this.value)" />
+      </div>
+      ${onlinePrintFilters.mode === 'files' ? renderOnlinePrintFileList(filtered, labels) : renderOnlinePrintSkuList(skuRows, labels)}
     </div>`;
+}
+
+function renderOnlinePrintSkuList(rows, labels) {
+  if (!rows.length) return '<div class="muted">ไม่พบ SKU ตามตัวกรองนี้</div>';
+  const grouped = new Map();
+  for (const row of rows) {
+    if (!grouped.has(row.category)) grouped.set(row.category, []);
+    grouped.get(row.category).push(row);
+  }
+  return [...grouped.entries()].map(([category, items]) => `
+    <details open style="border:1px solid #e2e8f0;border-radius:8px;margin:8px 0;background:white">
+      <summary style="cursor:pointer;padding:10px 12px;font-weight:700">${escapeHtml(category)} · ${items.length.toLocaleString()} SKU</summary>
+      <div style="padding:0 12px 10px">
+        <table style="width:100%;border-collapse:collapse">
+          <thead><tr><th>SKU</th><th style="text-align:right">จำนวนไฟล์</th><th>แพลตฟอร์ม</th><th>ขนส่ง</th><th></th></tr></thead>
+          <tbody>${items.map(row => `
+            <tr>
+              <td><code>${escapeHtml(row.sku)}</code></td>
+              <td style="text-align:right">${row.labels.toLocaleString()}</td>
+              <td>${[...row.platforms].map(p => labels[p] || p).join(', ')}</td>
+              <td>${[...row.carriers].join(', ')}</td>
+              <td style="text-align:right"><details><summary style="cursor:pointer;color:#2563eb">ไฟล์</summary><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">${renderOnlinePrintButtons(row.files)}</div></details></td>
+            </tr>`).join('')}</tbody>
+        </table>
+      </div>
+    </details>`).join('');
+}
+
+function renderOnlinePrintFileList(files, labels) {
+  if (!files.length) return '<div class="muted">ไม่พบไฟล์ตามตัวกรองนี้</div>';
+  return `<div style="display:flex;gap:6px;flex-wrap:wrap">${renderOnlinePrintButtons(files, labels)}</div>`;
+}
+
+function renderOnlinePrintButtons(files) {
+  return files.map(f => `<button type="button" class="btn btn-ghost" style="font-size:12px;padding:6px 8px" data-platform="${escapeHtml(f.platform)}" data-file="${escapeHtml(f.file)}" onclick="openOnlinePrintFile(this.dataset.platform, this.dataset.file)">${escapeHtml(f.carrier || '')} ${escapeHtml(f.sku || f.label || f.file)} x${Number(f.pack_qty || 1).toLocaleString()}</button>`).join('');
 }
 
 async function openOnlinePrintFile(platform, file) {
