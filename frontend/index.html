@@ -1009,6 +1009,7 @@ function switchPage(page) {
 
 // ===== หน้า "ออนไลน์": ดึงยอดออนไลน์จาก Script-Ecom -> ลงช่อง online =====
 function initOnline() {
+  ensureOnlineControls();
   const el = document.getElementById('onlineDate');
   if (el && !el.value) {
     const n = new Date();
@@ -1017,6 +1018,88 @@ function initOnline() {
 }
 
 // 🔍 โหมดพิสูจน์: ดูยอดที่ควรตัด (ไม่เขียนลง DB)
+let onlineLastData = null;
+let onlineLastMode = 'preview';
+let onlineSort = { key: 'code', dir: 'asc' };
+
+function ensureOnlineControls() {
+  const table = document.getElementById('onlineResultTable');
+  if (table) {
+    const head = table.querySelector('thead tr');
+    if (head && !head.dataset.sortReady) {
+      head.dataset.sortReady = '1';
+      head.innerHTML = [
+        onlineTh('code', 'รหัส', 'left'),
+        onlineTh('name', 'ชื่อสินค้า', 'left'),
+        onlineTh('shopee', 'Shopee', 'right'),
+        onlineTh('lazada', 'Lazada', 'right'),
+        onlineTh('tiktok', 'TikTok', 'right'),
+        onlineTh('qty', 'รวมที่ควรตัด', 'right'),
+        onlineTh('already_online', 'ช่องออนไลน์ตอนนี้', 'right'),
+      ].join('');
+    }
+  }
+  const writeBtn = document.getElementById('onlineWriteBtn');
+  if (writeBtn && !document.getElementById('onlinePrintBtn')) {
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-ghost';
+    btn.id = 'onlinePrintBtn';
+    btn.type = 'button';
+    btn.style.display = 'none';
+    btn.textContent = 'พิมพ์ใบปะหน้าแยก SKU';
+    btn.onclick = toggleOnlinePrintFiles;
+    writeBtn.insertAdjacentElement('afterend', btn);
+  }
+  const card = document.getElementById('onlineResultCard');
+  if (card && !document.getElementById('onlinePrintFiles')) {
+    const box = document.createElement('div');
+    box.id = 'onlinePrintFiles';
+    box.style.cssText = 'display:none;margin-top:10px';
+    card.appendChild(box);
+  }
+}
+
+function onlineTh(key, label, align) {
+  return `<th id="online-th-${key}" class="th-sort" onclick="setOnlineSort('${key}')" style="text-align:${align};border-bottom:1px solid #e2e8f0;padding:6px">${label} <span id="online-arrow-${key}" class="th-arrow"></span></th>`;
+}
+
+function onlineSortValue(it, key) {
+  if (key === 'name') return String(it.name || '').toLowerCase();
+  if (key === 'code') return String(it.code || '').toLowerCase();
+  return Number(it[key] || 0);
+}
+
+function sortedOnlineItems(items) {
+  const rows = [...(items || [])];
+  const numeric = !['code', 'name'].includes(onlineSort.key);
+  rows.sort((a, b) => {
+    const av = onlineSortValue(a, onlineSort.key);
+    const bv = onlineSortValue(b, onlineSort.key);
+    const cmp = numeric ? (av - bv) : String(av).localeCompare(String(bv), 'th');
+    return onlineSort.dir === 'asc' ? cmp : -cmp;
+  });
+  return rows;
+}
+
+function syncOnlineSortHeader() {
+  ['code', 'name', 'shopee', 'lazada', 'tiktok', 'qty', 'already_online'].forEach(key => {
+    const th = document.getElementById('online-th-' + key);
+    const arrow = document.getElementById('online-arrow-' + key);
+    if (!th || !arrow) return;
+    th.classList.toggle('active', onlineSort.key === key);
+    arrow.textContent = onlineSort.key === key ? (onlineSort.dir === 'asc' ? '↑' : '↓') : '';
+  });
+}
+
+function setOnlineSort(key) {
+  const numeric = !['code', 'name'].includes(key);
+  if (onlineSort.key === key) onlineSort.dir = onlineSort.dir === 'asc' ? 'desc' : 'asc';
+  else onlineSort = { key, dir: numeric ? 'desc' : 'asc' };
+  if (!onlineLastData) return;
+  if (onlineLastMode === 'result') renderOnlineResult(onlineLastData);
+  else renderOnlinePreview(onlineLastData);
+}
+
 async function readApiJson(res) {
   const text = await res.text();
   const ct = (res.headers.get('content-type') || '').toLowerCase();
@@ -1054,11 +1137,14 @@ async function previewOnline() {
 }
 
 function renderOnlinePreview(d) {
+  ensureOnlineControls();
+  onlineLastData = d;
+  onlineLastMode = 'preview';
   const card = document.getElementById('onlineResultCard');
   const tbody = document.querySelector('#onlineResultTable tbody');
   document.getElementById('onlineResultTitle').innerHTML =
     `🔍 ยอดออนไลน์ที่ควรตัด — วันที่ ${d.date} <span style="color:#94a3b8;font-weight:400;font-size:13px">(ดูอย่างเดียว ยังไม่เขียนลงสต็อก)</span>`;
-  tbody.innerHTML = (d.items || []).map(it => {
+  tbody.innerHTML = sortedOnlineItems(d.items || []).map(it => {
     const already = Number(it.already_online || 0);
     const note = already ? `<span style="color:#16a34a">${already.toLocaleString()}</span>` : '<span style="color:#cbd5e1">—</span>';
     const sp = Number(it.shopee || 0);
@@ -1079,6 +1165,9 @@ function renderOnlinePreview(d) {
       : '');
   const wb = document.getElementById('onlineWriteBtn');
   if (wb) wb.style.display = (d.items && d.items.length) ? '' : 'none';
+  const pb = document.getElementById('onlinePrintBtn');
+  if (pb) pb.style.display = d.date ? '' : 'none';
+  syncOnlineSortHeader();
   const dp = document.getElementById('onlineDate'); if (dp && d.date) dp.value = d.date;
   card.style.display = '';
 }
@@ -1114,11 +1203,14 @@ async function syncOnline() {
 }
 
 function renderOnlineResult(d) {
+  ensureOnlineControls();
+  onlineLastData = d;
+  onlineLastMode = 'result';
   const card = document.getElementById('onlineResultCard');
   const tbody = document.querySelector('#onlineResultTable tbody');
   document.getElementById('onlineResultTitle').innerHTML =
     `✅ เขียนลงช่อง "ออนไลน์" แล้ว — วันที่ ${d.date} (${d.written} รายการ)`;
-  tbody.innerHTML = (d.items || []).map(it =>
+  tbody.innerHTML = sortedOnlineItems(d.items || []).map(it =>
     `<tr><td style="padding:6px;border-bottom:1px solid #f1f5f9"><code>${it.code}</code></td>` +
     `<td style="padding:6px;border-bottom:1px solid #f1f5f9">${it.name || ''}</td>` +
     `<td style="padding:6px;border-bottom:1px solid #f1f5f9;text-align:right;color:#ea580c">${Number(it.shopee || 0) ? Number(it.shopee || 0).toLocaleString() : '—'}</td>` +
@@ -1133,6 +1225,9 @@ function renderOnlineResult(d) {
     platformCoverageHtml(d) +
     ((d.skipped_codes && d.skipped_codes.length) ? `<div style="margin-top:6px">ข้าม (ไม่มีรหัสใน ecom_stock): ${d.skipped_codes.join(', ')}</div>` : '');
   const wb = document.getElementById('onlineWriteBtn'); if (wb) wb.style.display = 'none';
+  const pb = document.getElementById('onlinePrintBtn');
+  if (pb) pb.style.display = d.date ? '' : 'none';
+  syncOnlineSortHeader();
   const dp = document.getElementById('onlineDate');
   if (dp && d.date) dp.value = d.date;
   card.style.display = '';
@@ -1159,6 +1254,76 @@ function platformCoverageHtml(d) {
 }
 
 // ① ดึงออเดอร์ใหม่ (สั่ง Script-Ecom ผ่านหลังบ้าน) แล้วซิงค์อัตโนมัติ
+async function toggleOnlinePrintFiles() {
+  ensureOnlineControls();
+  const box = document.getElementById('onlinePrintFiles');
+  const msg = document.getElementById('onlineMsg');
+  if (!box) return;
+  const date = (onlineLastData && onlineLastData.date) || ((document.getElementById('onlineDate') || {}).value || '');
+  if (box.style.display !== 'none' && box.dataset.loadedDate === date) {
+    box.style.display = 'none';
+    return;
+  }
+  if (!adminToken) { msg.textContent = 'กรุณาเข้า Admin ก่อนเปิดใบปะหน้า'; return; }
+  if (!date) { msg.textContent = 'กรุณาเลือกวันที่ก่อน'; return; }
+  box.style.display = '';
+  box.innerHTML = '<div class="muted">กำลังโหลดใบปะหน้า...</div>';
+  try {
+    const res = await fetch('/api/online/print-files?date=' + encodeURIComponent(date), {
+      headers: { 'Authorization': 'Bearer ' + adminToken }
+    });
+    const d = await readApiJson(res);
+    if (!res.ok) throw new Error(d.detail || 'โหลดใบปะหน้าไม่สำเร็จ');
+    box.dataset.loadedDate = date;
+    renderOnlinePrintFiles(d);
+  } catch (e) {
+    box.innerHTML = `<div style="color:#dc2626">โหลดใบปะหน้าไม่สำเร็จ: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+function renderOnlinePrintFiles(d) {
+  const box = document.getElementById('onlinePrintFiles');
+  if (!box) return;
+  const labels = { shopee: 'Shopee', lazada: 'Lazada', tiktok: 'TikTok' };
+  if (!d.total) {
+    box.innerHTML = `<div class="muted">ยังไม่พบไฟล์ใบปะหน้าของวันที่ ${escapeHtml(d.date || '')} - ให้กดดึงออเดอร์ใหม่ก่อน</div>`;
+    return;
+  }
+  box.innerHTML = `
+    <div style="border-top:1px dashed #e2e8f0;padding-top:10px">
+      <div style="font-weight:700;margin-bottom:8px">ใบปะหน้าแยก SKU (${Number(d.total).toLocaleString()} ไฟล์)</div>
+      ${(d.groups || []).map(g => `
+        <div style="margin:8px 0">
+          <div style="font-size:12.5px;color:#64748b;margin-bottom:5px">${labels[g.platform] || g.platform}: ${Number(g.count || 0).toLocaleString()} ไฟล์</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            ${(g.files || []).map(f => `<button type="button" class="btn btn-ghost" style="font-size:12px;padding:6px 8px" data-platform="${escapeHtml(g.platform)}" data-file="${escapeHtml(f.file)}" onclick="openOnlinePrintFile(this.dataset.platform, this.dataset.file)">${escapeHtml(f.label || f.file)}</button>`).join('') || '<span class="muted">ไม่มีไฟล์</span>'}
+          </div>
+        </div>`).join('')}
+    </div>`;
+}
+
+async function openOnlinePrintFile(platform, file) {
+  const msg = document.getElementById('onlineMsg');
+  const date = (onlineLastData && onlineLastData.date) || ((document.getElementById('onlineDate') || {}).value || '');
+  try {
+    const url = '/api/online/print-file?date=' + encodeURIComponent(date)
+      + '&platform=' + encodeURIComponent(platform)
+      + '&file=' + encodeURIComponent(file);
+    const res = await fetch(url, { headers: { 'Authorization': 'Bearer ' + adminToken } });
+    if (!res.ok) {
+      let d = {};
+      try { d = await readApiJson(res); } catch (_) {}
+      throw new Error(d.detail || 'เปิดไฟล์ไม่ได้');
+    }
+    const blob = await res.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    window.open(objectUrl, '_blank');
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+  } catch (e) {
+    if (msg) msg.textContent = 'เปิดใบปะหน้าไม่สำเร็จ: ' + e.message;
+  }
+}
+
 async function pullOrders() {
   const msg = document.getElementById('onlineMsg');
   const pBtn = document.getElementById('onlinePullBtn');

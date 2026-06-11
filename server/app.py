@@ -21,6 +21,7 @@ import urllib.error
 from functools import wraps
 from datetime import datetime, date
 from collections import defaultdict
+from pathlib import Path
 
 import psycopg2
 import psycopg2.extras
@@ -32,6 +33,11 @@ from brand_map import classify_brand
 
 # URL ของ Script-Ecom launcher (ใช้ในหน้า "ออนไลน์" ดึงยอดออนไลน์มาลงช่อง online)
 SCRIPT_ECOM_URL = os.getenv("SCRIPT_ECOM_URL", "http://127.0.0.1:4321")
+SCRIPT_ECOM_APP_DIR = os.getenv(
+    "SCRIPT_ECOM_APP_DIR",
+    r"D:\AI_WORKSPACE\AI_Project\Github\Script-Ecom\JLC App\app",
+)
+PRINT_PLATFORMS = ("shopee", "lazada", "tiktok")
 
 app = Flask(__name__, static_folder=None)
 
@@ -84,6 +90,17 @@ def num(x):
         return 0
     f = float(x)
     return int(f) if f.is_integer() else f
+
+
+def script_ecom_print_dir(date_iso, platform):
+    try:
+        day = date.fromisoformat(str(date_iso or "").strip()).strftime("%d-%m-%Y")
+    except ValueError:
+        raise ValueError("invalid_date")
+    platform = str(platform or "").strip().lower()
+    if platform not in PRINT_PLATFORMS:
+        raise ValueError("invalid_platform")
+    return Path(SCRIPT_ECOM_APP_DIR) / "tmp" / day / platform / "print"
 
 
 # ---- Admin auth ---------------------------------------------------------
@@ -1205,6 +1222,52 @@ def online_pull_status():
         return jsonify(status="ok", job=payload.get("job", {}))
     except Exception as e:
         return jsonify(error="upstream_unreachable", detail=str(e)), 424
+
+
+@app.route("/api/online/print-files")
+@require_admin
+def online_print_files():
+    date_iso = str(request.args.get("date", "")).strip()
+    try:
+        day = date.fromisoformat(date_iso).strftime("%d-%m-%Y")
+    except ValueError:
+        return jsonify(error="bad_request", detail="date must be YYYY-MM-DD"), 400
+
+    groups = []
+    total = 0
+    for platform in PRINT_PLATFORMS:
+        pdir = script_ecom_print_dir(date_iso, platform)
+        files = []
+        if pdir.exists():
+            for path in sorted(pdir.glob("*.pdf"), key=lambda p: p.name.lower()):
+                try:
+                    size = path.stat().st_size
+                except OSError:
+                    size = 0
+                files.append({"file": path.name, "label": path.stem, "size": size})
+        total += len(files)
+        groups.append({"platform": platform, "count": len(files), "files": files})
+    return jsonify(status="ok", date=date_iso, folder_date=day, total=total, groups=groups)
+
+
+@app.route("/api/online/print-file")
+@require_admin
+def online_print_file():
+    date_iso = str(request.args.get("date", "")).strip()
+    platform = str(request.args.get("platform", "")).strip().lower()
+    filename = os.path.basename(str(request.args.get("file", "")).strip())
+    if not filename or not filename.lower().endswith(".pdf"):
+        return jsonify(error="bad_request", detail="file must be a PDF filename"), 400
+    try:
+        pdir = script_ecom_print_dir(date_iso, platform).resolve()
+    except ValueError:
+        return jsonify(error="bad_request", detail="invalid date or platform"), 400
+    path = (pdir / filename).resolve()
+    if path.parent != pdir:
+        return jsonify(error="bad_request", detail="invalid file path"), 400
+    if not path.exists():
+        return jsonify(error="not_found", detail="print file not found"), 404
+    return send_file(path, mimetype="application/pdf", as_attachment=False, download_name=filename)
 
 
 if __name__ == "__main__":
