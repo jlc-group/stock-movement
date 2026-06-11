@@ -1034,10 +1034,10 @@ def online_sync():
         if not reason:
             reason = f"HTTP {he.code}"
         return jsonify(error="no_data",
-                       detail=f"Script-Ecom: {reason} — ลองเลือกวันที่ที่ดึงออเดอร์ไว้แล้ว หรือกดดึงออเดอร์ของวันนั้นใน Script-Ecom ก่อน"), 502
+                       detail=f"Script-Ecom: {reason} — ลองเลือกวันที่ที่ดึงออเดอร์ไว้แล้ว หรือกดดึงออเดอร์ของวันนั้นใน Script-Ecom ก่อน"), 424
     except Exception as e:
         return jsonify(error="upstream_unreachable",
-                       detail=f"เชื่อม Script-Ecom ไม่ได้ ({url}) — เปิด start_ui.bat ของ Script-Ecom ค้างไว้ก่อน [{e}]"), 502
+                       detail=f"เชื่อม Script-Ecom ไม่ได้ ({url}) — เปิด start_ui.bat ของ Script-Ecom ค้างไว้ก่อน [{e}]"), 424
 
     p_date = (payload.get("date") or mv_date or "").strip()
     proposed = payload.get("proposed") or []
@@ -1116,10 +1116,10 @@ def online_preview():
         if not reason:
             reason = f"HTTP {he.code}"
         return jsonify(error="no_data",
-                       detail=f"Script-Ecom: {reason} — ลองเลือกวันที่ที่ดึงออเดอร์ไว้แล้ว"), 502
+                       detail=f"Script-Ecom: {reason} — ลองเลือกวันที่ที่ดึงออเดอร์ไว้แล้ว"), 424
     except Exception as e:
         return jsonify(error="upstream_unreachable",
-                       detail=f"เชื่อม Script-Ecom ไม่ได้ ({url}) [{e}]"), 502
+                       detail=f"เชื่อม Script-Ecom ไม่ได้ ({url}) [{e}]"), 424
 
     p_date = (payload.get("date") or mv_date or "").strip()
     proposed = payload.get("proposed") or []
@@ -1188,10 +1188,10 @@ def online_pull():
             reason = (json.loads(he.read().decode("utf-8")) or {}).get("error", f"HTTP {he.code}")
         except Exception:
             reason = f"HTTP {he.code}"
-        return jsonify(error="pull_failed", detail=f"Script-Ecom: {reason}"), 502
+        return jsonify(error="pull_failed", detail=f"Script-Ecom: {reason}"), 424
     except Exception as e:
         return jsonify(error="upstream_unreachable",
-                       detail=f"เชื่อม Script-Ecom ไม่ได้ — เปิด start_ui.bat ของ Script-Ecom ค้างไว้ก่อน [{e}]"), 502
+                       detail=f"เชื่อม Script-Ecom ไม่ได้ — เปิด start_ui.bat ของ Script-Ecom ค้างไว้ก่อน [{e}]"), 424
 
 
 @app.route("/api/online/pull/status")
@@ -1204,7 +1204,7 @@ def online_pull_status():
             payload = json.loads(r.read().decode("utf-8"))
         return jsonify(status="ok", job=payload.get("job", {}))
     except Exception as e:
-        return jsonify(error="upstream_unreachable", detail=str(e)), 502
+        return jsonify(error="upstream_unreachable", detail=str(e)), 424
 
 
 if __name__ == "__main__":
