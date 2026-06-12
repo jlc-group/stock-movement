@@ -418,6 +418,7 @@ body.admin-on .admin-bar { display: flex; }
   <div class="nav-item active" data-page="dashboard" onclick="switchPage('dashboard')">📊 <span>Dashboard</span></div>
   <div class="nav-item" data-page="products" onclick="switchPage('products')">📦 <span>รายการสินค้า</span></div>
   <div class="nav-item" data-page="online" onclick="switchPage('online')">🛒 <span>ออนไลน์</span></div>
+  <div class="nav-item" data-page="prepack" onclick="switchPage('prepack')">🧰 <span>Prepack SKU</span></div>
   <div class="nav-item" data-page="report" onclick="switchPage('report')">📈 <span>Report</span></div>
   <div class="nav-item" onclick="location.href='/campaign'">🎯 <span>Campaign</span></div>
 </aside>
@@ -467,6 +468,21 @@ body.admin-on .admin-bar { display: flex; }
       <span class="muted" style="font-size:12px">ใช้เมื่อพิสูจน์แล้วว่ายอดตรง — เขียนเฉพาะช่องออนไลน์ ไม่แตะยอดที่กรอกมือ</span>
     </div>
   </div>
+</div>
+
+<div class="app page" id="page-prepack">
+  <div class="dash-head">
+    <h1>🧰 Prepack — แยกตาม SKU ใบปะหน้า</h1>
+    <div class="sub">นับจากไฟล์ใบปะหน้าจริง (Shopee / Lazada / TikTok) — SKU แบบแพ็ค เช่น C4-8GX6 = 1 ชุดมี 6 ชิ้น ใช้วางแผนว่าต้อง prepack กี่ชุด</div>
+  </div>
+  <div class="card" style="padding:16px">
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <label>วันที่: <input type="date" id="prepackDate"></label>
+      <button class="btn btn-primary" onclick="loadPrepack()">🔄 โหลด SKU จากใบปะหน้า</button>
+      <span id="prepackMsg" class="muted"></span>
+    </div>
+  </div>
+  <div class="card" id="prepackCard" style="display:none;padding:16px;margin-top:14px"></div>
 </div>
 
 <div class="app page active" id="page-dashboard">
@@ -1008,6 +1024,7 @@ function switchPage(page) {
   if (page === 'report') renderReport();
   if (page === 'products') syncStickyHeight();
   if (page === 'online') initOnline();
+  if (page === 'prepack') initPrepack();
 }
 
 // ===== หน้า "ออนไลน์": ดึงยอดออนไลน์จาก Script-Ecom -> ลงช่อง online =====
@@ -1062,12 +1079,6 @@ function ensureOnlineControls() {
   if (card && !document.getElementById('onlinePrintFiles')) {
     const box = document.createElement('div');
     box.id = 'onlinePrintFiles';
-    box.style.cssText = 'display:none;margin-top:10px';
-    card.appendChild(box);
-  }
-  if (card && !document.getElementById('onlineSkuBreakdown')) {
-    const box = document.createElement('div');
-    box.id = 'onlineSkuBreakdown';
     box.style.cssText = 'display:none;margin-top:10px';
     card.appendChild(box);
   }
@@ -1252,42 +1263,6 @@ function aggregateOnlineByProduct(items) {
   return [...map.values()];
 }
 
-// 🔖 ตาราง SKU แยกต่างหาก (สำหรับ prepack) — ไม่ปนกับตารางตัดสต็อกรายสินค้า
-function renderOnlineSkuBreakdown(skuItems) {
-  const box = document.getElementById('onlineSkuBreakdown');
-  if (!box) return;
-  const rows = (skuItems || []).filter(it => String(it.source_sku || it.sku || '').trim());
-  if (!rows.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
-  box.style.display = '';
-  const sorted = [...rows].sort((a, b) =>
-    String(a.source_sku || a.sku).localeCompare(String(b.source_sku || b.sku), 'th'));
-  box.innerHTML = `
-    <details style="border-top:1px dashed #e2e8f0;padding-top:10px">
-      <summary style="cursor:pointer;font-weight:700">🔖 แยกตาม SKU — ${sorted.length.toLocaleString()} SKU <span class="muted" style="font-weight:400;font-size:12.5px">(สำหรับ prepack · กดเพื่อเปิด/ปิด)</span></summary>
-      <table style="width:100%;border-collapse:collapse;margin-top:8px">
-        <thead><tr>
-          <th style="text-align:left;padding:6px;border-bottom:1px solid #e2e8f0">SKU</th>
-          <th style="text-align:left;padding:6px;border-bottom:1px solid #e2e8f0">รหัสสินค้า</th>
-          <th style="text-align:right;padding:6px;border-bottom:1px solid #e2e8f0">Shopee</th>
-          <th style="text-align:right;padding:6px;border-bottom:1px solid #e2e8f0">Lazada</th>
-          <th style="text-align:right;padding:6px;border-bottom:1px solid #e2e8f0">TikTok</th>
-          <th style="text-align:right;padding:6px;border-bottom:1px solid #e2e8f0">รวม</th>
-        </tr></thead>
-        <tbody>${sorted.map(it => {
-          const sp = Number(it.shopee || 0), lz = Number(it.lazada || 0), tt = Number(it.tiktok || 0);
-          return `<tr>
-            <td style="padding:6px;border-bottom:1px solid #f1f5f9"><code>${escapeHtml(String(it.source_sku || it.sku))}</code></td>
-            <td style="padding:6px;border-bottom:1px solid #f1f5f9"><code>${escapeHtml(String(it.code || ''))}</code></td>
-            <td style="padding:6px;border-bottom:1px solid #f1f5f9;text-align:right;color:#ea580c">${sp ? sp.toLocaleString() : '—'}</td>
-            <td style="padding:6px;border-bottom:1px solid #f1f5f9;text-align:right;color:#1d4ed8">${lz ? lz.toLocaleString() : '—'}</td>
-            <td style="padding:6px;border-bottom:1px solid #f1f5f9;text-align:right;color:#0f766e">${tt ? tt.toLocaleString() : '—'}</td>
-            <td style="padding:6px;border-bottom:1px solid #f1f5f9;text-align:right"><b>${Number(it.qty || 0).toLocaleString()}</b></td>
-          </tr>`;
-        }).join('')}</tbody>
-      </table>
-    </details>`;
-}
-
 async function viewOnlineBatch(id) {
   const msg = document.getElementById('onlineMsg');
   if (!adminToken) { msg.textContent = '⚠️ กรุณากดปุ่ม Admin (มุมขวาบน) ใส่ PIN ก่อน'; return; }
@@ -1330,7 +1305,7 @@ function renderOnlineBatchView() {
   document.getElementById('onlineResultTitle').innerHTML =
     `📦 ${escapeHtml(b.label || b.id || '')} — วันที่ ${escapeHtml(b.date || '')} `
     + `<span style="color:#94a3b8;font-weight:400;font-size:13px">(เฉพาะออเดอร์ใหม่ของรอบนี้ · แสตมป์เมื่อ ${escapeHtml(String(b.created_at || '').replace('T', ' ').slice(0, 16))})</span>`
-    + `<div style="font-weight:400;font-size:13px;margin-top:2px;color:${printed >= orders.length && orders.length ? '#16a34a' : '#b45309'}">สินค้า ${items.length.toLocaleString()} รายการ · ${skuItems.length.toLocaleString()} SKU · ออเดอร์รอบนี้ ${orders.length.toLocaleString()} · พิมพ์แล้ว ${printed.toLocaleString()} · ค้างพิมพ์ ${(orders.length - printed).toLocaleString()} `
+    + `<div style="font-weight:400;font-size:13px;margin-top:2px;color:${printed >= orders.length && orders.length ? '#16a34a' : '#b45309'}">สินค้า ${items.length.toLocaleString()} รายการ · ออเดอร์รอบนี้ ${orders.length.toLocaleString()} · พิมพ์แล้ว ${printed.toLocaleString()} · ค้างพิมพ์ ${(orders.length - printed).toLocaleString()} `
     + `<button type="button" class="btn btn-ghost" style="font-size:12px;padding:3px 8px;margin-left:8px" onclick="previewOnline()">← กลับยอดสด</button></div>`;
   tbody.innerHTML = sortedOnlineItems(items).map(it => {
     const sp = Number(it.shopee || 0), lz = Number(it.lazada || 0), tt = Number(it.tiktok || 0);
@@ -1346,7 +1321,6 @@ function renderOnlineBatchView() {
   const wb = document.getElementById('onlineWriteBtn'); if (wb) wb.style.display = 'none';
   const pb = document.getElementById('onlinePrintBtn'); if (pb) pb.style.display = '';
   const pf = document.getElementById('onlinePrintFiles'); if (pf) pf.style.display = 'none';
-  renderOnlineSkuBreakdown(skuItems);
   renderOnlineBatchOrders();
   syncOnlineSortHeader();
   card.style.display = '';
@@ -1446,6 +1420,110 @@ async function markOnlineBatchGroupPrinted(groupIndex, action) {
   }
 }
 
+// ===== หน้า Prepack: นับ SKU จาก "ไฟล์ใบปะหน้าจริง" (SKU space เดียวกับปุ่มพิมพ์ใบปะหน้า) =====
+let prepackData = null;
+
+function initPrepack() {
+  const el = document.getElementById('prepackDate');
+  if (el && !el.value) {
+    const n = new Date();
+    el.value = n.getFullYear() + '-' + String(n.getMonth() + 1).padStart(2, '0') + '-' + String(n.getDate()).padStart(2, '0');
+  }
+  if (adminToken && (!prepackData || prepackData.date !== (el || {}).value)) loadPrepack();
+}
+
+async function loadPrepack() {
+  const msg = document.getElementById('prepackMsg');
+  const card = document.getElementById('prepackCard');
+  if (!adminToken) { msg.textContent = '⚠️ กรุณากดปุ่ม Admin (มุมขวาบน) ใส่ PIN ก่อน'; return; }
+  const date = (document.getElementById('prepackDate') || {}).value || '';
+  if (!date) { msg.textContent = 'กรุณาเลือกวันที่ก่อน'; return; }
+  msg.textContent = 'กำลังโหลดใบปะหน้า...';
+  try {
+    const res = await fetch('/api/online/print-files?date=' + encodeURIComponent(date), {
+      headers: { 'Authorization': 'Bearer ' + adminToken }
+    });
+    const d = await readApiJson(res);
+    if (!res.ok) throw new Error(d.detail || 'โหลดใบปะหน้าไม่สำเร็จ');
+    prepackData = d;
+    msg.textContent = '';
+    renderPrepack();
+  } catch (e) {
+    msg.textContent = '❌ ' + e.message;
+    if (card) card.style.display = 'none';
+  }
+}
+
+function renderPrepack() {
+  const card = document.getElementById('prepackCard');
+  if (!card) return;
+  const d = prepackData || {};
+  const labels = { shopee: 'Shopee', lazada: 'Lazada', tiktok: 'TikTok' };
+  const files = (d.groups || []).flatMap(g => (g.files || []).map(f => ({ ...f, platform: g.platform })));
+  card.style.display = '';
+  if (!files.length) {
+    card.innerHTML = `<div class="muted">ยังไม่พบไฟล์ใบปะหน้าของวันที่ ${escapeHtml(d.date || '')} — ไปหน้า "🛒 ออนไลน์" กด "⟳ ดึงออเดอร์ใหม่จากแพลตฟอร์ม" ก่อน</div>`;
+    return;
+  }
+  // 1 หน้า PDF = 1 พัสดุ (1 ชุดที่ต้องแพ็ค) — SKU แพ็ค เช่น C4-8GX6 = ชุดละ 6 ชิ้น
+  const bySku = new Map();
+  for (const f of files) {
+    const sku = String(f.sku || f.label || f.file);
+    let r = bySku.get(sku);
+    if (!r) {
+      r = { sku, category: f.category || 'OTHER', packs: 0, filesCount: 0, printed: 0, platforms: new Set(), carriers: new Set() };
+      bySku.set(sku, r);
+    }
+    r.packs += Number(f.orders || 1);
+    r.filesCount += 1;
+    if (f.print_status === 'printed') r.printed += 1;
+    r.platforms.add(f.platform);
+    if (f.carrier) r.carriers.add(f.carrier);
+  }
+  const multi = new Set(['SET', 'DUO', 'MIX']); // หลายสินค้าในชุด — ไม่รู้จำนวนชิ้นจากชื่อ SKU
+  const rows = [...bySku.values()].sort((a, b) => a.category.localeCompare(b.category) || a.sku.localeCompare(b.sku, 'th'));
+  let totalPacks = 0, totalPieces = 0;
+  const grouped = new Map();
+  for (const r of rows) {
+    r.unit = multi.has(r.category) ? null : normalizePrintStockSku(r.sku).unitQty;
+    r.pieces = r.unit == null ? null : r.packs * r.unit;
+    totalPacks += r.packs;
+    if (r.pieces != null) totalPieces += r.pieces;
+    if (!grouped.has(r.category)) grouped.set(r.category, []);
+    grouped.get(r.category).push(r);
+  }
+  card.innerHTML = `
+    <h3 style="margin:0 0 4px">🧰 ต้อง prepack วันที่ ${escapeHtml(d.date || '')}</h3>
+    <div class="muted" style="font-size:13px;margin-bottom:10px">${bySku.size.toLocaleString()} SKU · ${totalPacks.toLocaleString()} ชุด (พัสดุ) · ≥ ${totalPieces.toLocaleString()} ชิ้น <span style="color:#94a3b8">(ชุด SET/DUO/MIX ไม่ถูกนับชิ้น เพราะมีหลายสินค้าในชุด)</span></div>
+    ${[...grouped.entries()].map(([category, items]) => `
+      <details open style="border:1px solid #e2e8f0;border-radius:8px;margin:8px 0;background:white">
+        <summary style="cursor:pointer;padding:10px 12px;font-weight:700">${escapeHtml(category)} · ${items.length.toLocaleString()} SKU · ${items.reduce((s, r) => s + r.packs, 0).toLocaleString()} ชุด</summary>
+        <div style="padding:0 12px 10px;overflow:auto">
+          <table style="width:100%;border-collapse:collapse">
+            <thead><tr>
+              <th style="text-align:left;padding:6px;border-bottom:1px solid #e2e8f0">SKU ใบปะหน้า</th>
+              <th style="text-align:right;padding:6px;border-bottom:1px solid #e2e8f0">ชุดที่ต้องแพ็ค</th>
+              <th style="text-align:right;padding:6px;border-bottom:1px solid #e2e8f0">ชิ้น/ชุด</th>
+              <th style="text-align:right;padding:6px;border-bottom:1px solid #e2e8f0">รวมชิ้น</th>
+              <th style="text-align:left;padding:6px;border-bottom:1px solid #e2e8f0">แพลตฟอร์ม</th>
+              <th style="text-align:left;padding:6px;border-bottom:1px solid #e2e8f0">ขนส่ง</th>
+              <th style="text-align:left;padding:6px;border-bottom:1px solid #e2e8f0">พิมพ์แล้ว</th>
+            </tr></thead>
+            <tbody>${items.map(r => `
+              <tr>
+                <td style="padding:6px;border-bottom:1px solid #f1f5f9"><code>${escapeHtml(r.sku)}</code></td>
+                <td style="padding:6px;border-bottom:1px solid #f1f5f9;text-align:right;font-weight:700">${r.packs.toLocaleString()}</td>
+                <td style="padding:6px;border-bottom:1px solid #f1f5f9;text-align:right">${r.unit == null ? '<span class="muted">หลายสินค้า</span>' : r.unit.toLocaleString()}</td>
+                <td style="padding:6px;border-bottom:1px solid #f1f5f9;text-align:right">${r.pieces == null ? '—' : r.pieces.toLocaleString()}</td>
+                <td style="padding:6px;border-bottom:1px solid #f1f5f9">${[...r.platforms].map(p => labels[p] || p).join(', ')}</td>
+                <td style="padding:6px;border-bottom:1px solid #f1f5f9">${[...r.carriers].join(', ') || '-'}</td>
+                <td style="padding:6px;border-bottom:1px solid #f1f5f9">${onlinePrintStatusBadge(r.printed, 0, r.filesCount)}</td>
+              </tr>`).join('')}</tbody>
+          </table>
+        </div>
+      </details>`).join('')}`;
+}
+
 function renderOnlinePreview(d) {
   ensureOnlineControls();
   onlineLastData = d;
@@ -1483,7 +1561,6 @@ function renderOnlinePreview(d) {
   const pb = document.getElementById('onlinePrintBtn');
   if (pb) pb.style.display = d.date ? '' : 'none';
   const bo = document.getElementById('onlineBatchOrders'); if (bo) bo.style.display = 'none';
-  renderOnlineSkuBreakdown(skuItems);
   syncOnlineSortHeader();
   const dp = document.getElementById('onlineDate'); if (dp && d.date) dp.value = d.date;
   card.style.display = '';
@@ -1545,7 +1622,6 @@ function renderOnlineResult(d) {
   const pb = document.getElementById('onlinePrintBtn');
   if (pb) pb.style.display = d.date ? '' : 'none';
   const bo = document.getElementById('onlineBatchOrders'); if (bo) bo.style.display = 'none';
-  const sb = document.getElementById('onlineSkuBreakdown'); if (sb) sb.style.display = 'none';
   syncOnlineSortHeader();
   const dp = document.getElementById('onlineDate');
   if (dp && d.date) dp.value = d.date;
