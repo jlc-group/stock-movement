@@ -409,6 +409,18 @@ body.admin-on .admin-bar { display: flex; }
   .field-row { flex-direction: column; gap: 0; }
 }
 
+/* ===== Premium products (warehouse move) page ===== */
+#pmTable { width: 100%; border-collapse: collapse; font-size: 14px; }
+#pmTable th, #pmTable td { padding: 10px 12px; border-bottom: 1px solid #eef2f7; text-align: left; white-space: nowrap; }
+#pmTable th { background: #f8fafc; color: #475569; font-weight: 700; position: sticky; top: 0; z-index: 2; }
+#pmTable th.num, #pmTable td.num { text-align: right; }
+#pmTable tbody tr:hover { background: #f8fbff; }
+#pmTable code { color: #2563eb; font-weight: 700; }
+.pm-wh-input { width: 92px; text-align: right; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font: inherit; }
+.pm-wh-input:focus { border-color: #2563eb; outline: none; box-shadow: 0 0 0 2px #2563eb22; }
+.pm-total { font-weight: 800; color: #0f172a; }
+.pm-total.neg { color: #dc2626; }
+
 </style>
 </head>
 <body>
@@ -417,6 +429,7 @@ body.admin-on .admin-bar { display: flex; }
   <div class="brand">📦 Stock Movement<small>JLC GROUP 2026</small></div>
   <div class="nav-item active" data-page="dashboard" onclick="switchPage('dashboard')">📊 <span>Dashboard</span></div>
   <div class="nav-item" data-page="products" onclick="switchPage('products')">📦 <span>รายการสินค้า</span></div>
+  <div class="nav-item" data-page="premium" onclick="switchPage('premium')">💎 <span>สินค้าพรีเมี่ยม</span></div>
   <div class="nav-item" data-page="online" onclick="switchPage('online')">🛒 <span>ออนไลน์</span></div>
   <div class="nav-item" data-page="prepack" onclick="switchPage('prepack')">🧰 <span>Prepack SKU</span></div>
   <div class="nav-item" data-page="report" onclick="switchPage('report')">📈 <span>Report</span></div>
@@ -483,6 +496,34 @@ body.admin-on .admin-bar { display: flex; }
     </div>
   </div>
   <div class="card" id="prepackCard" style="display:none;padding:16px;margin-top:14px"></div>
+</div>
+
+<div class="app page" id="page-premium">
+  <div class="dash-head">
+    <h1>💎 สินค้าพรีเมี่ยม — ย้ายคลังลำลูกกา → ซอย8</h1>
+    <div class="sub">การย้ายของจากคลังลำลูกกา → คลังซอย8 · <b>คงเหลือ = ลำลูกกา + ซอย8</b> (ยอดเดียวกับหน้ารายการสินค้า) · บันทึกลงฐานข้อมูล pgSQL · แก้ไขได้เฉพาะโหมด Admin</div>
+  </div>
+  <div class="card" style="padding:16px">
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <div class="search-wrap" style="flex:1;min-width:220px">
+        <input type="text" id="pmSearch" autocomplete="off" placeholder="🔍 ค้นหา รหัส หรือ ชื่อสินค้า..." oninput="renderPremium()">
+      </div>
+      <span id="pmSummary" class="muted"></span>
+    </div>
+  </div>
+  <div class="card" style="padding:0;margin-top:14px;overflow:auto">
+    <table id="pmTable">
+      <thead><tr>
+        <th>#</th>
+        <th>รหัส</th>
+        <th>ชื่อสินค้า</th>
+        <th class="num">คลังลำลูกกา</th>
+        <th class="num">คลังซอย8</th>
+        <th class="num">คงเหลือ</th>
+      </tr></thead>
+      <tbody id="pmBody"></tbody>
+    </table>
+  </div>
 </div>
 
 <div class="app page active" id="page-dashboard">
@@ -784,6 +825,14 @@ body.admin-on .admin-bar { display: flex; }
         <div class="field field-in"><label>รับเข้า</label><input type="number" id="mvIn" value="0" step="any" min="0" inputmode="decimal" onfocus="this.select()" oninput="updatePreview()"></div>
         <div class="field field-out"><label>จ่ายออก</label><input type="number" id="mvOut" value="0" step="any" min="0" inputmode="decimal" onfocus="this.select()" oninput="updatePreview()"></div>
       </div>
+      <div class="field" id="mvDestField" style="display:none">
+        <label>รับเข้าที่คลัง (สินค้าพรีเมี่ยม)</label>
+        <select id="mvDest" onchange="updatePreview()">
+          <option value="soi8">คลังซอย8</option>
+          <option value="lamlukka">คลังลำลูกกา</option>
+        </select>
+        <div class="hint" style="font-size:12px;color:#9ca3af;margin-top:4px">จ่ายออกจะตัดจากคลังซอย8 เสมอ</div>
+      </div>
       <div class="field"><label>หมายเหตุ</label><input type="text" id="mvNote" placeholder="หมายเหตุ (ถ้ามี)"></div>
       <div class="preview-bal" id="mvPreview" style="display:none"></div>
       <div class="amodal-foot">
@@ -1025,6 +1074,52 @@ function switchPage(page) {
   if (page === 'products') syncStickyHeight();
   if (page === 'online') initOnline();
   if (page === 'prepack') initPrepack();
+  if (page === 'premium') renderPremium();
+}
+
+// ============================================================
+//  หน้า "สินค้าพรีเมี่ยม": ย้ายของ คลังลำลูกกา -> ซอย8
+//  ยอดคลังลำลูกกา/ซอย8 เก็บใน pgSQL (ตาราง premium_warehouse)
+//  คงเหลือ = ลำลูกกา + ซอย8 (บันทึกกลับลง products.closing_balance)
+//  แสดงอย่างเดียว — เพิ่ม/ลดสต๊อกผ่าน "บันทึกรับ-จ่ายรายวัน" (add_movement)
+// ============================================================
+function premiumProducts() { return (DB.products || []).filter(p => p.brand === 'สินค้าพรีเมี่ยม'); }
+
+function pmRenderSummary() {
+  const list = premiumProducts();
+  let tl = 0, ts = 0;
+  list.forEach(p => { tl += Number(p.lamlukka) || 0; ts += Number(p.soi8) || 0; });
+  const el = document.getElementById('pmSummary');
+  if (el) el.innerHTML = `${list.length} รายการ · รวมลำลูกกา <b>${fmt(tl)}</b> · รวมซอย8 <b>${fmt(ts)}</b> · รวมคงเหลือ <b>${fmt(tl + ts)}</b>`;
+}
+
+function renderPremium() {
+  const body = document.getElementById('pmBody');
+  if (!body) return;
+  const q = (document.getElementById('pmSearch')?.value || '').trim().toLowerCase();
+  let list = premiumProducts();
+  if (q) list = list.filter(p => (p.code || '').toLowerCase().includes(q) || (p.name || '').toLowerCase().includes(q));
+  list.sort((a, b) => (a.code || '').localeCompare(b.code || ''));
+  if (!list.length) {
+    body.innerHTML = '<tr><td colspan="6" class="empty" style="padding:20px;text-align:center;color:#94a3b8">ไม่พบสินค้าพรีเมี่ยม</td></tr>';
+    pmRenderSummary();
+    return;
+  }
+  // คลังลำลูกกา/ซอย8 แสดงอย่างเดียว แก้ไม่ได้ — เพิ่ม/ลดสต๊อกผ่าน "บันทึกรับ-จ่ายรายวัน"
+  const whCell = (p, field) => fmt(Number(p[field]) || 0);
+  body.innerHTML = list.map((p, i) => {
+    const closing = Number(p.closing) || 0;
+    const cc = escapeHtml(p.code || '');
+    return `<tr data-id="${p.id}">
+      <td>${i + 1}</td>
+      <td><code>${cc}</code></td>
+      <td>${escapeHtml(p.name || '')}</td>
+      <td class="num">${whCell(p, 'lamlukka')}</td>
+      <td class="num">${whCell(p, 'soi8')}</td>
+      <td class="num bal pm-total ${cls(closing)}">${fmt(closing)}</td>
+    </tr>`;
+  }).join('');
+  pmRenderSummary();
 }
 
 // ===== หน้า "ออนไลน์": ดึงยอดออนไลน์จาก Script-Ecom -> ลงช่อง online =====
@@ -2667,6 +2762,7 @@ function updateAdminUI() {
   const on = !!adminToken;
   document.body.classList.toggle('admin-on', on);
   document.getElementById('adminBtnText').textContent = on ? 'Admin: เปิด' : 'Admin';
+  if (document.getElementById('page-premium')?.classList.contains('active')) renderPremium();
 }
 
 function onAdminBtn() {
@@ -2719,10 +2815,13 @@ function closeAModal(id) { document.getElementById(id).classList.remove('show');
 
 // ---- Merge a product object (from API) into DB.products + re-render ----
 function mergeProduct(product) {
-  const idx = DB.products.findIndex(p => p.code === product.code);
+  // Prefer id (premium codes like UMBRELLA are not unique); fall back to code.
+  let idx = (product.id != null) ? DB.products.findIndex(p => p.id === product.id) : -1;
+  if (idx < 0) idx = DB.products.findIndex(p => p.code === product.code);
   if (idx >= 0) DB.products[idx] = product;
   else DB.products.push(product);
   applyFilters();
+  if (document.getElementById('page-premium')?.classList.contains('active')) renderPremium();
 }
 
 // ---- Add Product ----
@@ -2993,16 +3092,30 @@ function pickProduct(idx) {
   document.getElementById('mvSelBal').textContent = fmt(mvSelected.closing);
   document.getElementById('mvSelCard').classList.add('show');
   document.getElementById('mvSubmit').disabled = false;
+  document.getElementById('mvDestField').style.display = mvIsPremium() ? 'block' : 'none';
   updatePreview();
 }
+
+function mvIsPremium() { return !!mvSelected && mvSelected.brand === 'สินค้าพรีเมี่ยม'; }
 
 function updatePreview() {
   const prev = document.getElementById('mvPreview');
   if (!mvSelected) { prev.style.display = 'none'; return; }
   const qin = parseFloat(document.getElementById('mvIn').value) || 0;
   const qout = parseFloat(document.getElementById('mvOut').value) || 0;
-  const newBal = (mvSelected.closing || 0) + qin - qout;
   prev.style.display = 'block';
+  if (mvIsPremium()) {
+    const dest = document.getElementById('mvDest').value;
+    let lam = Number(mvSelected.lamlukka) || 0;
+    let soi = Number(mvSelected.soi8) || 0;
+    soi -= qout;
+    if (dest === 'lamlukka') lam += qin; else soi += qin;
+    const newBal = lam + soi;
+    prev.innerHTML = `คงเหลือใหม่ (โดยประมาณ): <b class="${newBal < 0 ? 'neg' : ''}">${fmt(newBal)}</b> ` +
+      `<span style="color:#9ca3af;font-size:12px">= ลำลูกกา ${fmt(lam)} + ซอย8 ${fmt(soi)}</span>`;
+    return;
+  }
+  const newBal = (mvSelected.closing || 0) + qin - qout;
   prev.innerHTML = `คงเหลือใหม่ (โดยประมาณ): <b class="${newBal < 0 ? 'neg' : ''}">${fmt(newBal)}</b> ` +
     `<span style="color:#9ca3af;font-size:12px">= ${fmt(mvSelected.closing)} + ${fmt(qin)} − ${fmt(qout)}</span>`;
 }
@@ -3042,7 +3155,8 @@ async function submitMovement() {
   if (qty_in === 0 && qty_out === 0) { msg.className = 'form-msg err show'; msg.textContent = 'กรุณากรอกรับเข้าหรือจ่ายออก'; return; }
   btn.disabled = true;
   try {
-    const data = await adminFetch('/api/movements', { code: mvSelected.code, date, qty_in, qty_out, doc_no, note, channel });
+    const in_dest = document.getElementById('mvDest').value || 'soi8';
+    const data = await adminFetch('/api/movements', { id: mvSelected.id, code: mvSelected.code, date, qty_in, qty_out, doc_no, note, channel, in_dest });
     mergeProduct(data.product);
     mvSelected = data.product;   // keep selection updated with new balance
     document.getElementById('mvSelBal').textContent = fmt(mvSelected.closing);

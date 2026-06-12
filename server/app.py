@@ -90,6 +90,33 @@ def get_conn():
     return psycopg2.connect(**config.DB)
 
 
+def ensure_premium_warehouse_table():
+    """Create the premium_warehouse table if it doesn't exist yet.
+
+    Holds the per-product ลำลูกกา/ซอย8 split for premium products; the page's
+    closing balance = ลำลูกกา + ซอย8 (written back to products.closing_balance).
+    """
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute(f"""
+            CREATE TABLE IF NOT EXISTS {config.DB_SCHEMA}.premium_warehouse (
+                product_id INT PRIMARY KEY
+                    REFERENCES {config.DB_SCHEMA}.products(id) ON DELETE CASCADE,
+                lamlukka NUMERIC NOT NULL DEFAULT 0,
+                soi8     NUMERIC NOT NULL DEFAULT 0,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[warn] ensure_premium_warehouse_table failed: {e}")
+
+
+ensure_premium_warehouse_table()
+
+
 def num(x):
     """Decimal/None -> JSON-friendly int or float."""
     if x is None:
@@ -228,10 +255,12 @@ def require_admin(fn):
 def fetch_product(cur, product_id):
     """Return one product in the compact frontend shape (with tx list)."""
     cur.execute(f"""
-        SELECT id, sheet_name, code, name, category_code,
-               opening_balance, total_in, total_out, closing_balance, brand
-        FROM {config.DB_SCHEMA}.products
-        WHERE id = %s
+        SELECT p.id, p.sheet_name, p.code, p.name, p.category_code,
+               p.opening_balance, p.total_in, p.total_out, p.closing_balance, p.brand,
+               COALESCE(pw.lamlukka, 0), COALESCE(pw.soi8, 0)
+        FROM {config.DB_SCHEMA}.products p
+        LEFT JOIN {config.DB_SCHEMA}.premium_warehouse pw ON pw.product_id = p.id
+        WHERE p.id = %s
     """, (product_id,))
     p = cur.fetchone()
     if not p:
@@ -250,9 +279,10 @@ def fetch_product(cur, product_id):
         r[4] or "", r[5] or "", r[6] or "mixed",
     ] for r in cur.fetchall()]
     return {
-        "sheet": p[1], "code": p[2], "name": p[3] or "", "category": p[4],
+        "id": p[0], "sheet": p[1], "code": p[2], "name": p[3] or "", "category": p[4],
         "opening": num(p[5]), "total_in": num(p[6]), "total_out": num(p[7]),
-        "closing": num(p[8]), "brand": p[9] or classify_brand(p[2], p[3], p[4]), "tx": tx,
+        "closing": num(p[8]), "brand": p[9] or classify_brand(p[2], p[3], p[4]),
+        "lamlukka": num(p[10]), "soi8": num(p[11]), "tx": tx,
     }
 
 
@@ -307,6 +337,39 @@ def recompute_product(cur, product_id):
     """, (total_in, total_out, running, product_id))
 
 
+def apply_premium_warehouse_delta(cur, product_id, qty_in, qty_out, in_dest):
+    """For premium (warehouse-backed) products: qty_out is deducted from ซอย8,
+    qty_in is added to the chosen warehouse (`soi8` or `lamlukka`), and the
+    product's closing_balance is set to ลำลูกกา + ซอย8. This is the source of
+    truth for premium stock, overriding the movement-derived closing."""
+    cur.execute(f"""
+        SELECT lamlukka, soi8 FROM {config.DB_SCHEMA}.premium_warehouse
+        WHERE product_id = %s
+    """, (product_id,))
+    row = cur.fetchone()
+    lam = float(row[0]) if row else 0.0
+    soi = float(row[1]) if row else 0.0
+
+    soi -= qty_out
+    if in_dest == "lamlukka":
+        lam += qty_in
+    else:
+        soi += qty_in
+
+    cur.execute(f"""
+        INSERT INTO {config.DB_SCHEMA}.premium_warehouse (product_id, lamlukka, soi8, updated_at)
+        VALUES (%s, %s, %s, CURRENT_TIMESTAMP)
+        ON CONFLICT (product_id) DO UPDATE SET
+            lamlukka = EXCLUDED.lamlukka, soi8 = EXCLUDED.soi8,
+            updated_at = CURRENT_TIMESTAMP
+    """, (product_id, lam, soi))
+    cur.execute(f"""
+        UPDATE {config.DB_SCHEMA}.products
+        SET closing_balance = %s, updated_at = CURRENT_TIMESTAMP
+        WHERE id = %s
+    """, (lam + soi, product_id))
+
+
 # ---- Read endpoints -----------------------------------------------------
 @app.route("/")
 def index():
@@ -336,10 +399,12 @@ def products():
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
 
     cur.execute(f"""
-        SELECT id, sheet_name, code, name, category_code,
-               opening_balance, total_in, total_out, closing_balance, brand
-        FROM {config.DB_SCHEMA}.products
-        ORDER BY id
+        SELECT p.id, p.sheet_name, p.code, p.name, p.category_code,
+               p.opening_balance, p.total_in, p.total_out, p.closing_balance, p.brand,
+               COALESCE(pw.lamlukka, 0) AS lamlukka, COALESCE(pw.soi8, 0) AS soi8
+        FROM {config.DB_SCHEMA}.products p
+        LEFT JOIN {config.DB_SCHEMA}.premium_warehouse pw ON pw.product_id = p.id
+        ORDER BY p.id
     """)
     prod_rows = cur.fetchall()
 
@@ -363,6 +428,7 @@ def products():
     conn.close()
 
     products_out = [{
+        "id": p["id"],
         "sheet": p["sheet_name"],
         "code": p["code"],
         "name": p["name"] or "",
@@ -372,6 +438,8 @@ def products():
         "total_in": num(p["total_in"]),
         "total_out": num(p["total_out"]),
         "closing": num(p["closing_balance"]),
+        "lamlukka": num(p["lamlukka"]),
+        "soi8": num(p["soi8"]),
         "tx": tx_by_product.get(p["id"], []),
     } for p in prod_rows]
 
@@ -717,14 +785,63 @@ def create_product():
         conn.close()
 
 
+@app.route("/api/premium/warehouse", methods=["PUT"])
+@require_admin
+def set_premium_warehouse():
+    """Upsert the ลำลูกกา/ซอย8 split for one premium product and set its
+    closing_balance = ลำลูกกา + ซอย8 (the premium page's source of truth)."""
+    data = request.get_json(silent=True) or {}
+    pid = data.get("id")
+    try:
+        lam = float(data.get("lamlukka", 0) or 0)
+        soi = float(data.get("soi8", 0) or 0)
+    except (TypeError, ValueError):
+        return jsonify(error="bad_request", detail="ลำลูกกา/ซอย8 ต้องเป็นตัวเลข"), 400
+    if not pid:
+        return jsonify(error="bad_request", detail="ต้องระบุ id ของสินค้า"), 400
+    if lam < 0 or soi < 0:
+        return jsonify(error="bad_request", detail="จำนวนต้องไม่ติดลบ"), 400
+
+    conn = get_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute(f"SELECT 1 FROM {config.DB_SCHEMA}.products WHERE id = %s", (pid,))
+        if not cur.fetchone():
+            return jsonify(error="not_found", detail="ไม่พบสินค้า"), 404
+        cur.execute(f"""
+            INSERT INTO {config.DB_SCHEMA}.premium_warehouse
+                (product_id, lamlukka, soi8, updated_at)
+            VALUES (%s, %s, %s, CURRENT_TIMESTAMP)
+            ON CONFLICT (product_id) DO UPDATE SET
+                lamlukka = EXCLUDED.lamlukka,
+                soi8     = EXCLUDED.soi8,
+                updated_at = CURRENT_TIMESTAMP
+        """, (pid, lam, soi))
+        cur.execute(f"""
+            UPDATE {config.DB_SCHEMA}.products
+            SET closing_balance = %s, updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
+        """, (lam + soi, pid))
+        product = fetch_product(cur, pid)
+        conn.commit()
+        return jsonify(status="ok", product=product)
+    except Exception as e:
+        conn.rollback()
+        return jsonify(error="server_error", detail=str(e)), 500
+    finally:
+        conn.close()
+
+
 @app.route("/api/movements", methods=["POST"])
 @require_admin
 def add_movement():
     data = request.get_json(silent=True) or {}
     code = str(data.get("code", "")).strip()
+    pid_in = data.get("id")
     mv_date = str(data.get("date", "")).strip()
     doc_no = (str(data.get("doc_no", "")).strip() or None)
     note = (str(data.get("note", "")).strip() or None)
+    in_dest = str(data.get("in_dest", "soi8")).strip() or "soi8"
     try:
         qty_in = float(data.get("qty_in", 0) or 0)
         qty_out = float(data.get("qty_out", 0) or 0)
@@ -735,8 +852,10 @@ def add_movement():
     except ValueError:
         return jsonify(error="bad_request", detail="channel ไม่ถูกต้อง"), 400
 
-    if not code:
+    if not code and not pid_in:
         return jsonify(error="bad_request", detail="ต้องระบุรหัสสินค้า"), 400
+    if in_dest not in ("soi8", "lamlukka"):
+        return jsonify(error="bad_request", detail="คลังปลายทางต้องเป็น soi8 หรือ lamlukka"), 400
     if not mv_date:
         return jsonify(error="bad_request", detail="ต้องระบุวันที่"), 400
     try:
@@ -751,11 +870,16 @@ def add_movement():
     conn = get_conn()
     try:
         cur = conn.cursor()
-        cur.execute(f"SELECT id FROM {config.DB_SCHEMA}.products WHERE code = %s", (code,))
+        # Prefer lookup by id (premium codes like UMBRELLA are not unique).
+        if pid_in:
+            cur.execute(f"SELECT id, brand FROM {config.DB_SCHEMA}.products WHERE id = %s", (pid_in,))
+        else:
+            cur.execute(f"SELECT id, brand FROM {config.DB_SCHEMA}.products WHERE code = %s", (code,))
         row = cur.fetchone()
         if not row:
-            return jsonify(error="not_found", detail=f"ไม่พบรหัสสินค้า {code}"), 404
-        product_id = row[0]
+            return jsonify(error="not_found", detail=f"ไม่พบรหัสสินค้า {code or pid_in}"), 404
+        product_id, brand = row[0], row[1]
+        is_premium = (brand == "สินค้าพรีเมี่ยม")
 
         # Same (day, channel) -> accumulate; otherwise a new row. Conflict
         # target is the post-migration key (product_id, movement_date, channel)
@@ -772,6 +896,11 @@ def add_movement():
         """, (product_id, mv_date, doc_no, qty_in, qty_out, note, channel))
 
         recompute_product(cur, product_id)
+        # Premium products are warehouse-backed: qty_out always draws from ซอย8,
+        # qty_in lands in the chosen warehouse, and closing = ลำลูกกา + ซอย8
+        # (overrides the movement-derived closing set by recompute_product).
+        if is_premium:
+            apply_premium_warehouse_delta(cur, product_id, qty_in, qty_out, in_dest)
         product = fetch_product(cur, product_id)
         conn.commit()
         return jsonify(status="ok", product=product)
