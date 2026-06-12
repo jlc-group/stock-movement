@@ -1065,6 +1065,12 @@ function ensureOnlineControls() {
     box.style.cssText = 'display:none;margin-top:10px';
     card.appendChild(box);
   }
+  if (card && !document.getElementById('onlineSkuBreakdown')) {
+    const box = document.createElement('div');
+    box.id = 'onlineSkuBreakdown';
+    box.style.cssText = 'display:none;margin-top:10px';
+    card.appendChild(box);
+  }
   if (card && !document.getElementById('onlineBatchOrders')) {
     const box = document.createElement('div');
     box.id = 'onlineBatchOrders';
@@ -1224,6 +1230,64 @@ function onlineFindProduct(sku) {
   return null;
 }
 
+// ตัดสต็อกตัด "ตามสินค้า" — รวมหลาย SKU (เช่นราคาโปร _99/_159) ที่ชี้สินค้าเดียวกันเป็นแถวเดียว
+function aggregateOnlineByProduct(items) {
+  const map = new Map();
+  for (const it of (items || [])) {
+    const key = String(it.code || '').toUpperCase().trim();
+    let a = map.get(key);
+    if (!a) {
+      a = { code: it.code, name: it.name || '', shopee: 0, lazada: 0, tiktok: 0, qty: 0,
+            already_online: Number(it.already_online || 0), source_skus: [] };
+      map.set(key, a);
+    }
+    a.shopee += Number(it.shopee || 0);
+    a.lazada += Number(it.lazada || 0);
+    a.tiktok += Number(it.tiktok || 0);
+    a.qty += Number(it.qty || 0);
+    if (!a.name && it.name) a.name = it.name;
+    const sku = String(it.source_sku || it.sku || '').trim();
+    if (sku && !a.source_skus.includes(sku)) a.source_skus.push(sku);
+  }
+  return [...map.values()];
+}
+
+// 🔖 ตาราง SKU แยกต่างหาก (สำหรับ prepack) — ไม่ปนกับตารางตัดสต็อกรายสินค้า
+function renderOnlineSkuBreakdown(skuItems) {
+  const box = document.getElementById('onlineSkuBreakdown');
+  if (!box) return;
+  const rows = (skuItems || []).filter(it => String(it.source_sku || it.sku || '').trim());
+  if (!rows.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  box.style.display = '';
+  const sorted = [...rows].sort((a, b) =>
+    String(a.source_sku || a.sku).localeCompare(String(b.source_sku || b.sku), 'th'));
+  box.innerHTML = `
+    <details style="border-top:1px dashed #e2e8f0;padding-top:10px">
+      <summary style="cursor:pointer;font-weight:700">🔖 แยกตาม SKU — ${sorted.length.toLocaleString()} SKU <span class="muted" style="font-weight:400;font-size:12.5px">(สำหรับ prepack · กดเพื่อเปิด/ปิด)</span></summary>
+      <table style="width:100%;border-collapse:collapse;margin-top:8px">
+        <thead><tr>
+          <th style="text-align:left;padding:6px;border-bottom:1px solid #e2e8f0">SKU</th>
+          <th style="text-align:left;padding:6px;border-bottom:1px solid #e2e8f0">รหัสสินค้า</th>
+          <th style="text-align:right;padding:6px;border-bottom:1px solid #e2e8f0">Shopee</th>
+          <th style="text-align:right;padding:6px;border-bottom:1px solid #e2e8f0">Lazada</th>
+          <th style="text-align:right;padding:6px;border-bottom:1px solid #e2e8f0">TikTok</th>
+          <th style="text-align:right;padding:6px;border-bottom:1px solid #e2e8f0">รวม</th>
+        </tr></thead>
+        <tbody>${sorted.map(it => {
+          const sp = Number(it.shopee || 0), lz = Number(it.lazada || 0), tt = Number(it.tiktok || 0);
+          return `<tr>
+            <td style="padding:6px;border-bottom:1px solid #f1f5f9"><code>${escapeHtml(String(it.source_sku || it.sku))}</code></td>
+            <td style="padding:6px;border-bottom:1px solid #f1f5f9"><code>${escapeHtml(String(it.code || ''))}</code></td>
+            <td style="padding:6px;border-bottom:1px solid #f1f5f9;text-align:right;color:#ea580c">${sp ? sp.toLocaleString() : '—'}</td>
+            <td style="padding:6px;border-bottom:1px solid #f1f5f9;text-align:right;color:#1d4ed8">${lz ? lz.toLocaleString() : '—'}</td>
+            <td style="padding:6px;border-bottom:1px solid #f1f5f9;text-align:right;color:#0f766e">${tt ? tt.toLocaleString() : '—'}</td>
+            <td style="padding:6px;border-bottom:1px solid #f1f5f9;text-align:right"><b>${Number(it.qty || 0).toLocaleString()}</b></td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>
+    </details>`;
+}
+
 async function viewOnlineBatch(id) {
   const msg = document.getElementById('onlineMsg');
   if (!adminToken) { msg.textContent = '⚠️ กรุณากดปุ่ม Admin (มุมขวาบน) ใส่ PIN ก่อน'; return; }
@@ -1249,7 +1313,7 @@ function renderOnlineBatchView() {
   const b = onlineBatchData || {};
   onlineLastMode = 'batch';
   const rows = (b.delta_sku_rows && b.delta_sku_rows.length) ? b.delta_sku_rows : (b.sku_rows || []);
-  const items = rows.map(r => {
+  const skuItems = rows.map(r => {
     const p = onlineFindProduct(r.sku);
     return {
       code: p ? p.code : r.sku, name: p ? p.name : '',
@@ -1257,6 +1321,7 @@ function renderOnlineBatchView() {
       qty: Number(r.total || 0), source_sku: r.sku, already_online: 0,
     };
   });
+  const items = aggregateOnlineByProduct(skuItems); // ตารางหลัก = รายสินค้า (ตัดสต็อกตัดตามสินค้า)
   onlineLastData = { items, date: b.date };
   const card = document.getElementById('onlineResultCard');
   const tbody = document.querySelector('#onlineResultTable tbody');
@@ -1265,7 +1330,7 @@ function renderOnlineBatchView() {
   document.getElementById('onlineResultTitle').innerHTML =
     `📦 ${escapeHtml(b.label || b.id || '')} — วันที่ ${escapeHtml(b.date || '')} `
     + `<span style="color:#94a3b8;font-weight:400;font-size:13px">(เฉพาะออเดอร์ใหม่ของรอบนี้ · แสตมป์เมื่อ ${escapeHtml(String(b.created_at || '').replace('T', ' ').slice(0, 16))})</span>`
-    + `<div style="font-weight:400;font-size:13px;margin-top:2px;color:${printed >= orders.length && orders.length ? '#16a34a' : '#b45309'}">ออเดอร์รอบนี้ ${orders.length.toLocaleString()} · พิมพ์แล้ว ${printed.toLocaleString()} · ค้างพิมพ์ ${(orders.length - printed).toLocaleString()} `
+    + `<div style="font-weight:400;font-size:13px;margin-top:2px;color:${printed >= orders.length && orders.length ? '#16a34a' : '#b45309'}">สินค้า ${items.length.toLocaleString()} รายการ · ${skuItems.length.toLocaleString()} SKU · ออเดอร์รอบนี้ ${orders.length.toLocaleString()} · พิมพ์แล้ว ${printed.toLocaleString()} · ค้างพิมพ์ ${(orders.length - printed).toLocaleString()} `
     + `<button type="button" class="btn btn-ghost" style="font-size:12px;padding:3px 8px;margin-left:8px" onclick="previewOnline()">← กลับยอดสด</button></div>`;
   tbody.innerHTML = sortedOnlineItems(items).map(it => {
     const sp = Number(it.shopee || 0), lz = Number(it.lazada || 0), tt = Number(it.tiktok || 0);
@@ -1281,6 +1346,7 @@ function renderOnlineBatchView() {
   const wb = document.getElementById('onlineWriteBtn'); if (wb) wb.style.display = 'none';
   const pb = document.getElementById('onlinePrintBtn'); if (pb) pb.style.display = '';
   const pf = document.getElementById('onlinePrintFiles'); if (pf) pf.style.display = 'none';
+  renderOnlineSkuBreakdown(skuItems);
   renderOnlineBatchOrders();
   syncOnlineSortHeader();
   card.style.display = '';
@@ -1289,16 +1355,26 @@ function renderOnlineBatchView() {
 function onlineBatchOrderGroups(b) {
   const map = new Map();
   for (const o of (b.orders || [])) {
-    const sig = Object.entries(o.items || {})
+    // จัดกลุ่มตาม "สินค้า" (map SKU โปรหลายตัว → สินค้าเดียว) และไม่แยกตามขนส่ง — ลดแถว/ปุ่มซ้ำซ้อน
+    const byCode = {};
+    for (const [s, q] of Object.entries(o.items || {})) {
+      const p = onlineFindProduct(s);
+      const code = p ? p.code : s;
+      byCode[code] = (byCode[code] || 0) + Number(q || 0);
+    }
+    const sig = Object.entries(byCode)
       .sort((x, y) => x[0].localeCompare(y[0]))
-      .map(([s, q]) => Number(q) > 1 ? `${s} ×${Number(q).toLocaleString()}` : s)
+      .map(([s, q]) => q > 1 ? `${s} ×${q.toLocaleString()}` : s)
       .join(' + ');
-    const key = `${o.platform}|${o.carrier || ''}|${sig}`;
-    if (!map.has(key)) map.set(key, { platform: o.platform, carrier: o.carrier || '', sig, orders: [] });
-    map.get(key).orders.push(o);
+    const key = `${o.platform}|${sig}`;
+    let g = map.get(key);
+    if (!g) { g = { platform: o.platform, carriers: new Set(), sig, orders: [] }; map.set(key, g); }
+    if (o.carrier) g.carriers.add(o.carrier);
+    g.orders.push(o);
   }
-  return [...map.values()].sort((a, b2) =>
-    a.platform.localeCompare(b2.platform) || a.carrier.localeCompare(b2.carrier) || a.sig.localeCompare(b2.sig, 'th'));
+  return [...map.values()]
+    .map(g => ({ platform: g.platform, carrier: [...g.carriers].join(', '), sig: g.sig, orders: g.orders }))
+    .sort((a, b2) => a.platform.localeCompare(b2.platform) || a.sig.localeCompare(b2.sig, 'th'));
 }
 
 function renderOnlineBatchOrders() {
@@ -1381,7 +1457,9 @@ function renderOnlinePreview(d) {
     + (d.delta_applied
       ? `<div style="color:#0f766e;font-weight:400;font-size:13px;margin-top:2px">เฉพาะออเดอร์ใหม่ที่ยังไม่เข้ารอบ — หักรอบที่บันทึกแล้ว ${Number(d.batches_count || 0)} รอบ (${Number(d.batched_pcs || 0).toLocaleString()} ชิ้น · ล่าสุด: ${escapeHtml(d.latest_batch_label || '')})</div>`
       : '');
-  tbody.innerHTML = sortedOnlineItems(d.items || []).map(it => {
+  const skuItems = d.items || [];
+  const items = aggregateOnlineByProduct(skuItems); // ตารางหลัก = รายสินค้า (ตัดสต็อกตัดตามสินค้า)
+  tbody.innerHTML = sortedOnlineItems(items).map(it => {
     const already = Number(it.already_online || 0);
     const note = already ? `<span style="color:#16a34a">${already.toLocaleString()}</span>` : '<span style="color:#cbd5e1">—</span>';
     const sp = Number(it.shopee || 0);
@@ -1405,6 +1483,7 @@ function renderOnlinePreview(d) {
   const pb = document.getElementById('onlinePrintBtn');
   if (pb) pb.style.display = d.date ? '' : 'none';
   const bo = document.getElementById('onlineBatchOrders'); if (bo) bo.style.display = 'none';
+  renderOnlineSkuBreakdown(skuItems);
   syncOnlineSortHeader();
   const dp = document.getElementById('onlineDate'); if (dp && d.date) dp.value = d.date;
   card.style.display = '';
@@ -1466,6 +1545,7 @@ function renderOnlineResult(d) {
   const pb = document.getElementById('onlinePrintBtn');
   if (pb) pb.style.display = d.date ? '' : 'none';
   const bo = document.getElementById('onlineBatchOrders'); if (bo) bo.style.display = 'none';
+  const sb = document.getElementById('onlineSkuBreakdown'); if (sb) sb.style.display = 'none';
   syncOnlineSortHeader();
   const dp = document.getElementById('onlineDate');
   if (dp && d.date) dp.value = d.date;
