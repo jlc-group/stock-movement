@@ -3,8 +3,8 @@
   "configurations": [
     {
       "name": "stock-server",
-      "runtimeExecutable": "python3",
-      "runtimeArgs": ["server/app.py"],
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "server.app"],
       "port": 8000
     }
   ]

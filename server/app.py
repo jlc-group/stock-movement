@@ -41,6 +41,8 @@ SCRIPT_ECOM_APP_DIR = os.getenv(
 )
 PRINT_PLATFORMS = ("shopee", "lazada", "tiktok")
 PRINT_STATUS_PATH = config.PROCESSED_DIR / "online_print_status.json"
+# สถานะปริ้นระดับ "ออเดอร์" (ผูก order_id ไม่ผูกชื่อไฟล์ — ไฟล์ถูกดึงทับได้ สถานะไม่หาย)
+ORDER_PRINT_STATUS_PATH = config.PROCESSED_DIR / "online_order_print_status.json"
 PDF_PAGE_COUNT_CACHE = {}
 
 app = Flask(__name__, static_folder=None)
@@ -177,6 +179,25 @@ def save_print_statuses(statuses):
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(statuses, f, ensure_ascii=False, indent=2, sort_keys=True)
     os.replace(tmp, PRINT_STATUS_PATH)
+
+
+def load_order_print_statuses():
+    try:
+        if ORDER_PRINT_STATUS_PATH.exists():
+            with open(ORDER_PRINT_STATUS_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+    return {}
+
+
+def save_order_print_statuses(statuses):
+    config.PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+    tmp = ORDER_PRINT_STATUS_PATH.with_suffix(".tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(statuses, f, ensure_ascii=False, indent=2, sort_keys=True)
+    os.replace(tmp, ORDER_PRINT_STATUS_PATH)
 
 
 def script_ecom_json(path, method="GET", payload=None, timeout=30):
@@ -1267,9 +1288,50 @@ def online_preview():
                 "already_online": existing.get(info["id"], 0),
             })
         items.sort(key=lambda x: x["code"])
+
+        # ---- หักยอดที่ถูก "บันทึกรอบยืนยัน" ไปแล้ว → เหลือเฉพาะออเดอร์ใหม่ที่ยังไม่เข้ารอบ ----
+        delta_applied = False
+        batched_pcs = 0
+        batches_count = 0
+        latest_batch_label = ""
+        try:
+            bl = script_ecom_json("/api/stock/batches?date=" + urllib.parse.quote(p_date), timeout=15)
+            blist = list(bl.get("batches") or [])
+            batches_count = len(blist)
+            if blist:
+                blist.sort(key=lambda b: str(b.get("created_at") or ""))
+                latest = blist[-1]
+                latest_batch_label = str(latest.get("label") or "")
+                full = script_ecom_json(
+                    "/api/stock/batch?id=" + urllib.parse.quote(str(latest.get("id") or "")), timeout=15)
+                snap = full.get("stock_snapshot") or {}
+                if snap:  # batch รุ่นใหม่ (v2) เท่านั้น — รุ่นเก่าไม่มี snapshot ก็แสดงยอดเต็มตามเดิม
+                    delta_applied = True
+                    before = total
+                    remaining = []
+                    for it in items:
+                        sku = str(it.get("source_sku") or "")
+                        rem_total = 0
+                        for plat in ("shopee", "lazada", "tiktok"):
+                            have = float(it.get(plat) or 0)
+                            used = float((snap.get(plat) or {}).get(sku) or 0)
+                            rem = have - used
+                            it[plat] = rem if rem > 0 else 0
+                            rem_total += it[plat]
+                        it["qty"] = rem_total
+                        if rem_total > 0:
+                            remaining.append(it)
+                    items = remaining
+                    total = sum(it["qty"] for it in items)
+                    batched_pcs = max(0, before - total)
+        except Exception:
+            pass  # Script-Ecom ล่ม/ไม่มี batch → โชว์ยอดเต็มตามเดิม
+
         return jsonify(status="ok", date=p_date, mode="preview",
                        total_qty=total, matched=len(items), skipped=len(skipped),
                        items=items, skipped_items=skipped,
+                       delta_applied=delta_applied, batched_pcs=batched_pcs,
+                       batches_count=batches_count, latest_batch_label=latest_batch_label,
                        platforms=payload.get("platforms") or {})
     except Exception as e:
         return jsonify(error="server_error", detail=str(e)), 500
@@ -1356,6 +1418,64 @@ def online_create_batch():
         return jsonify(error="batch_failed", detail=f"Script-Ecom: {reason}"), 424
     except Exception as e:
         return jsonify(error="upstream_unreachable", detail=str(e)), 424
+
+
+@app.route("/api/online/batch")
+@require_admin
+def online_batch_detail():
+    """รายละเอียดรอบยืนยัน 1 รอบ (proxy Script-Ecom) + merge สถานะปริ้นรายออเดอร์ของเรา."""
+    bid = str(request.args.get("id", "")).strip()
+    if not bid:
+        return jsonify(error="bad_request", detail="ต้องระบุ id ของรอบ"), 400
+    try:
+        payload = script_ecom_json("/api/stock/batch?id=" + urllib.parse.quote(bid), timeout=30)
+    except urllib.error.HTTPError as he:
+        try:
+            reason = (json.loads(he.read().decode("utf-8")) or {}).get("error", f"HTTP {he.code}")
+        except Exception:
+            reason = f"HTTP {he.code}"
+        return jsonify(error="batch_failed", detail=f"Script-Ecom: {reason}"), 424
+    except Exception as e:
+        return jsonify(error="upstream_unreachable", detail=str(e)), 424
+
+    statuses = load_order_print_statuses()
+    printed = 0
+    for o in payload.get("orders") or []:
+        key = f"{o.get('platform')}|{o.get('order_id')}"
+        st = statuses.get(key) or {}
+        o["print_status"] = st.get("status") or "new"
+        o["printed_at"] = st.get("printed_at") or ""
+        if o["print_status"] == "printed":
+            printed += 1
+    payload["printed_orders"] = printed
+    return jsonify(status="ok", batch=payload)
+
+
+@app.route("/api/online/order-print-status", methods=["POST"])
+@require_admin
+def online_order_print_status():
+    """ติ๊ก 'พิมพ์แล้ว' ระดับออเดอร์ (bulk) — ผูก order_id ดึงไฟล์ใหม่ทับกี่ครั้งสถานะก็ไม่หาย."""
+    data = request.get_json(silent=True) or {}
+    platform = str(data.get("platform", "")).strip().lower()
+    action = str(data.get("action", "printed")).strip()
+    batch_id = str(data.get("batch_id", "")).strip()
+    order_ids = [str(x).strip() for x in (data.get("order_ids") or []) if str(x).strip()]
+    if platform not in PRINT_PLATFORMS:
+        return jsonify(error="bad_request", detail="platform ต้องเป็น shopee/lazada/tiktok"), 400
+    if not order_ids:
+        return jsonify(error="bad_request", detail="ต้องระบุ order_ids"), 400
+    if action not in ("printed", "new"):
+        return jsonify(error="bad_request", detail="action ต้องเป็น printed หรือ new"), 400
+    statuses = load_order_print_statuses()
+    now = datetime.now().isoformat(timespec="seconds")
+    for oid in order_ids:
+        key = f"{platform}|{oid}"
+        if action == "printed":
+            statuses[key] = {"status": "printed", "printed_at": now, "batch_id": batch_id}
+        else:
+            statuses.pop(key, None)
+    save_order_print_statuses(statuses)
+    return jsonify(status="ok", updated=len(order_ids), action=action)
 
 
 @app.route("/api/online/print-files")

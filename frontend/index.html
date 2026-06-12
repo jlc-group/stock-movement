@@ -440,6 +440,7 @@ body.admin-on .admin-bar { display: flex; }
       <b>วิธีใช้ (โหมดพิสูจน์ — ยังไม่เขียนทับสต็อก):</b> กดปุ่ม <b>Admin</b> (มุมขวาบน) ใส่รหัสก่อน 1 ครั้ง<br>
       • <b>🔍 ดูยอดออนไลน์ที่ควรตัด</b> — ระบบคำนวณยอดขายออนไลน์รายสินค้าให้ดู เอาไว้เทียบกับที่กรอกมือ <b>(ดูอย่างเดียว ไม่แตะสต็อกจริง)</b><br>
       • <b>⟳ ดึงออเดอร์ใหม่จากแพลตฟอร์ม</b> — ถ้ายอดของวันนี้ยังไม่ถูกดึง กดอันนี้เพื่อดึง Shopee/Lazada/TikTok ก่อน แล้วระบบจะโชว์ยอดให้<br>
+      • <b>บันทึกรอบยืนยัน</b> — แสตมป์ "ออเดอร์ใหม่ที่ยังไม่เข้ารอบ" เป็นรอบ (ก่อนเที่ยง/หลังเที่ยง) ไม่นับซ้ำกับรอบก่อน · กดที่รอบเพื่อดูยอด/เช็กลิสต์พิมพ์ของรอบนั้น<br>
       <span style="color:#94a3b8">* ช่วงนี้เป็นช่วง "พิสูจน์ความถูกต้อง" — เมื่อมั่นใจว่ายอดตรงทุกวันแล้ว ค่อยกดเขียนลงสต็อกจริง (ปุ่มอยู่ในตารางผลลัพธ์)</span>
     </div>
   </div>
@@ -1024,6 +1025,8 @@ function initOnline() {
 let onlineLastData = null;
 let onlineLastMode = 'preview';
 let onlineSort = { key: 'code', dir: 'asc' };
+let onlineActiveBatchId = null;
+let onlineBatchData = null;
 let onlinePrintData = null;
 let onlinePrintFilters = { platform: 'all', category: 'all', carrier: 'all', query: '', mode: 'sku' };
 
@@ -1059,6 +1062,12 @@ function ensureOnlineControls() {
   if (card && !document.getElementById('onlinePrintFiles')) {
     const box = document.createElement('div');
     box.id = 'onlinePrintFiles';
+    box.style.cssText = 'display:none;margin-top:10px';
+    card.appendChild(box);
+  }
+  if (card && !document.getElementById('onlineBatchOrders')) {
+    const box = document.createElement('div');
+    box.id = 'onlineBatchOrders';
     box.style.cssText = 'display:none;margin-top:10px';
     card.appendChild(box);
   }
@@ -1102,6 +1111,7 @@ function setOnlineSort(key) {
   else onlineSort = { key, dir: numeric ? 'desc' : 'asc' };
   if (!onlineLastData) return;
   if (onlineLastMode === 'result') renderOnlineResult(onlineLastData);
+  else if (onlineLastMode === 'batch') renderOnlineBatchView();
   else renderOnlinePreview(onlineLastData);
 }
 
@@ -1135,7 +1145,9 @@ async function previewOnline() {
     const d = await readApiJson(res);
     if (!res.ok) { msg.textContent = '❌ ' + (d.detail || 'ดึงไม่สำเร็จ'); btn.disabled = false; return; }
     msg.textContent = `✅ ยอดที่ควรตัดวันที่ ${d.date} · ${d.matched} รายการ รวม ${Number(d.total_qty).toLocaleString()} ชิ้น`
+      + (d.delta_applied ? ` (หักที่เข้ารอบแล้ว ${Number(d.batched_pcs || 0).toLocaleString()} ชิ้น)` : '')
       + (d.skipped ? ` · ข้าม ${d.skipped}` : '') + ' — ยังไม่เขียนลงสต็อก';
+    onlineActiveBatchId = null;
     renderOnlinePreview(d);
     loadOnlineBatches();
   } catch (e) { msg.textContent = '❌ ' + e.message; }
@@ -1157,13 +1169,14 @@ async function loadOnlineBatches() {
     if (!batches.length) {
       card.innerHTML = '<b>รอบยืนยันวันนี้</b><div class="muted" style="margin-top:6px">ยังไม่มี batch ที่ freeze ไว้สำหรับวันนี้</div>';
     } else {
-      card.innerHTML = '<b>รอบยืนยันวันนี้</b>' +
+      card.innerHTML = '<b>รอบยืนยันวันนี้</b> <span class="muted" style="font-size:12.5px">— กดที่รอบเพื่อดูยอด/ใบปะหน้าเฉพาะรอบนั้น</span>' +
         '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">' +
         batches.sort((a, b) => (a.round_no || 0) - (b.round_no || 0)).map(b => {
           const label = escapeHtml(b.label || ('R' + b.round_no));
           const qty = Number(b.total_qty || 0).toLocaleString();
           const orders = Number(b.order_count || 0).toLocaleString();
-          return `<span style="border:1px solid #dbe3ef;border-radius:8px;padding:8px 10px;background:white"><b>${label}</b> · ${orders} ออเดอร์ · ${qty} ชิ้น</span>`;
+          const active = onlineActiveBatchId === b.id;
+          return `<button type="button" onclick="viewOnlineBatch('${escapeHtml(b.id)}')" style="cursor:pointer;border:1px solid ${active ? '#2563eb' : '#dbe3ef'};border-radius:8px;padding:8px 10px;background:${active ? '#eff6ff' : 'white'};font:inherit"><b>${label}</b> · ${orders} ออเดอร์ · ${qty} ชิ้น</button>`;
         }).join('') + '</div>';
     }
     card.style.display = '';
@@ -1181,7 +1194,7 @@ async function createOnlineBatch() {
   const now = new Date();
   const noon = new Date(now); noon.setHours(12, 0, 0, 0);
   const label = now < noon ? 'รอบก่อนเที่ยง' : 'รอบหลังเที่ยง';
-  if (!confirm(`บันทึกรอบยืนยัน "${label}" สำหรับวันที่ ${date}?\nระบบจะ freeze รายการออเดอร์/ยอด SKU จากผลดึงล่าสุดไว้เป็น batch แยก`)) return;
+  if (!confirm(`บันทึกรอบยืนยัน "${label}" สำหรับวันที่ ${date}?\nระบบจะแสตมป์เฉพาะ "ออเดอร์ใหม่" ที่ยังไม่เคยอยู่ในรอบก่อนหน้า (ไม่นับซ้ำ)`)) return;
   try {
     const res = await fetch('/api/online/batches', {
       method: 'POST',
@@ -1191,10 +1204,169 @@ async function createOnlineBatch() {
     const d = await readApiJson(res);
     if (!res.ok) throw new Error(d.detail || 'บันทึกรอบไม่สำเร็จ');
     const b = d.batch || {};
-    msg.textContent = `✅ บันทึกรอบ ${b.label || b.id} แล้ว · ${Number(b.order_count || 0).toLocaleString()} ออเดอร์ · ${Number(b.total_qty || 0).toLocaleString()} ชิ้น`;
+    msg.textContent = `✅ บันทึกรอบ ${b.label || b.id} แล้ว · ${Number(b.order_count || 0).toLocaleString()} ออเดอร์ · ${Number(b.total_qty || 0).toLocaleString()} ชิ้น (เฉพาะออเดอร์ใหม่ของรอบนี้)`;
+    loadOnlineBatches();
+    if (b.id) viewOnlineBatch(b.id);
+  } catch (e) {
+    msg.textContent = '❌ ' + e.message;
+  }
+}
+
+// 📦 มุมมองรายรอบ: ตารางยอด + ออเดอร์ของรอบนั้น (ติดตามพิมพ์ระดับออเดอร์)
+function onlineFindProduct(sku) {
+  const s = String(sku || '').toUpperCase().trim();
+  const stripped = s.replace(/_\d{2,4}$/, '');
+  const keys = [s, 'JH' + s, stripped, 'JH' + stripped];
+  for (const p of (DB.products || [])) {
+    const code = String(p.code || '').toUpperCase();
+    if (keys.includes(code)) return p;
+  }
+  return null;
+}
+
+async function viewOnlineBatch(id) {
+  const msg = document.getElementById('onlineMsg');
+  if (!adminToken) { msg.textContent = '⚠️ กรุณากดปุ่ม Admin (มุมขวาบน) ใส่ PIN ก่อน'; return; }
+  msg.textContent = 'กำลังโหลดข้อมูลรอบ...';
+  try {
+    const res = await fetch('/api/online/batch?id=' + encodeURIComponent(id), {
+      headers: { 'Authorization': 'Bearer ' + adminToken }
+    });
+    const d = await readApiJson(res);
+    if (!res.ok) throw new Error(d.detail || 'โหลดรอบไม่สำเร็จ');
+    onlineBatchData = d.batch || {};
+    onlineActiveBatchId = onlineBatchData.id || id;
+    msg.textContent = '';
+    renderOnlineBatchView();
     loadOnlineBatches();
   } catch (e) {
     msg.textContent = '❌ ' + e.message;
+  }
+}
+
+function renderOnlineBatchView() {
+  ensureOnlineControls();
+  const b = onlineBatchData || {};
+  onlineLastMode = 'batch';
+  const rows = (b.delta_sku_rows && b.delta_sku_rows.length) ? b.delta_sku_rows : (b.sku_rows || []);
+  const items = rows.map(r => {
+    const p = onlineFindProduct(r.sku);
+    return {
+      code: p ? p.code : r.sku, name: p ? p.name : '',
+      shopee: Number(r.shopee || 0), lazada: Number(r.lazada || 0), tiktok: Number(r.tiktok || 0),
+      qty: Number(r.total || 0), source_sku: r.sku, already_online: 0,
+    };
+  });
+  onlineLastData = { items, date: b.date };
+  const card = document.getElementById('onlineResultCard');
+  const tbody = document.querySelector('#onlineResultTable tbody');
+  const orders = b.orders || [];
+  const printed = orders.filter(o => o.print_status === 'printed').length;
+  document.getElementById('onlineResultTitle').innerHTML =
+    `📦 ${escapeHtml(b.label || b.id || '')} — วันที่ ${escapeHtml(b.date || '')} `
+    + `<span style="color:#94a3b8;font-weight:400;font-size:13px">(เฉพาะออเดอร์ใหม่ของรอบนี้ · แสตมป์เมื่อ ${escapeHtml(String(b.created_at || '').replace('T', ' ').slice(0, 16))})</span>`
+    + `<div style="font-weight:400;font-size:13px;margin-top:2px;color:${printed >= orders.length && orders.length ? '#16a34a' : '#b45309'}">ออเดอร์รอบนี้ ${orders.length.toLocaleString()} · พิมพ์แล้ว ${printed.toLocaleString()} · ค้างพิมพ์ ${(orders.length - printed).toLocaleString()} `
+    + `<button type="button" class="btn btn-ghost" style="font-size:12px;padding:3px 8px;margin-left:8px" onclick="previewOnline()">← กลับยอดสด</button></div>`;
+  tbody.innerHTML = sortedOnlineItems(items).map(it => {
+    const sp = Number(it.shopee || 0), lz = Number(it.lazada || 0), tt = Number(it.tiktok || 0);
+    return `<tr><td style="padding:6px;border-bottom:1px solid #f1f5f9"><code>${escapeHtml(it.code)}</code></td>` +
+      `<td style="padding:6px;border-bottom:1px solid #f1f5f9">${escapeHtml(it.name || '')}</td>` +
+      `<td style="padding:6px;border-bottom:1px solid #f1f5f9;text-align:right;color:#ea580c">${sp ? sp.toLocaleString() : '—'}</td>` +
+      `<td style="padding:6px;border-bottom:1px solid #f1f5f9;text-align:right;color:#1d4ed8">${lz ? lz.toLocaleString() : '—'}</td>` +
+      `<td style="padding:6px;border-bottom:1px solid #f1f5f9;text-align:right;color:#0f766e">${tt ? tt.toLocaleString() : '—'}</td>` +
+      `<td style="padding:6px;border-bottom:1px solid #f1f5f9;text-align:right"><b>${Number(it.qty).toLocaleString()}</b></td>` +
+      `<td style="padding:6px;border-bottom:1px solid #f1f5f9;text-align:right"><span style="color:#cbd5e1">—</span></td></tr>`;
+  }).join('') || '<tr><td colspan="7" style="padding:6px">— รอบนี้ไม่มียอดใหม่ —</td></tr>';
+  document.getElementById('onlineSkipped').innerHTML = '';
+  const wb = document.getElementById('onlineWriteBtn'); if (wb) wb.style.display = 'none';
+  const pb = document.getElementById('onlinePrintBtn'); if (pb) pb.style.display = '';
+  const pf = document.getElementById('onlinePrintFiles'); if (pf) pf.style.display = 'none';
+  renderOnlineBatchOrders();
+  syncOnlineSortHeader();
+  card.style.display = '';
+}
+
+function onlineBatchOrderGroups(b) {
+  const map = new Map();
+  for (const o of (b.orders || [])) {
+    const sig = Object.entries(o.items || {})
+      .sort((x, y) => x[0].localeCompare(y[0]))
+      .map(([s, q]) => Number(q) > 1 ? `${s} ×${Number(q).toLocaleString()}` : s)
+      .join(' + ');
+    const key = `${o.platform}|${o.carrier || ''}|${sig}`;
+    if (!map.has(key)) map.set(key, { platform: o.platform, carrier: o.carrier || '', sig, orders: [] });
+    map.get(key).orders.push(o);
+  }
+  return [...map.values()].sort((a, b2) =>
+    a.platform.localeCompare(b2.platform) || a.carrier.localeCompare(b2.carrier) || a.sig.localeCompare(b2.sig, 'th'));
+}
+
+function renderOnlineBatchOrders() {
+  const box = document.getElementById('onlineBatchOrders');
+  if (!box) return;
+  const b = onlineBatchData || {};
+  const labels = { shopee: 'Shopee', lazada: 'Lazada', tiktok: 'TikTok' };
+  const groups = onlineBatchOrderGroups(b);
+  if (!groups.length) { box.style.display = 'none'; return; }
+  box.style.display = '';
+  box.innerHTML = `
+    <div style="border-top:1px dashed #e2e8f0;padding-top:10px">
+      <div style="font-weight:700">รายการพิมพ์ของรอบนี้ <span class="muted" style="font-weight:400;font-size:12.5px">— จัดกลุ่มตามสินค้าในออเดอร์ ติ๊ก "พิมพ์แล้ว" ได้ทีละกลุ่ม (จำสถานะข้ามรอบ/ข้ามการดึงใหม่)</span></div>
+      <table style="width:100%;border-collapse:collapse;margin-top:8px">
+        <thead><tr>
+          <th style="text-align:left;padding:6px;border-bottom:1px solid #e2e8f0">แพลตฟอร์ม</th>
+          <th style="text-align:left;padding:6px;border-bottom:1px solid #e2e8f0">ขนส่ง</th>
+          <th style="text-align:left;padding:6px;border-bottom:1px solid #e2e8f0">สินค้าในออเดอร์</th>
+          <th style="text-align:right;padding:6px;border-bottom:1px solid #e2e8f0">ออเดอร์</th>
+          <th style="text-align:right;padding:6px;border-bottom:1px solid #e2e8f0">พิมพ์แล้ว</th>
+          <th style="text-align:right;padding:6px;border-bottom:1px solid #e2e8f0"></th>
+        </tr></thead>
+        <tbody>${groups.map((g, i) => {
+          const done = g.orders.filter(o => o.print_status === 'printed').length;
+          const all = g.orders.length;
+          const bg = done >= all ? '#f0fdf4' : (done > 0 ? '#fffbeb' : 'white');
+          return `<tr style="background:${bg}">
+            <td style="padding:6px;border-bottom:1px solid #f1f5f9">${labels[g.platform] || g.platform}</td>
+            <td style="padding:6px;border-bottom:1px solid #f1f5f9">${escapeHtml(g.carrier || '-')}</td>
+            <td style="padding:6px;border-bottom:1px solid #f1f5f9"><code>${escapeHtml(g.sig)}</code>${g.platform === 'lazada' ? ' <span class="muted" style="font-size:12px">(ยอดรวม ไม่มีรายออเดอร์)</span>' : ''}</td>
+            <td style="padding:6px;border-bottom:1px solid #f1f5f9;text-align:right">${all.toLocaleString()}</td>
+            <td style="padding:6px;border-bottom:1px solid #f1f5f9;text-align:right;font-weight:700;color:${done >= all ? '#16a34a' : (done ? '#b45309' : '#64748b')}">${done.toLocaleString()}/${all.toLocaleString()}</td>
+            <td style="padding:6px;border-bottom:1px solid #f1f5f9;text-align:right;white-space:nowrap">
+              ${done < all ? `<button type="button" class="btn btn-success" style="font-size:12px;padding:4px 8px" onclick="markOnlineBatchGroupPrinted(${i}, 'printed')">พิมพ์แล้ว</button>` : `<button type="button" class="btn btn-ghost" style="font-size:12px;padding:4px 8px" onclick="markOnlineBatchGroupPrinted(${i}, 'new')">ยกเลิก</button>`}
+            </td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>
+      <div class="muted" style="font-size:12.5px;margin-top:6px">* เปิดไฟล์ PDF: ใช้ปุ่ม "พิมพ์ใบปะหน้าแยก SKU" ด้านบนเหมือนเดิม (ไฟล์รวมทั้งวัน) — ตารางนี้ใช้เช็กว่ารอบนี้ต้องพิมพ์อะไร และติ๊กกันลืม</div>
+    </div>`;
+}
+
+async function markOnlineBatchGroupPrinted(groupIndex, action) {
+  const msg = document.getElementById('onlineMsg');
+  const b = onlineBatchData || {};
+  const groups = onlineBatchOrderGroups(b);
+  const g = groups[groupIndex];
+  if (!g) return;
+  const ids = g.orders.map(o => o.order_id).filter(Boolean);
+  try {
+    const res = await fetch('/api/online/order-print-status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken },
+      body: JSON.stringify({ platform: g.platform, order_ids: ids, action, batch_id: b.id || '' })
+    });
+    const d = await readApiJson(res);
+    if (!res.ok) throw new Error(d.detail || 'อัปเดตสถานะไม่สำเร็จ');
+    const now = new Date().toISOString().slice(0, 19);
+    for (const o of (b.orders || [])) {
+      if (o.platform === g.platform && ids.includes(o.order_id)) {
+        o.print_status = action === 'printed' ? 'printed' : 'new';
+        o.printed_at = action === 'printed' ? now : '';
+      }
+    }
+    renderOnlineBatchView();
+    if (msg) msg.textContent = action === 'printed' ? `✅ ติ๊กพิมพ์แล้ว ${ids.length.toLocaleString()} ออเดอร์` : 'ยกเลิกสถานะพิมพ์แล้ว';
+  } catch (e) {
+    if (msg) msg.textContent = '❌ ' + e.message;
   }
 }
 
@@ -1205,7 +1377,10 @@ function renderOnlinePreview(d) {
   const card = document.getElementById('onlineResultCard');
   const tbody = document.querySelector('#onlineResultTable tbody');
   document.getElementById('onlineResultTitle').innerHTML =
-    `🔍 ยอดออนไลน์ที่ควรตัด — วันที่ ${d.date} <span style="color:#94a3b8;font-weight:400;font-size:13px">(ดูอย่างเดียว ยังไม่เขียนลงสต็อก)</span>`;
+    `🔍 ยอดออนไลน์ที่ควรตัด — วันที่ ${d.date} <span style="color:#94a3b8;font-weight:400;font-size:13px">(ดูอย่างเดียว ยังไม่เขียนลงสต็อก)</span>`
+    + (d.delta_applied
+      ? `<div style="color:#0f766e;font-weight:400;font-size:13px;margin-top:2px">เฉพาะออเดอร์ใหม่ที่ยังไม่เข้ารอบ — หักรอบที่บันทึกแล้ว ${Number(d.batches_count || 0)} รอบ (${Number(d.batched_pcs || 0).toLocaleString()} ชิ้น · ล่าสุด: ${escapeHtml(d.latest_batch_label || '')})</div>`
+      : '');
   tbody.innerHTML = sortedOnlineItems(d.items || []).map(it => {
     const already = Number(it.already_online || 0);
     const note = already ? `<span style="color:#16a34a">${already.toLocaleString()}</span>` : '<span style="color:#cbd5e1">—</span>';
@@ -1229,6 +1404,7 @@ function renderOnlinePreview(d) {
   if (wb) wb.style.display = (d.items && d.items.length) ? '' : 'none';
   const pb = document.getElementById('onlinePrintBtn');
   if (pb) pb.style.display = d.date ? '' : 'none';
+  const bo = document.getElementById('onlineBatchOrders'); if (bo) bo.style.display = 'none';
   syncOnlineSortHeader();
   const dp = document.getElementById('onlineDate'); if (dp && d.date) dp.value = d.date;
   card.style.display = '';
@@ -1289,6 +1465,7 @@ function renderOnlineResult(d) {
   const wb = document.getElementById('onlineWriteBtn'); if (wb) wb.style.display = 'none';
   const pb = document.getElementById('onlinePrintBtn');
   if (pb) pb.style.display = d.date ? '' : 'none';
+  const bo = document.getElementById('onlineBatchOrders'); if (bo) bo.style.display = 'none';
   syncOnlineSortHeader();
   const dp = document.getElementById('onlineDate');
   if (dp && d.date) dp.value = d.date;
