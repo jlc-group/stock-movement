@@ -227,6 +227,110 @@ def save_order_print_statuses(statuses):
     os.replace(tmp, ORDER_PRINT_STATUS_PATH)
 
 
+# ---- "ยอดยืนยันสะสมต่อวัน" (working layer · ไม่ลด) -----------------------
+# สะสม order_id ที่เคยเห็นในแต่ละวัน (union) → จำนวนออเดอร์ยืนยันไม่ลดแม้ขนส่งรับไปแล้ว
+# + high-water ของ ledger snapshot (ชิ้น base unit) สำหรับยอดตัดสะสม
+def confirmed_path(date_iso):
+    safe = re.sub(r"[^0-9-]", "", str(date_iso))
+    return config.PROCESSED_DIR / f"online_confirmed_{safe}.json"
+
+
+def load_confirmed(date_iso):
+    p = confirmed_path(date_iso)
+    try:
+        if p.exists():
+            with open(p, "r", encoding="utf-8") as f:
+                d = json.load(f)
+                if isinstance(d, dict):
+                    return d
+    except Exception:
+        pass
+    return {"date": date_iso, "orders": {}, "pieces_hw": {}, "updated_at": ""}
+
+
+def save_confirmed(date_iso, data):
+    config.PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+    p = confirmed_path(date_iso)
+    tmp = p.with_suffix(".tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, p)
+
+
+def accumulate_confirmed(date_iso):
+    """สะสม 'ออเดอร์ที่เคยเห็น' ของวัน (union · ไม่ลด) = ออเดอร์ปัจจุบัน + รอบที่ freeze ไว้.
+
+    สำคัญ: ต้อง backfill จากรอบด้วย เพราะออเดอร์ที่ขนส่งรับไปแล้วจะหายจากไฟล์ดิบ
+    แต่ยังถูกจับไว้ในรอบที่เคยกดก่อนหน้า.
+    """
+    cur = load_confirmed(date_iso)
+    orders = cur.get("orders") or {}
+    pieces_hw = cur.get("pieces_hw") or {}
+    added = 0
+
+    def merge_orders(order_list):
+        nonlocal added
+        for o in order_list or []:
+            plat = str(o.get("platform") or "")
+            oid = str(o.get("order_id") or "")
+            if not oid or plat == "lazada":  # lazada ไม่มี order_id รายใบ → ใช้ high-water แทน
+                continue
+            key = plat + "|" + oid
+            if key not in orders:
+                orders[key] = {"platform": plat, "items": o.get("items") or {}}
+                added += 1
+
+    def merge_hw(snap):
+        for plat, items in (snap or {}).items():
+            hw = pieces_hw.get(plat) or {}
+            for sku, qty in (items or {}).items():
+                n = float(qty or 0)
+                if n > float(hw.get(sku) or 0):
+                    hw[sku] = n
+            pieces_hw[plat] = hw
+
+    # 1) ออเดอร์ปัจจุบัน (จากการดึงล่าสุด)
+    payload = script_ecom_json(
+        "/api/stock/current-orders?date=" + urllib.parse.quote(date_iso), timeout=30)
+    merge_orders(payload.get("orders"))
+    merge_hw(payload.get("stock_snapshot"))
+
+    # 2) backfill จากรอบที่ freeze ไว้ (จับออเดอร์ก่อนหน้าที่อาจส่งไปแล้ว)
+    try:
+        bl = script_ecom_json("/api/stock/batches?date=" + urllib.parse.quote(date_iso), timeout=15)
+        for b in bl.get("batches") or []:
+            full = script_ecom_json(
+                "/api/stock/batch?id=" + urllib.parse.quote(str(b.get("id") or "")), timeout=15)
+            merge_orders(full.get("orders"))
+            merge_hw(full.get("stock_snapshot"))
+    except Exception:
+        pass  # ยังไม่มีรอบก็ข้ามไป
+
+    cur.update({"date": date_iso, "orders": orders, "pieces_hw": pieces_hw,
+                "updated_at": datetime.now().isoformat(timespec="seconds")})
+    save_confirmed(date_iso, cur)
+    return cur, added
+
+
+def confirmed_summary(cur):
+    orders = cur.get("orders") or {}
+    pieces_hw = cur.get("pieces_hw") or {}
+    by_plat = {}
+    for o in orders.values():
+        plat = o.get("platform") or "?"
+        by_plat[plat] = by_plat.get(plat, 0) + 1
+    plat_pieces = {p: sum(float(v or 0) for v in items.values())
+                   for p, items in pieces_hw.items()}
+    return {
+        "date": cur.get("date"),
+        "order_count": len(orders),
+        "total_pieces": sum(plat_pieces.values()),
+        "platforms_orders": by_plat,
+        "platforms_pieces": plat_pieces,
+        "updated_at": cur.get("updated_at"),
+    }
+
+
 def script_ecom_json(path, method="GET", payload=None, timeout=30):
     url = SCRIPT_ECOM_URL.rstrip("/") + path
     data = None
@@ -1504,6 +1608,37 @@ def online_pull_status():
         return jsonify(status="ok", job=payload.get("job", {}))
     except Exception as e:
         return jsonify(error="upstream_unreachable", detail=str(e)), 424
+
+
+@app.route("/api/online/accumulate", methods=["POST"])
+@require_admin
+def online_accumulate():
+    """สะสม 'ออเดอร์ที่ยืนยันแล้ว' ของวันนั้น (union order_id · ไม่ลด) — เรียกหลังดึงออเดอร์เสร็จ."""
+    data = request.get_json(silent=True) or {}
+    date_iso = str(data.get("date", "")).strip()
+    if not date_iso:
+        return jsonify(error="bad_request", detail="ต้องระบุวันที่"), 400
+    try:
+        cur, added = accumulate_confirmed(date_iso)
+    except urllib.error.HTTPError as he:
+        try:
+            reason = (json.loads(he.read().decode("utf-8")) or {}).get("error", f"HTTP {he.code}")
+        except Exception:
+            reason = f"HTTP {he.code}"
+        return jsonify(error="upstream", detail=f"Script-Ecom: {reason}"), 424
+    except Exception as e:
+        return jsonify(error="upstream_unreachable", detail=str(e)), 424
+    return jsonify(status="ok", added=added, **confirmed_summary(cur))
+
+
+@app.route("/api/online/confirmed")
+@require_admin
+def online_confirmed():
+    """อ่านยอดยืนยันสะสมของวันนั้น (ไม่เรียก Script-Ecom — อ่านจากที่สะสมไว้)."""
+    date_iso = str(request.args.get("date", "")).strip()
+    if not date_iso:
+        return jsonify(error="bad_request", detail="ต้องระบุวันที่"), 400
+    return jsonify(status="ok", **confirmed_summary(load_confirmed(date_iso)))
 
 
 @app.route("/api/online/batches")
