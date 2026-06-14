@@ -1432,7 +1432,8 @@ function renderOnlineBatchView() {
   const wb = document.getElementById('onlineWriteBtn'); if (wb) wb.style.display = 'none';
   const pb = document.getElementById('onlinePrintBtn'); if (pb) pb.style.display = '';
   const pf = document.getElementById('onlinePrintFiles'); if (pf) pf.style.display = 'none';
-  renderOnlineBatchOrders();
+  const bo = document.getElementById('onlineBatchOrders');
+  if (bo) { bo.style.display = ''; bo.innerHTML = '<div style="border-top:1px dashed #e2e8f0;padding-top:10px;font-size:13px;color:#475569">📋 เช็กลิสต์พิมพ์ใบปะหน้า (ติ๊กกันลืม) ย้ายไปเมนู <b>🧰 Prepack SKU</b> แล้ว — เลือกวันเดียวกัน ฟิลเตอร์ตามแพลตฟอร์ม/ขนส่ง/สถานะได้ ใช้งานง่ายกว่า</div>'; }
   syncOnlineSortHeader();
   card.style.display = '';
 }
@@ -1546,8 +1547,10 @@ async function markOnlineBatchGroupPrinted(groupIndex, action) {
   }
 }
 
-// ===== หน้า Prepack: นับ SKU จาก "ไฟล์ใบปะหน้าจริง" (SKU space เดียวกับปุ่มพิมพ์ใบปะหน้า) =====
+// ===== หน้า Prepack: นับ SKU จาก "ไฟล์ใบปะหน้าจริง" + เช็กลิสต์พิมพ์รวมทุกรอบ (ฟิลเตอร์ได้) =====
 let prepackData = null;
+let prepackOrders = [];
+let prepackFilter = { platform: 'all', carrier: 'all', type: 'all', status: 'all', q: '' };
 
 function initPrepack() {
   const el = document.getElementById('prepackDate');
@@ -1572,6 +1575,7 @@ async function loadPrepack() {
     const d = await readApiJson(res);
     if (!res.ok) throw new Error(d.detail || 'โหลดใบปะหน้าไม่สำเร็จ');
     prepackData = d;
+    prepackOrders = await loadPrepackOrders(date);
     msg.textContent = '';
     renderPrepack();
   } catch (e) {
@@ -1580,16 +1584,42 @@ async function loadPrepack() {
   }
 }
 
+// โหลดออเดอร์ของทุกรอบในวันนั้น (รวมเป็นเช็กลิสต์พิมพ์รวม)
+async function loadPrepackOrders(date) {
+  try {
+    const res = await fetch('/api/online/batches?date=' + encodeURIComponent(date), {
+      headers: { 'Authorization': 'Bearer ' + adminToken }
+    });
+    const d = await readApiJson(res);
+    if (!res.ok) return [];
+    const all = [];
+    for (const b of (d.batches || [])) {
+      const r = await fetch('/api/online/batch?id=' + encodeURIComponent(b.id), {
+        headers: { 'Authorization': 'Bearer ' + adminToken }
+      });
+      const bd = await readApiJson(r);
+      if (r.ok) for (const o of ((bd.batch || {}).orders || [])) all.push(o);
+    }
+    return all;
+  } catch (e) {
+    return [];
+  }
+}
+
 function renderPrepack() {
   const card = document.getElementById('prepackCard');
   if (!card) return;
-  const d = prepackData || {};
+  card.style.display = '';
+  card.innerHTML = renderPrepackSkuHtml(prepackData || {})
+    + '<div id="prepackChecklist" style="margin-top:18px;border-top:2px solid #e2e8f0;padding-top:14px"></div>';
+  renderPrepackChecklist();
+}
+
+function renderPrepackSkuHtml(d) {
   const labels = { shopee: 'Shopee', lazada: 'Lazada', tiktok: 'TikTok' };
   const files = (d.groups || []).flatMap(g => (g.files || []).map(f => ({ ...f, platform: g.platform })));
-  card.style.display = '';
   if (!files.length) {
-    card.innerHTML = `<div class="muted">ยังไม่พบไฟล์ใบปะหน้าของวันที่ ${escapeHtml(d.date || '')} — ไปหน้า "🛒 ออนไลน์" กด "⟳ ดึงออเดอร์ใหม่จากแพลตฟอร์ม" ก่อน</div>`;
-    return;
+    return `<div class="muted">ยังไม่พบไฟล์ใบปะหน้าของวันที่ ${escapeHtml(d.date || '')} — ไปหน้า "🛒 ออนไลน์" กด "⟳ ดึงออเดอร์ใหม่จากแพลตฟอร์ม" ก่อน</div>`;
   }
   // 1 หน้า PDF = 1 พัสดุ (1 ชุดที่ต้องแพ็ค) — SKU แพ็ค เช่น C4-8GX6 = ชุดละ 6 ชิ้น
   const bySku = new Map();
@@ -1618,7 +1648,7 @@ function renderPrepack() {
     if (!grouped.has(r.category)) grouped.set(r.category, []);
     grouped.get(r.category).push(r);
   }
-  card.innerHTML = `
+  return `
     <h3 style="margin:0 0 4px">🧰 ต้อง prepack วันที่ ${escapeHtml(d.date || '')}</h3>
     <div class="muted" style="font-size:13px;margin-bottom:10px">${bySku.size.toLocaleString()} SKU · ${totalPacks.toLocaleString()} ชุด (พัสดุ) · ≥ ${totalPieces.toLocaleString()} ชิ้น <span style="color:#94a3b8">(ชุด SET/DUO/MIX ไม่ถูกนับชิ้น เพราะมีหลายสินค้าในชุด)</span></div>
     ${[...grouped.entries()].map(([category, items]) => `
@@ -1648,6 +1678,108 @@ function renderPrepack() {
           </table>
         </div>
       </details>`).join('')}`;
+}
+
+// 📋 เช็กลิสต์พิมพ์ (รวมทุกรอบ) ในหน้า Prepack — ฟิลเตอร์ได้
+function renderPrepackChecklist() {
+  const box = document.getElementById('prepackChecklist');
+  if (!box) return;
+  const labels = { shopee: 'Shopee', lazada: 'Lazada', tiktok: 'TikTok' };
+  const groups = onlineBatchOrderGroups({ orders: prepackOrders }).map((g, i) => Object.assign({ _i: i }, g));
+  if (!groups.length) {
+    box.innerHTML = '<div class="muted">ยังไม่มีรอบที่บันทึก — ไปหน้า "🛒 ออนไลน์" กด "บันทึกรอบยืนยัน" ก่อน แล้วเช็กลิสต์พิมพ์จะมาแสดงที่นี่</div>';
+    return;
+  }
+  const carriers = [...new Set(groups.flatMap(g => String(g.carrier || '').split(', ').filter(Boolean)))].sort((a, b) => a.localeCompare(b, 'th'));
+  const f = prepackFilter;
+  const filtered = groups.filter(g => {
+    if (g.platform === 'lazada') return false; // lazada ไม่มีรายออเดอร์ให้ติ๊ก
+    if (f.platform !== 'all' && g.platform !== f.platform) return false;
+    if (f.carrier !== 'all' && !String(g.carrier || '').includes(f.carrier)) return false;
+    const isMulti = g.sig.includes(' + ');
+    if (f.type === 'single' && isMulti) return false;
+    if (f.type === 'multi' && !isMulti) return false;
+    const done = g.orders.filter(o => o.print_status === 'printed').length;
+    if (f.status === 'printed' && done < g.orders.length) return false;
+    if (f.status === 'unprinted' && done >= g.orders.length) return false;
+    if (f.q && !g.sig.toLowerCase().includes(f.q.toLowerCase())) return false;
+    return true;
+  }).sort((a, b) => b.orders.length - a.orders.length);
+
+  const totOrders = filtered.reduce((s, g) => s + g.orders.length, 0);
+  const totDone = filtered.reduce((s, g) => s + g.orders.filter(o => o.print_status === 'printed').length, 0);
+  const cnt = g => { const done = g.orders.filter(o => o.print_status === 'printed').length; return { done, all: g.orders.length }; };
+  const rowBg = g => { const { done, all } = cnt(g); return done >= all ? '#f0fdf4' : (done ? '#fffbeb' : 'white'); };
+  const statusCell = g => { const { done, all } = cnt(g); const c = done >= all ? '#16a34a' : (done ? '#b45309' : '#94a3b8'); return `<span style="font-weight:700;color:${c}">${done}/${all}</span>`; };
+  const btn = g => { const { done, all } = cnt(g); return done < all
+    ? `<button type="button" class="btn btn-success" style="font-size:12px;padding:4px 10px" onclick="markPrepackGroupPrinted(${g._i},'printed')">พิมพ์แล้ว</button>`
+    : `<button type="button" class="btn btn-ghost" style="font-size:12px;padding:4px 10px" onclick="markPrepackGroupPrinted(${g._i},'new')">ยกเลิก</button>`; };
+  const cell = 'padding:7px 6px;border-bottom:1px solid #f1f5f9';
+  const sel = (key, opts, cur) => `<select onchange="setPrepackFilter('${key}', this.value)" style="padding:5px 8px;border:1px solid #cbd5e1;border-radius:7px;font:inherit">${opts.map(([v, t]) => `<option value="${escapeHtml(v)}"${cur === v ? ' selected' : ''}>${escapeHtml(t)}</option>`).join('')}</select>`;
+
+  const rows = filtered.map(g => {
+    const isMulti = g.sig.includes(' + ');
+    const prod = isMulti
+      ? `<span style="font-size:12px;font-weight:600;color:#7c3aed">🎁 ${g.sig.split(' + ').length} สินค้า</span> <span style="font-size:11px;color:#94a3b8">${labels[g.platform] || g.platform}</span><div style="font-size:12px;color:#475569;margin-top:2px;line-height:1.5">${escapeHtml(g.sig)}</div>`
+      : `<code style="font-size:13.5px">${escapeHtml(g.sig)}</code> <span style="font-size:11px;color:#94a3b8">${labels[g.platform] || g.platform}</span>`;
+    return `<tr style="background:${rowBg(g)}">
+      <td style="${cell}">${prod}</td>
+      <td style="${cell};text-align:right;font-weight:700">${g.orders.length.toLocaleString()}</td>
+      <td style="${cell};font-size:12px">${escapeHtml(g.carrier || '-')}</td>
+      <td style="${cell};text-align:right">${statusCell(g)}</td>
+      <td style="${cell};text-align:right;white-space:nowrap">${btn(g)}</td></tr>`;
+  }).join('') || '<tr><td colspan="5" class="muted" style="padding:8px">— ไม่มีรายการตามตัวกรองนี้ —</td></tr>';
+
+  box.innerHTML = `
+    <div style="font-weight:700;font-size:15px">📋 เช็กลิสต์พิมพ์ใบปะหน้า (รวมทุกรอบ) <span class="muted" style="font-weight:400;font-size:12.5px">— ติ๊ก "พิมพ์แล้ว" กันลืม (จำข้ามรอบ/ข้ามการดึงใหม่)</span></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0;align-items:center">
+      ${sel('platform', [['all', 'ทุกแพลตฟอร์ม'], ['shopee', 'Shopee'], ['tiktok', 'TikTok']], f.platform)}
+      ${sel('carrier', [['all', 'ทุกขนส่ง'], ...carriers.map(c => [c, c])], f.carrier)}
+      ${sel('type', [['all', 'ทุกแบบ'], ['single', 'สินค้าเดี่ยว'], ['multi', 'หลายสินค้า/เซ็ต']], f.type)}
+      ${sel('status', [['all', 'ทุกสถานะ'], ['unprinted', 'ยังไม่พิมพ์'], ['printed', 'พิมพ์แล้ว']], f.status)}
+      <input value="${escapeHtml(f.q)}" oninput="setPrepackFilter('q', this.value)" placeholder="ค้นหาสินค้า/SKU" style="padding:6px 10px;border:1px solid #cbd5e1;border-radius:7px;font:inherit;flex:1;min-width:140px" />
+    </div>
+    <div class="muted" style="font-size:12.5px;margin-bottom:6px">แสดง ${filtered.length.toLocaleString()} กลุ่ม · ${totOrders.toLocaleString()} ออเดอร์ · พิมพ์แล้ว ${totDone.toLocaleString()} · ค้าง ${(totOrders - totDone).toLocaleString()}</div>
+    <table style="width:100%;border-collapse:collapse">
+      <thead><tr>
+        <th style="text-align:left;padding:6px;border-bottom:1px solid #e2e8f0;font-size:12px;color:#64748b">สินค้า</th>
+        <th style="text-align:right;padding:6px;border-bottom:1px solid #e2e8f0;font-size:12px;color:#64748b">ออเดอร์</th>
+        <th style="text-align:left;padding:6px;border-bottom:1px solid #e2e8f0;font-size:12px;color:#64748b">ขนส่ง</th>
+        <th style="text-align:right;padding:6px;border-bottom:1px solid #e2e8f0;font-size:12px;color:#64748b">พิมพ์</th>
+        <th style="text-align:right;padding:6px;border-bottom:1px solid #e2e8f0"></th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <div class="muted" style="font-size:12.5px;margin-top:8px">* เปิดไฟล์ PDF จริง: ใช้ปุ่ม "พิมพ์ใบปะหน้าแยก SKU" ในหน้าออนไลน์ — ตารางนี้แค่ติ๊กกันลืมว่าพิมพ์อะไรไปแล้ว</div>`;
+}
+
+function setPrepackFilter(key, val) {
+  prepackFilter[key] = val;
+  renderPrepackChecklist();
+}
+
+async function markPrepackGroupPrinted(groupIndex, action) {
+  const msg = document.getElementById('prepackMsg');
+  const groups = onlineBatchOrderGroups({ orders: prepackOrders });
+  const g = groups[groupIndex];
+  if (!g) return;
+  const ids = g.orders.map(o => o.order_id).filter(Boolean);
+  try {
+    const res = await fetch('/api/online/order-print-status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken },
+      body: JSON.stringify({ platform: g.platform, order_ids: ids, action, batch_id: '' })
+    });
+    const d = await readApiJson(res);
+    if (!res.ok) throw new Error(d.detail || 'อัปเดตสถานะไม่สำเร็จ');
+    for (const o of prepackOrders) {
+      if (o.platform === g.platform && ids.includes(o.order_id)) o.print_status = action === 'printed' ? 'printed' : 'new';
+    }
+    renderPrepackChecklist();
+    if (msg) msg.textContent = action === 'printed' ? `✅ ติ๊กพิมพ์แล้ว ${ids.length.toLocaleString()} ออเดอร์` : 'ยกเลิกสถานะพิมพ์แล้ว';
+  } catch (e) {
+    if (msg) msg.textContent = '❌ ' + e.message;
+  }
 }
 
 function renderOnlinePreview(d) {
