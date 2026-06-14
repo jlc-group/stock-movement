@@ -1281,8 +1281,24 @@ async function loadOnlineBatches() {
     if (!batches.length) {
       card.innerHTML = '<b>รอบยืนยันวันนี้</b><div class="muted" style="margin-top:6px">ยังไม่มี batch ที่ freeze ไว้สำหรับวันนี้</div>';
     } else {
+      // ยอดสะสม 2 เลขแยกหน้าที่: ตัดสต็อก = ชิ้นเดี่ยว (สะสม ไม่ลด) · ออเดอร์ = อะไรออกบ้าง
+      const cumQty = batches.reduce((s, b) => s + Number(b.total_qty || 0), 0);
+      const cumOrders = batches.reduce((s, b) => s + Number(b.order_count || 0), 0);
       card.innerHTML = '<b>รอบยืนยันวันนี้</b> <span class="muted" style="font-size:12.5px">— กดที่รอบเพื่อดูยอด/ใบปะหน้าเฉพาะรอบนั้น</span>' +
-        '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">' +
+        `<div style="display:flex;gap:24px;flex-wrap:wrap;margin-top:10px;padding:12px 14px;border:1px solid #bbf7d0;background:#f0fdf4;border-radius:10px">
+          <div>
+            <div style="font-size:12px;color:#15803d">📦 ยอดตัดสต็อกสะสมวันนี้ <b>(ชิ้นเดี่ยว · รวมทุกรอบ · ไม่ลด)</b></div>
+            <div style="font-size:24px;font-weight:700;color:#16a34a;line-height:1.3">${cumQty.toLocaleString()} <span style="font-size:14px;font-weight:400">ชิ้น</span></div>
+            <div style="font-size:11.5px;color:#64748b">= เลขที่เอาไปตัดสต็อกจริง</div>
+          </div>
+          <div style="border-left:1px solid #d1fae5;padding-left:24px">
+            <div style="font-size:12px;color:#64748b">🏷️ ออเดอร์ที่ออกทั้งวัน <b>(รวมทุกรอบ)</b></div>
+            <div style="font-size:24px;font-weight:700;color:#0f172a;line-height:1.3">${cumOrders.toLocaleString()} <span style="font-size:14px;font-weight:400">ออเดอร์</span></div>
+            <div style="font-size:11.5px;color:#64748b">= จำนวนใบที่ต้องแพ็ค/พิมพ์</div>
+          </div>
+        </div>` +
+        '<div style="font-size:12.5px;color:#64748b;margin-top:10px">รอบที่บันทึกไว้:</div>' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">' +
         batches.sort((a, b) => (a.round_no || 0) - (b.round_no || 0)).map(b => {
           const label = escapeHtml(b.label || ('R' + b.round_no));
           const qty = Number(b.total_qty || 0).toLocaleString();
@@ -1626,10 +1642,10 @@ function renderOnlinePreview(d) {
   const card = document.getElementById('onlineResultCard');
   const tbody = document.querySelector('#onlineResultTable tbody');
   document.getElementById('onlineResultTitle').innerHTML =
-    `🔍 ยอดออนไลน์ที่ควรตัด — วันที่ ${d.date} <span style="color:#94a3b8;font-weight:400;font-size:13px">(ดูอย่างเดียว ยังไม่เขียนลงสต็อก)</span>`
+    `🔍 ของใหม่ที่ยังไม่เข้ารอบ — วันที่ ${d.date} <span style="color:#94a3b8;font-weight:400;font-size:13px">(ดูอย่างเดียว · เลขนี้ลดได้เมื่อแพ็คส่ง)</span>`
     + (d.delta_applied
-      ? `<div style="color:#0f766e;font-weight:400;font-size:13px;margin-top:2px">เฉพาะออเดอร์ใหม่ที่ยังไม่เข้ารอบ — หักรอบที่บันทึกแล้ว ${Number(d.batches_count || 0)} รอบ (${Number(d.batched_pcs || 0).toLocaleString()} ชิ้น · ล่าสุด: ${escapeHtml(d.latest_batch_label || '')})</div>`
-      : '');
+      ? `<div style="color:#0f766e;font-weight:400;font-size:13px;margin-top:2px">หักรอบที่บันทึกแล้ว ${Number(d.batches_count || 0)} รอบ (${Number(d.batched_pcs || 0).toLocaleString()} ชิ้น · ล่าสุด: ${escapeHtml(d.latest_batch_label || '')}) — กด “บันทึกรอบยืนยัน” เพื่อล็อกของชุดนี้เข้ายอดตัดสะสม</div>`
+      : `<div style="color:#b45309;font-weight:400;font-size:13px;margin-top:2px">⚠️ ยอดตัดสต็อกจริง = “ยอดตัดสะสมทุกรอบ” ด้านบน (สะสม ไม่ลด) — ตารางนี้เป็นยอดสดที่ยังไม่ล็อกเข้ารอบ</div>`);
   const skuItems = d.items || [];
   const items = aggregateOnlineByProduct(skuItems); // ตารางหลัก = รายสินค้า (ตัดสต็อกตัดตามสินค้า)
   tbody.innerHTML = sortedOnlineItems(items).map(it => {

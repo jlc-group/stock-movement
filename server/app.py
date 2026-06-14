@@ -1271,8 +1271,9 @@ def online_sync():
     data = request.get_json(silent=True) or {}
     mv_date = str(data.get("date", "")).strip()
 
-    # 1) ดึงยอดออนไลน์ (คำนวณ+แปลงรหัสแล้ว) จาก Script-Ecom launcher
-    url = SCRIPT_ECOM_URL.rstrip("/") + "/api/stock/propose"
+    # 1) ดึง "ยอดตัดสะสมทั้งวัน" (รวมทุกรอบที่ freeze = ชิ้นเดี่ยว ไม่ลด) จาก Script-Ecom launcher
+    #    ใช้ยอดสะสมแทนยอดสด (stock_count) เพราะของที่แพ็คส่งไปแล้วต้องคงตัดไว้ ไม่งั้นตัดสต็อกขาด
+    url = SCRIPT_ECOM_URL.rstrip("/") + "/api/stock/propose-cumulative"
     if mv_date:
         url += "?date=" + mv_date
     try:
