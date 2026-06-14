@@ -1567,15 +1567,11 @@ async function loadPrepack() {
   if (!adminToken) { msg.textContent = '⚠️ กรุณากดปุ่ม Admin (มุมขวาบน) ใส่ PIN ก่อน'; return; }
   const date = (document.getElementById('prepackDate') || {}).value || '';
   if (!date) { msg.textContent = 'กรุณาเลือกวันที่ก่อน'; return; }
-  msg.textContent = 'กำลังโหลดใบปะหน้า...';
+  msg.textContent = 'กำลังโหลด...';
   try {
-    const res = await fetch('/api/online/print-files?date=' + encodeURIComponent(date), {
-      headers: { 'Authorization': 'Bearer ' + adminToken }
-    });
-    const d = await readApiJson(res);
-    if (!res.ok) throw new Error(d.detail || 'โหลดใบปะหน้าไม่สำเร็จ');
-    prepackData = d;
+    // ทั้ง prep และเช็กลิสต์ใช้แหล่งเดียวกัน = ออเดอร์ในรอบที่ freeze → ตัวเลขตรงกันเป๊ะ
     prepackOrders = await loadPrepackOrders(date);
+    prepackData = { date };
     msg.textContent = '';
     renderPrepack();
   } catch (e) {
@@ -1617,63 +1613,68 @@ function renderPrepack() {
 
 function renderPrepackSkuHtml(d) {
   const labels = { shopee: 'Shopee', lazada: 'Lazada', tiktok: 'TikTok' };
-  const files = (d.groups || []).flatMap(g => (g.files || []).map(f => ({ ...f, platform: g.platform })));
-  if (!files.length) {
-    return `<div class="muted">ยังไม่พบไฟล์ใบปะหน้าของวันที่ ${escapeHtml(d.date || '')} — ไปหน้า "🛒 ออนไลน์" กด "⟳ ดึงออเดอร์ใหม่จากแพลตฟอร์ม" ก่อน</div>`;
+  const date = (d || {}).date || '';
+  // นับจาก "ออเดอร์ในรอบ" (แหล่งเดียวกับเช็กลิสต์) → พัสดุ = ออเดอร์ = ตรงกันเป๊ะ
+  const orders = (prepackOrders || []).filter(o => o.platform !== 'lazada');
+  if (!orders.length) {
+    return `<div class="muted">ยังไม่มีรอบที่บันทึกของวันที่ ${escapeHtml(date)} — ไปหน้า "🛒 ออนไลน์" กด "บันทึกรอบยืนยัน" ก่อน แล้วยอด prep จะมาแสดงที่นี่</div>`;
   }
-  // 1 หน้า PDF = 1 พัสดุ (1 ชุดที่ต้องแพ็ค) — SKU แพ็ค เช่น C4-8GX6 = ชุดละ 6 ชิ้น
+  const catOf = (sku) => {
+    const u = String(sku).toUpperCase();
+    if (u.startsWith('SET')) return 'SET';
+    if (u.startsWith('DUO')) return 'DUO';
+    if (u.startsWith('MIX')) return 'MIX';
+    const m = u.match(/^([A-Z]+)/);
+    return m ? m[1] : 'OTHER';
+  };
+  const isMulti = c => c === 'SET' || c === 'DUO' || c === 'MIX';
+  // รวมแพ็คต่อ SKU จากของในออเดอร์ (seller_sku/item_sku = รหัสแพ็ค เช่น C4-8GX6)
   const bySku = new Map();
-  for (const f of files) {
-    const sku = String(f.sku || f.label || f.file);
-    let r = bySku.get(sku);
-    if (!r) {
-      r = { sku, category: f.category || 'OTHER', packs: 0, filesCount: 0, printed: 0, platforms: new Set(), carriers: new Set() };
-      bySku.set(sku, r);
+  for (const o of orders) {
+    for (const [sku, qty] of Object.entries(o.items || {})) {
+      const key = String(sku).trim();
+      if (!key) continue;
+      let r = bySku.get(key);
+      if (!r) { r = { sku: key, category: catOf(key), packs: 0, platforms: new Set() }; bySku.set(key, r); }
+      r.packs += Number(qty || 0);
+      r.platforms.add(o.platform);
     }
-    r.packs += Number(f.orders || 1);
-    r.filesCount += 1;
-    if (f.print_status === 'printed') r.printed += 1;
-    r.platforms.add(f.platform);
-    if (f.carrier) r.carriers.add(f.carrier);
   }
-  const multi = new Set(['SET', 'DUO', 'MIX']); // หลายสินค้าในชุด — ไม่รู้จำนวนชิ้นจากชื่อ SKU
-  const rows = [...bySku.values()].sort((a, b) => a.category.localeCompare(b.category) || a.sku.localeCompare(b.sku, 'th'));
-  let totalPacks = 0, totalPieces = 0;
+  let totalPieces = 0;
   const grouped = new Map();
-  for (const r of rows) {
-    r.unit = multi.has(r.category) ? null : normalizePrintStockSku(r.sku).unitQty;
+  for (const r of [...bySku.values()]) {
+    r.unit = isMulti(r.category) ? null : normalizePrintStockSku(r.sku).unitQty;
     r.pieces = r.unit == null ? null : r.packs * r.unit;
-    totalPacks += r.packs;
     if (r.pieces != null) totalPieces += r.pieces;
     if (!grouped.has(r.category)) grouped.set(r.category, []);
     grouped.get(r.category).push(r);
   }
+  const totalParcels = orders.length; // = ออเดอร์ ตรงกับเช็กลิสต์
+  const lzPieces = (prepackOrders || []).filter(o => o.platform === 'lazada')
+    .reduce((s, o) => s + Object.values(o.items || {}).reduce((a, n) => a + Number(n || 0), 0), 0);
+  const cats = [...grouped.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   return `
-    <h3 style="margin:0 0 4px">🧰 ต้อง prepack วันที่ ${escapeHtml(d.date || '')}</h3>
-    <div class="muted" style="font-size:13px;margin-bottom:10px">${bySku.size.toLocaleString()} SKU · ${totalPacks.toLocaleString()} ชุด (พัสดุ) · ≥ ${totalPieces.toLocaleString()} ชิ้น <span style="color:#94a3b8">(ชุด SET/DUO/MIX ไม่ถูกนับชิ้น เพราะมีหลายสินค้าในชุด)</span></div>
-    ${[...grouped.entries()].map(([category, items]) => `
+    <h3 style="margin:0 0 4px">🧰 ต้อง prepack วันที่ ${escapeHtml(date)}</h3>
+    <div class="muted" style="font-size:13px;margin-bottom:10px">${bySku.size.toLocaleString()} SKU · <b>${totalParcels.toLocaleString()} พัสดุ</b> (= ออเดอร์ ตรงกับเช็กลิสต์ด้านล่าง) · ≥ ${totalPieces.toLocaleString()} ชิ้น <span style="color:#94a3b8">(ชุด SET/DUO/MIX ไม่ถูกนับชิ้น)</span>${lzPieces ? ` · <span style="color:#1e40af">+ Lazada ${lzPieces.toLocaleString()} ชิ้น (แยก)</span>` : ''}</div>
+    ${cats.map(([category, items]) => `
       <details open style="border:1px solid #e2e8f0;border-radius:8px;margin:8px 0;background:white">
-        <summary style="cursor:pointer;padding:10px 12px;font-weight:700">${escapeHtml(category)} · ${items.length.toLocaleString()} SKU · ${items.reduce((s, r) => s + r.packs, 0).toLocaleString()} ชุด</summary>
+        <summary style="cursor:pointer;padding:10px 12px;font-weight:700">${escapeHtml(category)} · ${items.length.toLocaleString()} SKU · ${items.reduce((s, r) => s + r.packs, 0).toLocaleString()} แพ็ค</summary>
         <div style="padding:0 12px 10px;overflow:auto">
           <table style="width:100%;border-collapse:collapse">
             <thead><tr>
-              <th style="text-align:left;padding:6px;border-bottom:1px solid #e2e8f0">SKU ใบปะหน้า</th>
-              <th style="text-align:right;padding:6px;border-bottom:1px solid #e2e8f0">ชุดที่ต้องแพ็ค</th>
-              <th style="text-align:right;padding:6px;border-bottom:1px solid #e2e8f0">ชิ้น/ชุด</th>
+              <th style="text-align:left;padding:6px;border-bottom:1px solid #e2e8f0">SKU</th>
+              <th style="text-align:right;padding:6px;border-bottom:1px solid #e2e8f0">แพ็คที่ต้องเตรียม</th>
+              <th style="text-align:right;padding:6px;border-bottom:1px solid #e2e8f0">ชิ้น/แพ็ค</th>
               <th style="text-align:right;padding:6px;border-bottom:1px solid #e2e8f0">รวมชิ้น</th>
               <th style="text-align:left;padding:6px;border-bottom:1px solid #e2e8f0">แพลตฟอร์ม</th>
-              <th style="text-align:left;padding:6px;border-bottom:1px solid #e2e8f0">ขนส่ง</th>
-              <th style="text-align:left;padding:6px;border-bottom:1px solid #e2e8f0">พิมพ์แล้ว</th>
             </tr></thead>
-            <tbody>${items.map(r => `
+            <tbody>${items.sort((a, b) => b.packs - a.packs).map(r => `
               <tr>
                 <td style="padding:6px;border-bottom:1px solid #f1f5f9"><code>${escapeHtml(r.sku)}</code></td>
                 <td style="padding:6px;border-bottom:1px solid #f1f5f9;text-align:right;font-weight:700">${r.packs.toLocaleString()}</td>
                 <td style="padding:6px;border-bottom:1px solid #f1f5f9;text-align:right">${r.unit == null ? '<span class="muted">หลายสินค้า</span>' : r.unit.toLocaleString()}</td>
                 <td style="padding:6px;border-bottom:1px solid #f1f5f9;text-align:right">${r.pieces == null ? '—' : r.pieces.toLocaleString()}</td>
                 <td style="padding:6px;border-bottom:1px solid #f1f5f9">${[...r.platforms].map(p => labels[p] || p).join(', ')}</td>
-                <td style="padding:6px;border-bottom:1px solid #f1f5f9">${[...r.carriers].join(', ') || '-'}</td>
-                <td style="padding:6px;border-bottom:1px solid #f1f5f9">${onlinePrintStatusBadge(r.printed, 0, r.filesCount)}</td>
               </tr>`).join('')}</tbody>
           </table>
         </div>
