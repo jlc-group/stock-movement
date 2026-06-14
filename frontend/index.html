@@ -1470,35 +1470,50 @@ function renderOnlineBatchOrders() {
   const groups = onlineBatchOrderGroups(b);
   if (!groups.length) { box.style.display = 'none'; return; }
   box.style.display = '';
+
+  // แยก สินค้าเดี่ยว / หลายสินค้า(เซ็ต) / lazada · เรียงจากออเดอร์เยอะสุด (พิมพ์ก่อน)
+  const idx = groups.map((g, i) => Object.assign({ _i: i }, g));
+  const byCount = (a, c) => c.orders.length - a.orders.length;
+  const single = idx.filter(g => g.platform !== 'lazada' && !g.sig.includes(' + ')).sort(byCount);
+  const multi = idx.filter(g => g.platform !== 'lazada' && g.sig.includes(' + ')).sort(byCount);
+  const lazada = idx.filter(g => g.platform === 'lazada');
+
+  const cnt = g => { const done = g.orders.filter(o => o.print_status === 'printed').length; return { done, all: g.orders.length }; };
+  const rowBg = g => { const { done, all } = cnt(g); return done >= all ? '#f0fdf4' : (done ? '#fffbeb' : 'white'); };
+  const statusCell = g => { const { done, all } = cnt(g); const c = done >= all ? '#16a34a' : (done ? '#b45309' : '#94a3b8'); return `<span style="font-weight:700;color:${c}">${done}/${all}</span>`; };
+  const btn = g => { const { done, all } = cnt(g); return done < all
+    ? `<button type="button" class="btn btn-success" style="font-size:12px;padding:4px 10px" onclick="markOnlineBatchGroupPrinted(${g._i},'printed')">พิมพ์แล้ว</button>`
+    : `<button type="button" class="btn btn-ghost" style="font-size:12px;padding:4px 10px" onclick="markOnlineBatchGroupPrinted(${g._i},'new')">ยกเลิก</button>`; };
+  const plat = g => `<span style="font-size:11px;color:#94a3b8">${labels[g.platform] || g.platform}</span>`;
+  const cell = 'padding:7px 6px;border-bottom:1px solid #f1f5f9';
+  const th = (t, a) => `<th style="text-align:${a};padding:6px;border-bottom:1px solid #e2e8f0;font-size:12px;color:#64748b">${t}</th>`;
+  const head = `<thead><tr>${th('สินค้า', 'left')}${th('ออเดอร์', 'right')}${th('ขนส่ง', 'left')}${th('พิมพ์', 'right')}${th('', 'right')}</tr></thead>`;
+
+  const singleRow = g => `<tr style="background:${rowBg(g)}">
+    <td style="${cell}"><code style="font-size:13.5px">${escapeHtml(g.sig)}</code> ${plat(g)}</td>
+    <td style="${cell};text-align:right;font-weight:700">${g.orders.length.toLocaleString()}</td>
+    <td style="${cell};font-size:12px">${escapeHtml(g.carrier || '-')}</td>
+    <td style="${cell};text-align:right">${statusCell(g)}</td>
+    <td style="${cell};text-align:right;white-space:nowrap">${btn(g)}</td></tr>`;
+  const multiRow = g => `<tr style="background:${rowBg(g)}">
+    <td style="${cell}"><span style="font-size:12px;font-weight:600;color:#7c3aed">🎁 ${g.sig.split(' + ').length} สินค้า</span> ${plat(g)}<div style="font-size:12px;color:#475569;margin-top:2px;line-height:1.5">${escapeHtml(g.sig)}</div></td>
+    <td style="${cell};text-align:right;font-weight:700">${g.orders.length.toLocaleString()}</td>
+    <td style="${cell};font-size:12px">${escapeHtml(g.carrier || '-')}</td>
+    <td style="${cell};text-align:right">${statusCell(g)}</td>
+    <td style="${cell};text-align:right;white-space:nowrap">${btn(g)}</td></tr>`;
+  const lazadaHtml = lazada.map(g => {
+    const total = g.orders.reduce((s, o) => s + Object.values(o.items || {}).reduce((a, n) => a + Number(n || 0), 0), 0);
+    return `<div style="margin-top:8px;padding:8px 10px;background:#eff6ff;border:1px solid #dbeafe;border-radius:8px;font-size:12.5px;color:#1e40af">Lazada: ยอดรวม ${total.toLocaleString()} ชิ้น — ไม่มีรายออเดอร์ให้ติ๊ก (พิมพ์ใบปะหน้าจากระบบ Lazada ตามปกติ)</div>`;
+  }).join('');
+
   box.innerHTML = `
     <div style="border-top:1px dashed #e2e8f0;padding-top:10px">
-      <div style="font-weight:700">รายการพิมพ์ของรอบนี้ <span class="muted" style="font-weight:400;font-size:12.5px">— จัดกลุ่มตามสินค้าในออเดอร์ ติ๊ก "พิมพ์แล้ว" ได้ทีละกลุ่ม (จำสถานะข้ามรอบ/ข้ามการดึงใหม่)</span></div>
-      <table style="width:100%;border-collapse:collapse;margin-top:8px">
-        <thead><tr>
-          <th style="text-align:left;padding:6px;border-bottom:1px solid #e2e8f0">แพลตฟอร์ม</th>
-          <th style="text-align:left;padding:6px;border-bottom:1px solid #e2e8f0">ขนส่ง</th>
-          <th style="text-align:left;padding:6px;border-bottom:1px solid #e2e8f0">สินค้าในออเดอร์</th>
-          <th style="text-align:right;padding:6px;border-bottom:1px solid #e2e8f0">ออเดอร์</th>
-          <th style="text-align:right;padding:6px;border-bottom:1px solid #e2e8f0">พิมพ์แล้ว</th>
-          <th style="text-align:right;padding:6px;border-bottom:1px solid #e2e8f0"></th>
-        </tr></thead>
-        <tbody>${groups.map((g, i) => {
-          const done = g.orders.filter(o => o.print_status === 'printed').length;
-          const all = g.orders.length;
-          const bg = done >= all ? '#f0fdf4' : (done > 0 ? '#fffbeb' : 'white');
-          return `<tr style="background:${bg}">
-            <td style="padding:6px;border-bottom:1px solid #f1f5f9">${labels[g.platform] || g.platform}</td>
-            <td style="padding:6px;border-bottom:1px solid #f1f5f9">${escapeHtml(g.carrier || '-')}</td>
-            <td style="padding:6px;border-bottom:1px solid #f1f5f9"><code>${escapeHtml(g.sig)}</code>${g.platform === 'lazada' ? ' <span class="muted" style="font-size:12px">(ยอดรวม ไม่มีรายออเดอร์)</span>' : ''}</td>
-            <td style="padding:6px;border-bottom:1px solid #f1f5f9;text-align:right">${all.toLocaleString()}</td>
-            <td style="padding:6px;border-bottom:1px solid #f1f5f9;text-align:right;font-weight:700;color:${done >= all ? '#16a34a' : (done ? '#b45309' : '#64748b')}">${done.toLocaleString()}/${all.toLocaleString()}</td>
-            <td style="padding:6px;border-bottom:1px solid #f1f5f9;text-align:right;white-space:nowrap">
-              ${done < all ? `<button type="button" class="btn btn-success" style="font-size:12px;padding:4px 8px" onclick="markOnlineBatchGroupPrinted(${i}, 'printed')">พิมพ์แล้ว</button>` : `<button type="button" class="btn btn-ghost" style="font-size:12px;padding:4px 8px" onclick="markOnlineBatchGroupPrinted(${i}, 'new')">ยกเลิก</button>`}
-            </td>
-          </tr>`;
-        }).join('')}</tbody>
-      </table>
-      <div class="muted" style="font-size:12.5px;margin-top:6px">* เปิดไฟล์ PDF: ใช้ปุ่ม "พิมพ์ใบปะหน้าแยก SKU" ด้านบนเหมือนเดิม (ไฟล์รวมทั้งวัน) — ตารางนี้ใช้เช็กว่ารอบนี้ต้องพิมพ์อะไร และติ๊กกันลืม</div>
+      <div style="font-weight:700">รายการพิมพ์ของรอบนี้ <span class="muted" style="font-weight:400;font-size:12.5px">— ติ๊ก "พิมพ์แล้ว" กันลืม (จำข้ามรอบ) · เรียงจากออเดอร์เยอะสุด</span></div>
+      <div style="font-weight:600;font-size:13px;margin-top:10px">📦 สินค้าเดี่ยว <span class="muted" style="font-weight:400">(${single.length} แบบ · พิมพ์ง่าย)</span></div>
+      <table style="width:100%;border-collapse:collapse;margin-top:4px">${head}<tbody>${single.map(singleRow).join('') || '<tr><td colspan="5" class="muted" style="padding:6px">—</td></tr>'}</tbody></table>
+      ${multi.length ? `<details style="margin-top:10px"><summary style="cursor:pointer;font-weight:600;font-size:13px">🎁 หลายสินค้า/เซ็ต (${multi.length} แบบ) <span class="muted" style="font-weight:400">— กดเพื่อดู</span></summary><table style="width:100%;border-collapse:collapse;margin-top:4px">${head}<tbody>${multi.map(multiRow).join('')}</tbody></table></details>` : ''}
+      ${lazadaHtml}
+      <div class="muted" style="font-size:12.5px;margin-top:8px">* เปิดไฟล์ PDF จริง: ใช้ปุ่ม "พิมพ์ใบปะหน้าแยก SKU" ด้านบน — ตารางนี้แค่ติ๊กกันลืมว่ารอบนี้พิมพ์อะไรไปแล้ว</div>
     </div>`;
 }
 
