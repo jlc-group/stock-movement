@@ -930,6 +930,21 @@ let DB = { products: [] };
 const fmt = n => (n === 0 || n === null || n === undefined) ? '-' : Number(n).toLocaleString('en-US', {maximumFractionDigits: 2});
 const cls = n => n < 0 ? 'neg' : '';
 
+// แสดง timestamp เป็นเวลาไทยเสมอ (กันสับสน UTC vs local).
+// รับได้ทั้งแบบ UTC (ลงท้าย Z จาก Script-Ecom/Node) และแบบไม่มี timezone
+// (จาก datetime.now() ฝั่ง Python = เวลาเครื่อง = เวลาไทยอยู่แล้ว):
+// new Date() ตีความ Z=UTC, ไม่มี Z=local แล้ว format เป็น Asia/Bangkok → ถูกทั้งคู่.
+function fmtThai(s) {
+  if (!s) return '';
+  const d = new Date(s);
+  if (isNaN(d)) return String(s).replace('T', ' ').slice(0, 16); // กันพังถ้า parse ไม่ได้
+  const p = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+  }).formatToParts(d).reduce((a, x) => (a[x.type] = x.value, a), {});
+  return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}`;
+}
+
 // ---- Channels (ช่องทางการเคลื่อนไหว) ----
 // Source of truth = GET /api/channels (fetched in loadData). Static fallback keeps
 // labels/dropdowns working if that call hasn't returned yet. 'mixed' = legacy rows
@@ -1170,7 +1185,7 @@ function renderOnlineConfirmed(d) {
   const pp = (d.platforms_pieces || {});
   const platLine = ['shopee', 'tiktok', 'lazada'].filter(k => (po[k] || pp[k]))
     .map(k => `${labels[k]}: ${Number(po[k] || 0).toLocaleString()} ออเดอร์${pp[k] ? ` · ${Number(pp[k]).toLocaleString()} ชิ้น` : ''}`).join(' &nbsp;·&nbsp; ');
-  const upd = String(d.updated_at || '').replace('T', ' ').slice(0, 16);
+  const upd = fmtThai(d.updated_at);
   card.style.display = '';
   card.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">
@@ -1469,7 +1484,7 @@ function renderOnlineBatchView() {
   const printed = orders.filter(o => o.print_status === 'printed').length;
   document.getElementById('onlineResultTitle').innerHTML =
     `📦 ${escapeHtml(b.label || b.id || '')} — วันที่ ${escapeHtml(b.date || '')} `
-    + `<span style="color:#94a3b8;font-weight:400;font-size:13px">(เฉพาะออเดอร์ใหม่ของรอบนี้ · แสตมป์เมื่อ ${escapeHtml(String(b.created_at || '').replace('T', ' ').slice(0, 16))})</span>`
+    + `<span style="color:#94a3b8;font-weight:400;font-size:13px">(เฉพาะออเดอร์ใหม่ของรอบนี้ · แสตมป์เมื่อ ${escapeHtml(fmtThai(b.created_at))})</span>`
     + `<div style="font-weight:400;font-size:13px;margin-top:2px;color:${printed >= orders.length && orders.length ? '#16a34a' : '#b45309'}">สินค้า ${items.length.toLocaleString()} รายการ · ออเดอร์รอบนี้ ${orders.length.toLocaleString()} · พิมพ์แล้ว ${printed.toLocaleString()} · ค้างพิมพ์ ${(orders.length - printed).toLocaleString()} `
     + `<button type="button" class="btn btn-ghost" style="font-size:12px;padding:3px 8px;margin-left:8px" onclick="previewOnline()">← กลับยอดสด</button></div>`;
   tbody.innerHTML = sortedOnlineItems(items).map(it => {
