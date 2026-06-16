@@ -2260,6 +2260,15 @@ async function pullOrders() {
   } catch (e) { msg.textContent = '❌ ' + e.message; pBtn.disabled = false; }
 }
 
+// แปลง label ของ step (เช่น "node tiktok_shop.js") -> ชื่อแพลตฟอร์มอ่านง่าย
+function platformFromStep(label) {
+  const s = String(label || '').toLowerCase();
+  if (s.includes('shopee')) return 'Shopee';
+  if (s.includes('lazada')) return 'Lazada';
+  if (s.includes('tiktok')) return 'TikTok';
+  return '';
+}
+
 async function pollPull() {
   const msg = document.getElementById('onlineMsg');
   const pBtn = document.getElementById('onlinePullBtn');
@@ -2269,9 +2278,25 @@ async function pollPull() {
     try { st = await readApiJson(await fetch('/api/online/pull/status', { headers: { 'Authorization': 'Bearer ' + adminToken } })); }
     catch (e) { continue; }
     const job = (st && st.job) || {};
-    if (job.running) { msg.textContent = `กำลังดึงออเดอร์... ${job.name || ''} (${job.status || 'running'})`; continue; }
+    const stepNo = Number(job.stepIndex || 0) + 1;
+    const stepTot = Number(job.stepCount || 0);
+    const cur = platformFromStep(job.currentStep);
+    if (job.running) {
+      const pos = stepTot ? ` (${stepNo}/${stepTot})` : '';
+      msg.textContent = `กำลังดึงออเดอร์${cur ? ' — ' + cur : '...'}${pos}`;
+      continue;
+    }
     pBtn.disabled = false;
-    if (job.status === 'error') { msg.textContent = '❌ ดึงออเดอร์ผิดพลาด — เช็ก Script-Ecom (อาจ token หมดอายุ)'; return; }
+    if (job.status === 'error') {
+      const where = cur ? `ที่ ${cur}` : (stepTot ? `ที่ช่อง ${stepNo}` : '');
+      const posTag = stepTot ? ` (ช่อง ${stepNo}/${stepTot})` : '';
+      const ec = (job.exitCode != null && job.exitCode !== '') ? ` [exit ${escapeHtml(String(job.exitCode))}]` : '';
+      const ranOk = stepNo > 1 ? ` · ${stepNo - 1} ช่องก่อนหน้าดึงสำเร็จแล้ว` : '';
+      const notRun = (stepTot && stepNo < stepTot) ? ` · อีก ${stepTot - stepNo} ช่องยังไม่ได้ดึง` : '';
+      msg.innerHTML = `❌ ดึงไม่สำเร็จ ${escapeHtml(where)}${posTag}${ec}${escapeHtml(ranOk)}${escapeHtml(notRun)}`
+        + `<div style="font-size:12px;color:#b45309;margin-top:3px;line-height:1.6">สาเหตุที่พบบ่อย: token หมดอายุ · เน็ตหลุด · แพลตฟอร์มตอบช้า — ลองกดดึงใหม่อีกครั้ง · ดู log แบบเต็มได้ที่หน้าจอ Script-Ecom</div>`;
+      return;
+    }
     msg.textContent = '✅ ดึงออเดอร์เสร็จ → กำลังคำนวณยอดที่ควรตัด...';
     const dp = document.getElementById('onlineDate'); if (dp) dp.value = '';
     await previewOnline();
