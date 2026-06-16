@@ -1186,6 +1186,17 @@ function renderOnlineConfirmed(d) {
   const platLine = ['shopee', 'tiktok', 'lazada'].filter(k => (po[k] || pp[k]))
     .map(k => `${labels[k]}: ${Number(po[k] || 0).toLocaleString()} ออเดอร์${pp[k] ? ` · ${Number(pp[k]).toLocaleString()} ชิ้น` : ''}`).join(' &nbsp;·&nbsp; ');
   const upd = fmtThai(d.updated_at);
+  const cc = Number((d || {}).cancelled_count || 0);
+  const cpc = Number((d || {}).cancelled_pieces || 0);
+  const net = Number((d || {}).net_order_count != null ? d.net_order_count : oc);
+  let cancelLine = '';
+  if (d.cancelled_available) {
+    cancelLine = cc > 0
+      ? `<div style="font-size:12.5px;color:#b45309;margin-top:4px">↩️ ยกเลิกระหว่างวัน: <b>${cc.toLocaleString()}</b> ออเดอร์${cpc ? ` (−${cpc.toLocaleString()} ชิ้น)` : ''} &nbsp;·&nbsp; ยอดสุทธิ (หักยกเลิก): <b style="color:#15803d">${net.toLocaleString()}</b> ออเดอร์</div>`
+      : `<div style="font-size:12px;color:#16a34a;margin-top:4px">✓ ไม่มีออเดอร์ในยอดสะสมนี้ถูกยกเลิก</div>`;
+  } else {
+    cancelLine = `<div style="font-size:12px;color:#94a3b8;margin-top:4px">— เช็กออเดอร์ยกเลิกไม่ได้ในรอบนี้</div>`;
+  }
   card.style.display = '';
   card.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">
@@ -1193,6 +1204,7 @@ function renderOnlineConfirmed(d) {
         <div style="font-size:12.5px;color:#15803d;font-weight:500">📊 ยอดยืนยันสะสมวันนี้ <span style="color:#16a34a">(ไม่ลด แม้ขนส่งรับไปแล้ว)</span></div>
         <div style="font-size:24px;font-weight:700;color:#16a34a;line-height:1.35">${oc.toLocaleString()} <span style="font-size:14px;font-weight:400">ออเดอร์</span> &nbsp;·&nbsp; ${pc.toLocaleString()} <span style="font-size:14px;font-weight:400">ชิ้น</span></div>
         <div style="font-size:12px;color:#64748b;margin-top:2px">= ยอดที่กดยืนยันในแพลตฟอร์มแล้ว เอาไว้เทียบ/ตัดสต็อก${platLine ? ` &nbsp;|&nbsp; ${platLine}` : ''}</div>
+        ${cancelLine}
       </div>
       <div style="text-align:right;white-space:nowrap">
         <button type="button" class="btn btn-ghost" style="font-size:12px;padding:4px 10px" onclick="accumulateOnline()">🔄 อัปเดต</button>

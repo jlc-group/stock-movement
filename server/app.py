@@ -306,7 +306,28 @@ def accumulate_confirmed(date_iso):
     except Exception:
         pass  # ยังไม่มีรอบก็ข้ามไป
 
+    # 3) ดึง order_id ที่ "ยกเลิก" ของวัน (Shopee+TikTok) → หาที่อยู่ในยอดสะสมเรา (intersection)
+    #    ไม่ลบทิ้ง — เก็บ count ไว้โชว์ "ยกเลิกระหว่างวัน" + คำนวณยอดสุทธิ. พังก็ degrade เงียบ.
+    cancel = {"available": False, "count": 0, "pieces": 0, "by_platform": {}, "errors": None}
+    try:
+        cx = script_ecom_json("/api/stock/cancelled?date=" + urllib.parse.quote(date_iso), timeout=60)
+        cancelled_keys = set()
+        for plat in ("shopee", "tiktok"):
+            for oid in cx.get(plat) or []:
+                cancelled_keys.add(plat + "|" + str(oid))
+        in_union = [k for k in orders if k in cancelled_keys]
+        by_plat, pcs = {}, 0
+        for k in in_union:
+            p = orders[k].get("platform") or "?"
+            by_plat[p] = by_plat.get(p, 0) + 1
+            pcs += sum(float(v or 0) for v in (orders[k].get("items") or {}).values())
+        cancel = {"available": True, "count": len(in_union), "pieces": pcs,
+                  "by_platform": by_plat, "errors": cx.get("errors")}
+    except Exception as e:
+        cancel["fetch_error"] = str(e)
+
     cur.update({"date": date_iso, "orders": orders, "pieces_hw": pieces_hw,
+                "cancelled": cancel,
                 "updated_at": datetime.now().isoformat(timespec="seconds")})
     save_confirmed(date_iso, cur)
     return cur, added
@@ -321,6 +342,8 @@ def confirmed_summary(cur):
         by_plat[plat] = by_plat.get(plat, 0) + 1
     plat_pieces = {p: sum(float(v or 0) for v in items.values())
                    for p, items in pieces_hw.items()}
+    c = cur.get("cancelled") or {}
+    cancelled_count = int(c.get("count") or 0)
     return {
         "date": cur.get("date"),
         "order_count": len(orders),
@@ -328,6 +351,11 @@ def confirmed_summary(cur):
         "platforms_orders": by_plat,
         "platforms_pieces": plat_pieces,
         "updated_at": cur.get("updated_at"),
+        "cancelled_available": bool(c.get("available")),
+        "cancelled_count": cancelled_count,
+        "cancelled_pieces": num(c.get("pieces") or 0),
+        "cancelled_by_platform": c.get("by_platform") or {},
+        "net_order_count": len(orders) - cancelled_count,
     }
 
 
