@@ -7,7 +7,7 @@
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: -apple-system, 'Segoe UI', 'Sarabun', Tahoma, sans-serif; background: #f4f5f7; color: #1f2937; }
-.cmp-page { max-width: 1200px; margin: 0 auto; padding: 20px 24px 60px; }
+.cmp-page { width: 100%; max-width: 1460px; margin: 0 auto; padding: clamp(14px, 2vw, 28px) clamp(14px, 2.4vw, 32px) 60px; }
 
 /* ----- top bar ----- */
 .cmp-top { background: linear-gradient(135deg, #1e3a8a, #3b82f6); color: #fff; padding: 18px 24px; border-radius: 12px; margin-bottom: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
@@ -90,7 +90,7 @@ body.admin-on .cmp-admin { display: inline-flex !important; }
 .cmp-legend i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
 .cmp-cal { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 14px 16px 18px; margin-bottom: 18px; }
 .cmp-cal h3 { font-size: 15px; color: #0f172a; margin-bottom: 12px; }
-.cmp-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.cmp-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
 .cmp-dow { text-align: center; font-size: 11px; font-weight: 700; color: #94a3b8; padding: 4px 0; }
 .cmp-day { min-height: 88px; border: 1px solid #f1f5f9; border-radius: 8px; padding: 4px 5px; position: relative; background: #fcfcfd; }
 .cmp-day.out { background: #f8fafc; opacity: .45; }
@@ -127,7 +127,7 @@ body.admin-on .cmp-day:hover .cmp-day-add { display: inline-flex; }
 .cmp-legend-note { font-size: 11.5px; color: #94a3b8; margin-left: auto; }
 
 /* ----- KPI strip ----- */
-.cmp-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+.cmp-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: clamp(10px, 1vw, 14px); margin-bottom: 16px; }
 .cmp-kpi { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 14px 16px; box-shadow: 0 1px 2px rgba(0,0,0,.03); }
 .cmp-kpi .k-label { font-size: 12px; color: #64748b; font-weight: 600; margin-bottom: 6px; }
 .cmp-kpi .k-val { font-size: 26px; font-weight: 800; color: #0f172a; line-height: 1; font-variant-numeric: tabular-nums; }
@@ -137,11 +137,12 @@ body.admin-on .cmp-day:hover .cmp-day-add { display: inline-flex; }
 .cmp-kpi.good .k-val { color: #059669; }
 
 /* ----- main + sidebar layout ----- */
-.cmp-layout { display: grid; grid-template-columns: 1fr 340px; gap: 18px; align-items: start; }
+.cmp-layout { display: grid; grid-template-columns: minmax(0, 1fr) clamp(300px, 24%, 360px); gap: clamp(14px, 1.6vw, 22px); align-items: start; }
 .cmp-side { display: flex; flex-direction: column; gap: 14px; position: sticky; top: 14px; }
 .cmp-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 12px 14px; }
 .cmp-card-h { display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 700; color: #0f172a; margin-bottom: 10px; }
 .cmp-card-c { background: #fee2e2; color: #b91c1c; font-size: 12px; font-weight: 700; border-radius: 999px; padding: 1px 9px; }
+.cmp-card-n { background: #f1f5f9; color: #475569; font-size: 12px; font-weight: 700; border-radius: 999px; padding: 1px 9px; }
 .cmp-side-empty { font-size: 12.5px; color: #64748b; padding: 8px 2px; }
 
 /* ----- shortage items + health bar ----- */
@@ -152,6 +153,8 @@ body.admin-on .cmp-day:hover .cmp-day-add { display: inline-flex; }
 .si-short { color: #dc2626; font-weight: 700; font-size: 12px; }
 .si-name { font-size: 12px; color: #64748b; margin: 2px 0 6px; }
 .si-meta { font-size: 11px; color: #94a3b8; margin-top: 4px; }
+.cmp-short-toggle { display: block; width: 100%; margin-top: 10px; padding: 7px 0; border: 1px solid #e2e8f0; border-radius: 8px; background: #f8fafc; color: #2563eb; font-size: 12px; font-weight: 600; cursor: pointer; transition: background .15s, border-color .15s; }
+.cmp-short-toggle:hover { background: #eff6ff; border-color: #bfdbfe; }
 .cmp-bar { height: 7px; background: #f1f5f9; border-radius: 99px; overflow: hidden; }
 .cmp-bar.sm { height: 5px; margin-top: 5px; max-width: 170px; }
 .cmp-bar i { display: block; height: 100%; border-radius: 99px; }
@@ -187,7 +190,7 @@ body.admin-on .cmp-day:hover .cmp-day-add { display: inline-flex; }
 .cmp-dot { width: 11px; height: 11px; border-radius: 50%; display: inline-block; }
 
 /* ----- week view ----- */
-.cmp-week { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.cmp-week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
 .cmp-wday { border: 1px solid #f1f5f9; border-radius: 8px; min-height: 150px; display: flex; flex-direction: column; background: #fcfcfd; }
 .cmp-wday.today { border-color: #2563eb; box-shadow: 0 0 0 1px #2563eb inset; }
 .wd-head { display: flex; align-items: center; gap: 5px; padding: 6px 8px; border-bottom: 1px solid #f1f5f9; }
@@ -198,10 +201,28 @@ body.admin-on .cmp-day:hover .cmp-day-add { display: inline-flex; }
 .cmp-wempty { color: #cbd5e1; font-size: 12px; text-align: center; margin: auto; }
 .cmp-wday .cmp-day-add { position: static; display: inline-flex; margin-left: auto; }
 
+/* ----- gantt timeline (bottom, real-date axis) ----- */
+.cmp-gantt-card { --g-label: clamp(110px, 16%, 190px); background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 14px 16px; margin-top: 16px; }
+.cmp-gantt-card .cmp-card-h { margin-bottom: 12px; }
+.g-period { font-size: 12px; font-weight: 600; color: #64748b; }
+.gantt-axis { display: grid; grid-template-columns: var(--g-label) 1fr; column-gap: 10px; }
+.gantt-axis-track { position: relative; height: 18px; border-bottom: 1px solid #e5e7eb; }
+.g-tick { position: absolute; bottom: 3px; font-size: 10.5px; color: #94a3b8; font-weight: 600; white-space: nowrap; transform: translateX(-2px); }
+.g-tick::after { content: ''; position: absolute; left: 0; bottom: -6px; width: 1px; height: 5px; background: #cbd5e1; }
+.g-today-lbl { position: absolute; bottom: 3px; font-size: 10px; font-weight: 700; color: #2563eb; white-space: nowrap; transform: translateX(-50%); }
+.gantt-body { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.gantt-row { display: grid; grid-template-columns: var(--g-label) 1fr; column-gap: 10px; align-items: center; }
+.gantt-label { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 12px; color: #334155; font-weight: 600; }
+.gantt-label .g-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gantt-track { position: relative; height: 26px; background: #f8fafc; border: 1px solid #f1f5f9; border-radius: 7px; overflow: hidden; }
+.gantt-today { position: absolute; top: 0; bottom: 0; width: 0; border-left: 2px dashed #2563eb; opacity: .55; z-index: 1; pointer-events: none; }
+.gantt-bar { position: absolute; top: 3px; bottom: 3px; min-width: 14px; border: 1px solid; border-left-width: 3px; border-radius: 6px; display: flex; align-items: center; padding: 0 7px; cursor: pointer; overflow: hidden; z-index: 2; transition: filter .12s; }
+.gantt-bar:hover { filter: brightness(.95); }
+.gantt-bar .gb-text { font-size: 10.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
 @media (max-width: 980px) {
   .cmp-layout { grid-template-columns: 1fr; }
   .cmp-side { position: static; }
-  .cmp-kpis { grid-template-columns: repeat(2, 1fr); }
   .cmp-week { overflow-x: auto; grid-template-columns: repeat(7, minmax(120px, 1fr)); }
 }
 @media (max-width: 768px) {
@@ -251,6 +272,7 @@ body.admin-on .cmp-day:hover .cmp-day-add { display: inline-flex; }
       <div class="cmp-card" id="cmpAgenda"></div>
     </aside>
   </div>
+  <div class="cmp-gantt-card" id="cmpGantt"></div>
 </div>
 
 <!-- ===== Admin: Login ===== -->
@@ -438,6 +460,8 @@ let cmpDetailId = null;
 let cmpForecastDraft = [];
 let cmpColorDraft = null;
 let cmpColorTouched = false;
+let cmpShortExpanded = false;   // shortage panel: show all vs first 2
+let cmpAgendaExpanded = false;  // upcoming-agenda panel: show all vs first 2
 
 function cmpAuthHeaders() {
   const h = { 'Content-Type': 'application/json' };
@@ -545,6 +569,7 @@ function renderCampaign() {
   }
   renderShortagePanel();
   renderAgenda();
+  renderGantt();
 }
 
 function renderFilters() {
@@ -584,7 +609,10 @@ function renderShortagePanel() {
   if (!shorts.length) {
     html += '<div class="cmp-side-empty">✓ สต็อกเพียงพอสำหรับทุกแคมเปญในช่วงนี้</div>';
   } else {
-    html += shorts.map(p => {
+    const COLLAPSE_AT = 2;
+    const collapsible = shorts.length > COLLAPSE_AT;
+    const visible = (collapsible && !cmpShortExpanded) ? shorts.slice(0, COLLAPSE_AT) : shorts;
+    html += visible.map(p => {
       const pct = p.qty ? Math.max(0, Math.min(100, p.closing / p.qty * 100)) : 0;
       return `<div class="cmp-short-item">
         <div class="si-top"><span class="si-code">${escapeHtml(p.code)}</span><span class="si-short">สั่งเพิ่ม ${cmpN(p.short)}</span></div>
@@ -593,20 +621,87 @@ function renderShortagePanel() {
         <div class="si-meta">มี ${cmpN(p.closing)} · ต้องใช้ ${cmpN(p.qty)} ชิ้น</div>
       </div>`;
     }).join('');
+    if (collapsible) {
+      const hidden = shorts.length - COLLAPSE_AT;
+      html += cmpShortExpanded
+        ? `<button type="button" class="cmp-short-toggle" onclick="toggleShortExpand()">▲ หุบรายการ</button>`
+        : `<button type="button" class="cmp-short-toggle" onclick="toggleShortExpand()">▼ ดูทั้งหมด (อีก ${hidden} รายการ)</button>`;
+    }
   }
   box.innerHTML = html;
+}
+
+function toggleShortExpand() {
+  cmpShortExpanded = !cmpShortExpanded;
+  renderShortagePanel();
+}
+
+// ---------- gantt timeline (real-date axis, positioned within the layout frame) ----------
+function renderGantt() {
+  const box = document.getElementById('cmpGantt'); if (!box) return;
+  const { start, end } = cmpPeriod();
+  const total = Math.round((end - start) / 86400000) + 1;   // days inclusive
+  const list = cmpPeriodCampaigns().slice()
+    .sort((a, b) => cmpStartD(a).localeCompare(cmpStartD(b)) || a.name.localeCompare(b.name));
+  let head = `<div class="cmp-card-h"><span>📊 ไทม์ไลน์แคมเปญ (Gantt)</span><span class="g-period">${escapeHtml(cmpPeriodLabel())}</span></div>`;
+  if (!list.length) { box.innerHTML = head + '<div class="cmp-side-empty">ไม่มีแคมเปญในช่วงนี้</div>'; return; }
+
+  // today marker (only if within the visible period)
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  let todayLeft = null;
+  if (today >= start && today <= end) todayLeft = (Math.round((today - start) / 86400000) + 0.5) / total * 100;
+
+  // adaptive axis ticks: per-day (short) → weekly DD/MM (mid) → per-month (long)
+  const ticks = [];
+  if (total <= 16) {
+    for (let i = 0; i < total; i++) { const d = new Date(start); d.setDate(d.getDate() + i); ticks.push({ left: i / total * 100, label: String(d.getDate()) }); }
+  } else if (total <= 70) {
+    for (let i = 0; i < total; i += 7) { const d = new Date(start); d.setDate(d.getDate() + i); ticks.push({ left: i / total * 100, label: cmpDM(cmpISO(d)).slice(0, 5) }); }
+  } else {
+    let m = new Date(start.getFullYear(), start.getMonth(), 1);
+    while (m <= end) {
+      if (m >= start) { const idx = Math.round((m - start) / 86400000); ticks.push({ left: idx / total * 100, label: CMP_MONTH_TH[m.getMonth()] }); }
+      m = new Date(m.getFullYear(), m.getMonth() + 1, 1);
+    }
+  }
+  const axis = `<div class="gantt-axis"><div></div><div class="gantt-axis-track">`
+    + ticks.map(t => `<span class="g-tick" style="left:${t.left}%">${t.label}</span>`).join('')
+    + (todayLeft != null ? `<span class="g-today-lbl" style="left:${todayLeft}%">วันนี้</span>` : '')
+    + `</div></div>`;
+
+  const rows = list.map(c => {
+    const s = cmpStartD(c), e = cmpEndD(c);
+    const si = Math.max(0, Math.round((new Date(s + 'T00:00:00') - start) / 86400000));
+    const ei = Math.min(total - 1, Math.round((new Date(e + 'T00:00:00') - start) / 86400000));
+    const left = si / total * 100;
+    const width = (ei - si + 1) / total * 100;
+    const color = cmpColor(c);
+    const span = cmpSpanDays(c);
+    const warn = cmpShortage(c) ? ' ⚠️' : '';
+    const dateLbl = span > 1 ? `${cmpDM(s).slice(0, 5)}–${cmpDM(e).slice(0, 5)}` : cmpDM(s).slice(0, 5);
+    const todayLine = todayLeft != null ? `<span class="gantt-today" style="left:${todayLeft}%"></span>` : '';
+    return `<div class="gantt-row">
+      <div class="gantt-label" title="${escapeHtml(c.name)}"><span class="cmp-dot" style="background:${color}"></span><span class="g-name">${escapeHtml(c.name)}</span></div>
+      <div class="gantt-track">${todayLine}<div class="gantt-bar" style="left:${left}%;width:${width}%;background:${cmpTint(color)};border-color:${color};color:${color}" onclick="openCampaignDetail('${c.id}')" title="${escapeHtml(c.name)} · ${dateLbl}"><span class="gb-text">${escapeHtml(c.name)} · ${dateLbl}${warn}</span></div></div>
+    </div>`;
+  }).join('');
+
+  box.innerHTML = head + axis + `<div class="gantt-body">${rows}</div>`;
 }
 
 function renderAgenda() {
   const todayISO = cmpISO(new Date());
   const up = campaigns.filter(c => cmpFilterPass(c) && cmpEndD(c) >= todayISO)
-    .sort((a, b) => cmpStartD(a).localeCompare(cmpStartD(b))).slice(0, 8);
+    .sort((a, b) => cmpStartD(a).localeCompare(cmpStartD(b)));
   const box = document.getElementById('cmpAgenda'); if (!box) return;
-  let html = '<div class="cmp-card-h"><span>📅 แคมเปญที่กำลังจะมาถึง</span></div>';
+  let html = `<div class="cmp-card-h"><span>📅 แคมเปญที่กำลังจะมาถึง</span>${up.length ? `<span class="cmp-card-n">${up.length}</span>` : ''}</div>`;
   if (!up.length) {
     html += '<div class="cmp-side-empty">ยังไม่มีแคมเปญในอนาคต — กด “เพิ่มแคมเปญ” เพื่อเริ่มวางแผน</div>';
   } else {
-    html += up.map(c => {
+    const COLLAPSE_AT = 2;
+    const collapsible = up.length > COLLAPSE_AT;
+    const visible = (collapsible && !cmpAgendaExpanded) ? up.slice(0, COLLAPSE_AT) : up;
+    html += visible.map(c => {
       const ch = cmpChannel(c.channel);
       const color = cmpColor(c);
       const ongoing = cmpStartD(c) <= todayISO && todayISO <= cmpEndD(c);
@@ -626,8 +721,19 @@ function renderAgenda() {
         </div>
       </div>`;
     }).join('');
+    if (collapsible) {
+      const hidden = up.length - COLLAPSE_AT;
+      html += cmpAgendaExpanded
+        ? `<button type="button" class="cmp-short-toggle" onclick="toggleAgendaExpand()">▲ หุบรายการ</button>`
+        : `<button type="button" class="cmp-short-toggle" onclick="toggleAgendaExpand()">▼ ดูทั้งหมด (อีก ${hidden} รายการ)</button>`;
+    }
   }
   box.innerHTML = html;
+}
+
+function toggleAgendaExpand() {
+  cmpAgendaExpanded = !cmpAgendaExpanded;
+  renderAgenda();
 }
 
 function renderCmpMonth(m) {
@@ -842,11 +948,11 @@ async function loadProducts() {
   } catch (e) {
     toast('โหลดข้อมูลสินค้าไม่สำเร็จ', 'err');
   }
-  renderCampaign();
 }
 updateAdminUI();
-(async () => { await loadCampaigns(); renderCampaign(); })();
-loadProducts();
+// Load campaigns AND products before the first render. Rendering before products
+// arrive made every forecast read closing=0 → a flash of false "ของไม่พอ มี 0".
+(async () => { await Promise.all([loadCampaigns(), loadProducts()]); renderCampaign(); })();
 </script>
 </body>
 </html>
