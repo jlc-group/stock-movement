@@ -13,7 +13,12 @@ load_dotenv(ROOT / ".env")
 # ---- Paths --------------------------------------------------------------
 DATA_DIR = ROOT / "data"
 RAW_DIR = DATA_DIR / "raw"
-PROCESSED_DIR = DATA_DIR / "processed"
+# PROCESSED_DIR เก็บ runtime state (ยอดยืนยันสะสมรายวัน + สถานะปริ้น) ที่
+# "ต้องอยู่รอด deploy". deploy.ps1 ทำ robocopy /PURGE บนโฟลเดอร์โปรเจกต์ →
+# ถ้าเก็บใน ROOT/data จะถูกลบทิ้งทุก deploy. จึง default ไปโฟลเดอร์ "พี่น้อง"
+# นอก ROOT (เช่น Production/stock-movement-data/processed) ที่ robocopy ไม่แตะ.
+# override ผ่าน env PROCESSED_DIR ได้ถ้าต้องการกำหนดเอง.
+PROCESSED_DIR = Path(os.getenv("PROCESSED_DIR") or (ROOT.parent / f"{ROOT.name}-data" / "processed"))
 FRONTEND_DIR = ROOT / "frontend"
 
 EXCEL_PATH = RAW_DIR / os.getenv("EXCEL_FILE", "Stock Online_JLC GROUP 2026.xlsx")
