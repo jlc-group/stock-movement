@@ -117,6 +117,51 @@ def ensure_premium_warehouse_table():
 ensure_premium_warehouse_table()
 
 
+def ensure_campaigns_table():
+    """Create the campaigns + campaign_forecasts tables if they don't exist.
+
+    Stores marketing campaigns shown on the /campaign page (previously kept in
+    the browser's localStorage only). One campaign has a date range, a channel,
+    a display color and a list of per-product forecast quantities.
+    """
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute(f"""
+            CREATE TABLE IF NOT EXISTS {config.DB_SCHEMA}.campaigns (
+                id         TEXT PRIMARY KEY,
+                name       TEXT NOT NULL,
+                channel    TEXT NOT NULL DEFAULT 'other',
+                start_date DATE NOT NULL,
+                end_date   DATE NOT NULL,
+                color      TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cur.execute(f"""
+            CREATE TABLE IF NOT EXISTS {config.DB_SCHEMA}.campaign_forecasts (
+                id          SERIAL PRIMARY KEY,
+                campaign_id TEXT NOT NULL
+                    REFERENCES {config.DB_SCHEMA}.campaigns(id) ON DELETE CASCADE,
+                code        TEXT NOT NULL,
+                name        TEXT,
+                qty         NUMERIC NOT NULL DEFAULT 0
+            )
+        """)
+        cur.execute(f"""
+            CREATE INDEX IF NOT EXISTS idx_campaign_forecasts_cid
+            ON {config.DB_SCHEMA}.campaign_forecasts(campaign_id)
+        """)
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[warn] ensure_campaigns_table failed: {e}")
+
+
+ensure_campaigns_table()
+
+
 def num(x):
     """Decimal/None -> JSON-friendly int or float."""
     if x is None:
@@ -957,6 +1002,180 @@ def set_premium_warehouse():
         product = fetch_product(cur, pid)
         conn.commit()
         return jsonify(status="ok", product=product)
+    except Exception as e:
+        conn.rollback()
+        return jsonify(error="server_error", detail=str(e)), 500
+    finally:
+        conn.close()
+
+
+# ---- Campaigns ----------------------------------------------------------
+CAMPAIGN_CHANNELS = {"lazada", "tiktok", "shopee", "other"}
+
+
+def fetch_campaign(cur, cid):
+    """Return one campaign in the shape the /campaign frontend expects."""
+    cur.execute(f"""
+        SELECT id, name, channel, start_date, end_date, color
+        FROM {config.DB_SCHEMA}.campaigns WHERE id = %s
+    """, (cid,))
+    row = cur.fetchone()
+    if not row:
+        return None
+    cur.execute(f"""
+        SELECT code, name, qty FROM {config.DB_SCHEMA}.campaign_forecasts
+        WHERE campaign_id = %s ORDER BY id
+    """, (cid,))
+    fcs = [{"code": r["code"], "name": r["name"] or "", "qty": num(r["qty"])}
+           for r in cur.fetchall()]
+    return {
+        "id": row["id"], "name": row["name"], "channel": row["channel"],
+        "start": row["start_date"].isoformat(), "end": row["end_date"].isoformat(),
+        "color": row["color"], "forecasts": fcs,
+    }
+
+
+def validate_campaign(data):
+    """Normalize+validate a campaign payload in place. Return error str or None."""
+    name = str(data.get("name") or "").strip()
+    if not name:
+        return "กรุณากรอกชื่อแคมเปญ"
+    channel = str(data.get("channel") or "").strip().lower()
+    if channel not in CAMPAIGN_CHANNELS:
+        return "ช่องทางไม่ถูกต้อง"
+    start = str(data.get("start") or "").strip()
+    end = str(data.get("end") or start).strip() or start
+    if not re.match(r"^\d{4}-\d{2}-\d{2}$", start):
+        return "วันเริ่มไม่ถูกต้อง"
+    if not re.match(r"^\d{4}-\d{2}-\d{2}$", end):
+        return "วันสิ้นสุดไม่ถูกต้อง"
+    if end < start:
+        return "วันสิ้นสุดต้องไม่ก่อนวันเริ่ม"
+    data["name"] = name
+    data["channel"] = channel
+    data["start"] = start
+    data["end"] = end
+    data["color"] = (str(data.get("color")).strip() or None) if data.get("color") else None
+    return None
+
+
+def save_campaign_forecasts(cur, cid, forecasts):
+    """Replace all forecast rows for a campaign with the given list."""
+    cur.execute(
+        f"DELETE FROM {config.DB_SCHEMA}.campaign_forecasts WHERE campaign_id = %s",
+        (cid,),
+    )
+    for f in forecasts or []:
+        code = str(f.get("code") or "").strip()
+        if not code:
+            continue
+        try:
+            qty = float(f.get("qty") or 0)
+        except (TypeError, ValueError):
+            qty = 0
+        cur.execute(f"""
+            INSERT INTO {config.DB_SCHEMA}.campaign_forecasts (campaign_id, code, name, qty)
+            VALUES (%s, %s, %s, %s)
+        """, (cid, code, str(f.get("name") or ""), qty))
+
+
+@app.route("/api/campaigns")
+def list_campaigns():
+    """All campaigns (public, read-only) in the frontend shape."""
+    conn = get_conn()
+    try:
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute(
+            f"SELECT id FROM {config.DB_SCHEMA}.campaigns ORDER BY start_date, name"
+        )
+        ids = [r["id"] for r in cur.fetchall()]
+        camps = [fetch_campaign(cur, cid) for cid in ids]
+        return jsonify(campaigns=camps)
+    except Exception as e:
+        return jsonify(error="server_error", detail=str(e)), 500
+    finally:
+        conn.close()
+
+
+@app.route("/api/campaigns", methods=["POST"])
+@require_admin
+def create_campaign():
+    data = request.get_json(silent=True) or {}
+    err = validate_campaign(data)
+    if err:
+        return jsonify(error="bad_request", detail=err), 400
+    cid = "c" + uuid.uuid4().hex[:12]
+    conn = get_conn()
+    try:
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute(f"""
+            INSERT INTO {config.DB_SCHEMA}.campaigns
+                (id, name, channel, start_date, end_date, color)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """, (cid, data["name"], data["channel"], data["start"],
+              data["end"], data["color"]))
+        save_campaign_forecasts(cur, cid, data.get("forecasts"))
+        camp = fetch_campaign(cur, cid)
+        conn.commit()
+        return jsonify(status="ok", campaign=camp)
+    except Exception as e:
+        conn.rollback()
+        return jsonify(error="server_error", detail=str(e)), 500
+    finally:
+        conn.close()
+
+
+@app.route("/api/campaigns", methods=["PUT"])
+@require_admin
+def update_campaign():
+    data = request.get_json(silent=True) or {}
+    cid = data.get("id")
+    if not cid:
+        return jsonify(error="bad_request", detail="ต้องระบุ id ของแคมเปญ"), 400
+    err = validate_campaign(data)
+    if err:
+        return jsonify(error="bad_request", detail=err), 400
+    conn = get_conn()
+    try:
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute(
+            f"SELECT 1 FROM {config.DB_SCHEMA}.campaigns WHERE id = %s", (cid,)
+        )
+        if not cur.fetchone():
+            return jsonify(error="not_found", detail="ไม่พบแคมเปญ"), 404
+        cur.execute(f"""
+            UPDATE {config.DB_SCHEMA}.campaigns SET
+                name = %s, channel = %s, start_date = %s, end_date = %s,
+                color = %s, updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
+        """, (data["name"], data["channel"], data["start"], data["end"],
+              data["color"], cid))
+        save_campaign_forecasts(cur, cid, data.get("forecasts"))
+        camp = fetch_campaign(cur, cid)
+        conn.commit()
+        return jsonify(status="ok", campaign=camp)
+    except Exception as e:
+        conn.rollback()
+        return jsonify(error="server_error", detail=str(e)), 500
+    finally:
+        conn.close()
+
+
+@app.route("/api/campaigns", methods=["DELETE"])
+@require_admin
+def delete_campaign():
+    data = request.get_json(silent=True) or {}
+    cid = data.get("id") or request.args.get("id")
+    if not cid:
+        return jsonify(error="bad_request", detail="ต้องระบุ id ของแคมเปญ"), 400
+    conn = get_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            f"DELETE FROM {config.DB_SCHEMA}.campaigns WHERE id = %s", (cid,)
+        )
+        conn.commit()
+        return jsonify(status="ok")
     except Exception as e:
         conn.rollback()
         return jsonify(error="server_error", detail=str(e)), 500

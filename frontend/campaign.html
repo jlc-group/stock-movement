@@ -331,8 +331,8 @@ body.admin-on .cmp-day:hover .cmp-day-add { display: inline-flex; }
 <script>
 // ============================================================
 //  Standalone Campaign page — talks to the same backend (/api)
-//  Data lives ONLY in localStorage (no pgSQL writes). Stock compare
-//  reads the current closing balance from /api/products (read-only).
+//  Campaigns are stored in PostgreSQL via /api/campaigns (CRUD). Stock
+//  compare reads the current closing balance from /api/products (read-only).
 // ============================================================
 let DB = { products: [] };
 const fmt = n => (n === 0 || n === null || n === undefined) ? '-' : Number(n).toLocaleString('en-US', { maximumFractionDigits: 2 });
@@ -415,8 +415,7 @@ async function adminLogout() {
   toast('ออกจากโหมด Admin แล้ว');
 }
 
-// ---------- Campaign data (localStorage only) ----------
-const CMP_KEY = 'stock_campaigns_v1';
+// ---------- Campaign data (server-backed via /api/campaigns) ----------
 const CMP_CHANNELS = [
   { id: 'lazada', name: 'Lazada', color: '#0f146e', bg: '#e6e9fb' },
   { id: 'tiktok', name: 'TikTok', color: '#0c5c5c', bg: '#dbf6f6' },
@@ -433,22 +432,27 @@ let cmpView = 'month';
 let cmpFilter = null;          // channel id, or null = all
 let cmpMonths = 1;
 let cmpAnchor = new Date();
-let campaigns = cmpLoad();
-// one-time cleanup: ลบข้อมูล demo ที่เคย seed ไว้ (id ขึ้นต้น 'demo'); ปลอดภัยกับข้อมูลจริง (id จริงขึ้นต้น 'c'). ลบบล็อกนี้ได้ภายหลัง.
-(function () { try { const n = campaigns.length; campaigns = campaigns.filter(c => !String(c.id || '').startsWith('demo')); localStorage.removeItem('stock_campaigns_seeded_demo_v1'); if (campaigns.length !== n) cmpSave(); } catch (e) {} })();
+let campaigns = [];
 let cmpEditId = null;
 let cmpDetailId = null;
 let cmpForecastDraft = [];
 let cmpColorDraft = null;
 let cmpColorTouched = false;
 
-function cmpLoad() {
-  let arr; try { arr = JSON.parse(localStorage.getItem(CMP_KEY)) || []; } catch (e) { arr = []; }
-  // normalize legacy single-date campaigns → start/end range
-  return arr.map(c => { const start = c.start || c.date; const end = c.end || c.start || c.date; const o = { ...c, start, end }; delete o.date; return o; });
+function cmpAuthHeaders() {
+  const h = { 'Content-Type': 'application/json' };
+  if (adminToken) h['Authorization'] = 'Bearer ' + adminToken;
+  return h;
 }
-function cmpSave() { localStorage.setItem(CMP_KEY, JSON.stringify(campaigns)); }
-function cmpUid() { return 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+async function loadCampaigns() {
+  try {
+    const res = await fetch('/api/campaigns');
+    const data = await res.json();
+    campaigns = (data.campaigns || []).map(c => ({
+      ...c, start: c.start, end: c.end || c.start, forecasts: c.forecasts || []
+    }));
+  } catch (e) { campaigns = []; toast('โหลดแคมเปญไม่สำเร็จ', 'err'); }
+}
 
 function cmpChannel(id) { return CMP_CHANNELS.find(c => c.id === id) || CMP_CHANNELS[3]; }
 function cmpN(n) { return Number(n || 0).toLocaleString('en-US'); }
@@ -710,10 +714,10 @@ function openCampaignDetail(id) {
   openAModal('campaignDetailModal');
 }
 function cmpDetEdit() { const id = cmpDetailId; if (!id) return; closeAModal('campaignDetailModal'); openCampaignEdit(id); }
-function cmpDetDelete() {
+async function cmpDetDelete() {
   if (!cmpDetailId || !adminToken) return;
   if (!confirm('ลบแคมเปญนี้?')) return;
-  campaigns = campaigns.filter(c => c.id !== cmpDetailId); cmpSave();
+  if (!await deleteCampaign(cmpDetailId)) return;
   closeAModal('campaignDetailModal'); renderCampaign(); toast('ลบแคมเปญแล้ว', 'ok');
 }
 
@@ -786,7 +790,7 @@ function renderCmpForecastDraft() {
     </div>`;
   }).join('');
 }
-function saveCampaign() {
+async function saveCampaign() {
   if (!adminToken) { toast('ต้องเข้าโหมด Admin ก่อน', 'err'); return; }
   const name = document.getElementById('cmpName').value.trim();
   const channel = document.getElementById('cmpChannel').value;
@@ -797,21 +801,35 @@ function saveCampaign() {
   if (end < start) { toast('วันสิ้นสุดต้องไม่ก่อนวันเริ่ม', 'err'); return; }
   const color = cmpColorDraft || CMP_CH_DEFAULT[channel] || CMP_PALETTE[0];
   const forecasts = cmpForecastDraft.filter(f => f.code).map(f => ({ code: f.code, name: f.name || '', qty: Number(f.qty) || 0 }));
-  if (cmpEditId) {
-    const c = campaigns.find(x => x.id === cmpEditId);
-    if (c) { c.name = name; c.channel = channel; c.start = start; c.end = end; c.color = color; c.forecasts = forecasts; delete c.date; }
-  } else {
-    campaigns.push({ id: cmpUid(), name, channel, start, end, color, forecasts });
-  }
-  cmpSave();
+  const payload = { name, channel, start, end, color, forecasts };
+  try {
+    let res;
+    if (cmpEditId) {
+      payload.id = cmpEditId;
+      res = await fetch('/api/campaigns', { method: 'PUT', headers: cmpAuthHeaders(), body: JSON.stringify(payload) });
+    } else {
+      res = await fetch('/api/campaigns', { method: 'POST', headers: cmpAuthHeaders(), body: JSON.stringify(payload) });
+    }
+    if (!res.ok) { const e = await res.json().catch(() => ({})); toast(e.detail || 'บันทึกแคมเปญไม่สำเร็จ', 'err'); return; }
+  } catch (e) { toast('บันทึกแคมเปญไม่สำเร็จ', 'err'); return; }
+  await loadCampaigns();
   closeAModal('campaignEditModal');
   renderCampaign();
   toast('บันทึกแคมเปญแล้ว', 'ok');
 }
-function cmpEditDelete() {
+// shared DELETE helper → returns true on success; reloads campaigns from server
+async function deleteCampaign(id) {
+  try {
+    const res = await fetch('/api/campaigns', { method: 'DELETE', headers: cmpAuthHeaders(), body: JSON.stringify({ id }) });
+    if (!res.ok) { const e = await res.json().catch(() => ({})); toast(e.detail || 'ลบแคมเปญไม่สำเร็จ', 'err'); return false; }
+  } catch (e) { toast('ลบแคมเปญไม่สำเร็จ', 'err'); return false; }
+  await loadCampaigns();
+  return true;
+}
+async function cmpEditDelete() {
   if (!cmpEditId || !adminToken) return;
   if (!confirm('ลบแคมเปญนี้?')) return;
-  campaigns = campaigns.filter(c => c.id !== cmpEditId); cmpSave();
+  if (!await deleteCampaign(cmpEditId)) return;
   closeAModal('campaignEditModal'); renderCampaign(); toast('ลบแคมเปญแล้ว', 'ok');
 }
 
@@ -827,7 +845,7 @@ async function loadProducts() {
   renderCampaign();
 }
 updateAdminUI();
-renderCampaign();
+(async () => { await loadCampaigns(); renderCampaign(); })();
 loadProducts();
 </script>
 </body>
