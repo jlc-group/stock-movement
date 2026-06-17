@@ -1189,10 +1189,13 @@ function renderOnlineConfirmed(d) {
   const cc = Number((d || {}).cancelled_count || 0);
   const cpc = Number((d || {}).cancelled_pieces || 0);
   const net = Number((d || {}).net_order_count != null ? d.net_order_count : oc);
+  const cbp = (d || {}).cancelled_by_platform || {};
+  const cbpStr = ['shopee', 'tiktok', 'lazada'].filter(k => cbp[k])
+    .map(k => `${labels[k]} ${Number(cbp[k]).toLocaleString()}`).join(', ');
   let cancelLine = '';
   if (d.cancelled_available) {
     cancelLine = cc > 0
-      ? `<div style="font-size:12.5px;color:#b45309;margin-top:4px">↩️ ยกเลิกระหว่างวัน: <b>${cc.toLocaleString()}</b> ออเดอร์${cpc ? ` (−${cpc.toLocaleString()} ชิ้น)` : ''} &nbsp;·&nbsp; ยอดสุทธิ (หักยกเลิก): <b style="color:#15803d">${net.toLocaleString()}</b> ออเดอร์</div>`
+      ? `<div style="font-size:12.5px;color:#b45309;margin-top:4px">↩️ ยกเลิกระหว่างวัน: <b>${cc.toLocaleString()}</b> ออเดอร์${cbpStr ? ` (${cbpStr})` : ''}${cpc ? ` · −${cpc.toLocaleString()} ชิ้น` : ''} &nbsp;·&nbsp; ยอดสุทธิ (หักยกเลิก): <b style="color:#15803d">${net.toLocaleString()}</b> ออเดอร์</div>`
       : `<div style="font-size:12px;color:#16a34a;margin-top:4px">✓ ไม่มีออเดอร์ในยอดสะสมนี้ถูกยกเลิก</div>`;
   } else {
     cancelLine = `<div style="font-size:12px;color:#94a3b8;margin-top:4px">— เช็กออเดอร์ยกเลิกไม่ได้ในรอบนี้</div>`;
