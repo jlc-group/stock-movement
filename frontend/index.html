@@ -1381,6 +1381,7 @@ async function loadOnlineBatches() {
             <div style="font-size:11.5px;color:#64748b">= จำนวนใบที่ต้องแพ็ค/พิมพ์</div>
           </div>
         </div>` +
+        '<div style="font-size:11.5px;color:#94a3b8;margin-top:8px;line-height:1.6">ℹ️ Lazada: รอบที่ freeze ก่อนเพิ่มฟีเจอร์นี้นับเป็น “ยอดรวม” (ไม่มีรายออเดอร์) เลขออเดอร์จึงอาจต่างจาก “ยอดยืนยันสะสม” เล็กน้อย · รอบที่ freeze ใหม่จะนับ Lazada รายออเดอร์</div>' +
         '<div style="font-size:12.5px;color:#64748b;margin-top:10px">รอบที่บันทึกไว้:</div>' +
         '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">' +
         batches.sort((a, b) => (a.round_no || 0) - (b.round_no || 0)).map(b => {
