@@ -318,7 +318,10 @@ def accumulate_confirmed(date_iso):
         for o in order_list or []:
             plat = str(o.get("platform") or "")
             oid = str(o.get("order_id") or "")
-            if not oid or plat == "lazada":  # lazada ไม่มี order_id รายใบ → ใช้ high-water แทน
+            # ข้าม id สังเคราะห์ Lazada (LAZADA-STOCK-COUNT-SNAPSHOT / LAZADA-DELTA-* จาก
+            # snapshot หรือรอบเก่าที่ backfill) — นับเฉพาะ order จริง. Lazada order จริง
+            # (เลขล้วน) จะถูกนับ; pieces ยังมาจาก stock_snapshot (high-water) เหมือนเดิม.
+            if not oid or oid.startswith("LAZADA-"):
                 continue
             key = plat + "|" + oid
             if key not in orders:
@@ -357,7 +360,7 @@ def accumulate_confirmed(date_iso):
     try:
         cx = script_ecom_json("/api/stock/cancelled?date=" + urllib.parse.quote(date_iso), timeout=60)
         cancelled_keys = set()
-        for plat in ("shopee", "tiktok"):
+        for plat in ("shopee", "tiktok", "lazada"):
             for oid in cx.get(plat) or []:
                 cancelled_keys.add(plat + "|" + str(oid))
         in_union = [k for k in orders if k in cancelled_keys]
