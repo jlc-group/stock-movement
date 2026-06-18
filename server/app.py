@@ -568,11 +568,13 @@ def recompute_product(cur, product_id):
     """, (total_in, total_out, running, product_id))
 
 
-def apply_premium_warehouse_delta(cur, product_id, qty_in, qty_out, in_dest):
-    """For premium (warehouse-backed) products: qty_out is deducted from ซอย8,
-    qty_in is added to the chosen warehouse (`soi8` or `lamlukka`), and the
-    product's closing_balance is set to ลำลูกกา + ซอย8. This is the source of
-    truth for premium stock, overriding the movement-derived closing."""
+def apply_premium_warehouse_delta(cur, product_id, qty_in, qty_out, in_dest, brand=""):
+    """For warehouse-backed products: qty_out is deducted from ซอย8,
+    qty_in is added to the chosen warehouse (`soi8` or `lamlukka`).
+    closing_balance formula is brand-aware:
+      - Beauterry: ลำลูกกา − ซอย8  (soi8 = consumed stock)
+      - others:    ลำลูกกา + ซอย8
+    Overrides the movement-derived closing set by recompute_product."""
     cur.execute(f"""
         SELECT lamlukka, soi8 FROM {config.DB_SCHEMA}.premium_warehouse
         WHERE product_id = %s
@@ -587,6 +589,8 @@ def apply_premium_warehouse_delta(cur, product_id, qty_in, qty_out, in_dest):
     else:
         soi += qty_in
 
+    closing = lam - soi if brand == "Beauterry" else lam + soi
+
     cur.execute(f"""
         INSERT INTO {config.DB_SCHEMA}.premium_warehouse (product_id, lamlukka, soi8, updated_at)
         VALUES (%s, %s, %s, CURRENT_TIMESTAMP)
@@ -598,7 +602,7 @@ def apply_premium_warehouse_delta(cur, product_id, qty_in, qty_out, in_dest):
         UPDATE {config.DB_SCHEMA}.products
         SET closing_balance = %s, updated_at = CURRENT_TIMESTAMP
         WHERE id = %s
-    """, (lam + soi, product_id))
+    """, (closing, product_id))
 
 
 # ---- Read endpoints -----------------------------------------------------
@@ -1036,9 +1040,12 @@ def set_premium_warehouse():
     conn = get_conn()
     try:
         cur = conn.cursor()
-        cur.execute(f"SELECT 1 FROM {config.DB_SCHEMA}.products WHERE id = %s", (pid,))
-        if not cur.fetchone():
+        cur.execute(f"SELECT brand FROM {config.DB_SCHEMA}.products WHERE id = %s", (pid,))
+        row = cur.fetchone()
+        if not row:
             return jsonify(error="not_found", detail="ไม่พบสินค้า"), 404
+        brand = row[0] or ""
+        closing = lam - soi if brand == "Beauterry" else lam + soi
         cur.execute(f"""
             INSERT INTO {config.DB_SCHEMA}.premium_warehouse
                 (product_id, lamlukka, soi8, updated_at)
@@ -1052,7 +1059,7 @@ def set_premium_warehouse():
             UPDATE {config.DB_SCHEMA}.products
             SET closing_balance = %s, updated_at = CURRENT_TIMESTAMP
             WHERE id = %s
-        """, (lam + soi, pid))
+        """, (closing, pid))
         product = fetch_product(cur, pid)
         conn.commit()
         return jsonify(status="ok", product=product)
@@ -1388,7 +1395,7 @@ def add_movement():
         # qty_in lands in the chosen warehouse, and closing = ลำลูกกา + ซอย8
         # (overrides the movement-derived closing set by recompute_product).
         if is_premium:
-            apply_premium_warehouse_delta(cur, product_id, qty_in, qty_out, in_dest)
+            apply_premium_warehouse_delta(cur, product_id, qty_in, qty_out, in_dest, brand)
         product = fetch_product(cur, product_id)
         conn.commit()
         return jsonify(status="ok", product=product)
@@ -1453,11 +1460,14 @@ def edit_movement():
 
         recompute_product(cur, product_id)
         # For warehouse-backed products recompute_product overwrites closing with
-        # the movement-derived value; restore closing = ลำลูกกา + ซอย8.
+        # the movement-derived value; restore the warehouse-backed closing.
+        # Formula is brand-aware: Beauterry = lam - soi; others = lam + soi.
         if brand in ("สินค้าพรีเมี่ยม", "Beauterry"):
             cur.execute(f"""
                 UPDATE {config.DB_SCHEMA}.products p
-                SET closing_balance = pw.lamlukka + pw.soi8,
+                SET closing_balance = CASE WHEN p.brand = 'Beauterry'
+                                          THEN pw.lamlukka - pw.soi8
+                                          ELSE pw.lamlukka + pw.soi8 END,
                     updated_at = CURRENT_TIMESTAMP
                 FROM {config.DB_SCHEMA}.premium_warehouse pw
                 WHERE p.id = %s AND pw.product_id = p.id

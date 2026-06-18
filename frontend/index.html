@@ -440,6 +440,36 @@ body.admin-on .admin-bar { display: flex; }
 #wlTable td.num { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
 #wlTable .wl-del { background: none; border: 1px solid #fca5a5; color: #dc2626; border-radius: 6px; padding: 3px 10px; font-size: 12px; cursor: pointer; }
 #wlTable .wl-del:hover { background: #fef2f2; }
+.wl-group-row td { padding: 13px 14px; }
+.wl-group-row:hover td { background: #f0f9ff; }
+.wl-expand-btn { background: none; border: 1px solid #cbd5e1; color: #475569; border-radius: 6px; padding: 4px 12px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; transition: background .15s, border-color .15s; }
+.wl-expand-btn:hover { background: #f1f5f9; border-color: #94a3b8; }
+.wl-expand-btn.open { background: #eff6ff; border-color: #2563eb; color: #2563eb; }
+.wl-detail-row > td { padding: 0 !important; border-bottom: 2px solid #e2e8f0; }
+.wl-detail-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.wl-detail-table th { background: #f1f5f9; color: #475569; font-size: 11px; font-weight: 700; padding: 6px 14px 6px 32px; text-align: left; text-transform: none; border-bottom: 1px solid #e2e8f0; }
+.wl-detail-table th.num { text-align: right; }
+.wl-detail-table td { padding: 8px 14px 8px 32px; border-bottom: 1px solid #f1f5f9; color: #374151; }
+.wl-detail-table td.num { text-align: right; }
+.wl-detail-table tr:last-child td { border-bottom: none; }
+#wlTable .wl-yield-cell { font-weight: 700; color: #2563eb; }
+.wl-chip { display:inline-flex; align-items:center; gap:5px; padding:4px 12px; border-radius:20px; font-size:12px; font-weight:600; border:1px solid #cbd5e1; color:#475569; cursor:pointer; background:none; transition:all .15s; white-space:nowrap; }
+.wl-chip:hover { border-color:#94a3b8; background:#f8fafc; }
+.wl-chip.active { background:#2563eb; color:#fff; border-color:#2563eb; }
+.wl-chip .wl-chip-cnt { font-size:11px; opacity:.75; }
+/* Weight Lot toolbar */
+.wl-toolbar { padding: 0; }
+.wl-toolbar-top { display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap; padding:13px 16px; }
+.wl-fill-group { display:flex; align-items:center; gap:6px; }
+.wl-fill-label { font-size:13px; color:#374151; font-weight:600; white-space:nowrap; }
+.wl-fill-group input { width:66px; padding:5px 8px; border:1px solid #cbd5e1; border-radius:8px; font:inherit; font-size:13px; text-align:right; }
+.wl-summary-text { font-size:13px; color:#64748b; }
+.wl-toolbar-sep { height:1px; background:#f1f5f9; }
+.wl-toolbar-filters { display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:9px 16px; background:#f8fafc; border-radius:0 0 12px 12px; }
+.wl-filter-label { font-size:11px; font-weight:700; color:#94a3b8; white-space:nowrap; text-transform:uppercase; letter-spacing:.5px; }
+.wl-sel { padding:5px 10px; border:1px solid #e2e8f0; border-radius:8px; font:inherit; font-size:13px; background:#fff; cursor:pointer; }
+.wl-search-input { padding:5px 10px; border:1px solid #e2e8f0; border-radius:8px; font:inherit; font-size:13px; min-width:140px; max-width:210px; background:#fff; }
+.wl-sel:focus, .wl-search-input:focus { outline:none; border-color:#2563eb; box-shadow:0 0 0 2px #dbeafe; }
 
 </style>
 </head>
@@ -558,7 +588,7 @@ body.admin-on .admin-bar { display: flex; }
 <div class="app page" id="page-beauterry">
   <div class="dash-head">
     <h1>💄 Beauterry — สต๊อกคลังลำลูกกา / ซอย8</h1>
-    <div class="sub">สินค้าแบรนด์ Beauterry · <b>คงเหลือ = ลำลูกกา + ซอย8</b> (ยอดเดียวกับหน้ารายการสินค้า) · แสดงอย่างเดียว — เพิ่ม/ลดสต๊อกผ่านหน้า <b>รายการสินค้า → บันทึกรับ-จ่ายรายวัน</b> (เหมือนสินค้าพรีเมี่ยม) · จ่ายออกหักจากคลังซอย8 เสมอ</div>
+    <div class="sub">สินค้าแบรนด์ Beauterry · <b>คงเหลือสุทธิ = ลำลูกกา − ซอย8</b> (ยอดเดียวกับหน้ารายการสินค้า) · แสดงอย่างเดียว — เพิ่ม/ลดสต๊อกผ่านหน้า <b>รายการสินค้า → บันทึกรับ-จ่ายรายวัน</b> (เหมือนสินค้าพรีเมี่ยม) · จ่ายออกหักจากคลังซอย8 เสมอ</div>
   </div>
   <div class="card" style="padding:16px">
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
@@ -588,23 +618,44 @@ body.admin-on .admin-bar { display: flex; }
     <h1>⚖️ Weight Lot</h1>
     <div class="sub">บันทึกน้ำหนักต่อ Lot · เพิ่ม/ลบรายการได้เฉพาะโหมด Admin · จัดเก็บใน pgSQL</div>
   </div>
-  <div class="card" style="padding:14px 16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
-    <div class="wl-unit-toggle">
-      <button id="wlBtnKg" class="wl-unit-btn active" onclick="setWlUnit('kg')">kg</button>
-      <button id="wlBtnG" class="wl-unit-btn" onclick="setWlUnit('g')">g</button>
+  <div class="card wl-toolbar" style="margin-top:8px">
+    <div class="wl-toolbar-top">
+      <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+        <div class="wl-unit-toggle">
+          <button id="wlBtnKg" class="wl-unit-btn active" onclick="setWlUnit('kg')">kg</button>
+          <button id="wlBtnG" class="wl-unit-btn" onclick="setWlUnit('g')">g</button>
+        </div>
+        <div class="wl-fill-group">
+          <span class="wl-fill-label">ปริมาณต่อชิ้น</span>
+          <input type="number" id="wlFillInput" value="30" min="0.1" step="any" inputmode="decimal"
+            onfocus="this.select()" oninput="setWlFill(this.value)">
+          <span class="wl-fill-label">g</span>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <span id="wlSummary" class="wl-summary-text"></span>
+        <button id="wlAddBtn" onclick="openWlAdd()" style="display:none" class="btn btn-success">+ เพิ่มรายการ</button>
+      </div>
     </div>
-    <span id="wlSummary" style="font-size:13px;color:#64748b;flex:1"></span>
-    <button id="wlAddBtn" onclick="openWlAdd()" style="display:none" class="btn btn-success">+ เพิ่มรายการ</button>
+    <div class="wl-toolbar-sep"></div>
+    <div class="wl-toolbar-filters">
+      <span class="wl-filter-label">สินค้า</span>
+      <select id="wlProductSel" onchange="setWlProduct(this.value)" class="wl-sel"></select>
+      <input type="text" id="wlLotSearch" placeholder="🔍 ค้นหา Lot…" autocomplete="off"
+        oninput="setWlLotSearch(this.value)" class="wl-search-input">
+      <span class="wl-filter-label">ปีผลิต</span>
+      <select id="wlYearSel" onchange="setWlYear(this.value)" class="wl-sel"></select>
+    </div>
   </div>
-  <div class="card" style="padding:0;margin-top:14px;overflow:auto">
+  <div class="card" style="padding:0;margin-top:8px;overflow:auto">
     <table id="wlTable">
       <thead><tr>
         <th>#</th>
         <th>Product</th>
-        <th>Lot</th>
-        <th class="num" id="wlWeightHead">น้ำหนัก (kg)</th>
-        <th>วันผลิต</th>
-        <th id="wlActHead" style="display:none;width:60px"></th>
+        <th>จำนวน Lot</th>
+        <th class="num" id="wlWeightHead">น้ำหนักรวม (kg)</th>
+        <th class="num" id="wlYieldHead">จำนวนที่ได้ (÷ 30g)</th>
+        <th></th>
       </tr></thead>
       <tbody id="wlBody"><tr><td colspan="6" style="padding:24px;text-align:center;color:#94a3b8">กำลังโหลด…</td></tr></tbody>
     </table>
@@ -1254,7 +1305,7 @@ function renderPremium() {
 // ============================================================
 //  หน้า "Beauterry": สต๊อกคลังลำลูกกา / ซอย8 (แสดงอย่างเดียว)
 //  เก็บใน pgSQL (ตาราง premium_warehouse, ใช้ร่วมกับพรีเมี่ยม — คนละ product_id)
-//  คงเหลือ = ลำลูกกา + ซอย8 (บันทึกกลับลง products.closing_balance)
+//  คงเหลือสุทธิ = ลำลูกกา − ซอย8 (บันทึกกลับลง products.closing_balance)
 //  เพิ่ม/ลดสต๊อกผ่านหน้า "รายการสินค้า" → บันทึกรับ-จ่ายรายวัน (เหมือนพรีเมี่ยม)
 //  จ่ายออกหักจากคลังซอย8 เสมอ; รับเข้าเลือกคลังได้ (ลำลูกกา/ซอย8)
 // ============================================================
@@ -1265,7 +1316,7 @@ function btRenderSummary() {
   let tl = 0, ts = 0;
   list.forEach(p => { tl += Number(p.lamlukka) || 0; ts += Number(p.soi8) || 0; });
   const el = document.getElementById('btSummary');
-  if (el) el.innerHTML = `${list.length} รายการ · รวมลำลูกกา <b>${fmt(tl)}</b> · รวมซอย8 <b>${fmt(ts)}</b> · รวมคงเหลือ <b>${fmt(tl + ts)}</b>`;
+  if (el) el.innerHTML = `${list.length} รายการ · รวมลำลูกกา <b>${fmt(tl)}</b> · รวมซอย8 <b>${fmt(ts)}</b> · รวมคงเหลือสุทธิ <b>${fmt(tl - ts)}</b>`;
 }
 
 function renderBeauterry() {
@@ -3693,9 +3744,13 @@ async function submitEditMovement() {
 //  หน้า "Weight Lot": บันทึกน้ำหนักต่อ Lot · เก็บใน pgSQL (ตาราง weight_lots)
 //  หน่วยสลับได้ kg ↔ g แบบ dynamic · เพิ่ม/ลบผ่าน Admin
 // ============================================================
-let WL = [];       // in-memory weight lot rows
-let wlUnit = 'kg'; // current display unit
+let WL = [];               // in-memory weight lot rows
+let wlUnit = 'kg';         // current display unit
+let wlFillG = 30;          // fill weight per unit in grams
 let wlLoaded = false;
+let wlFilterProduct = null; // null = ทั้งหมด
+let wlSearchLot = '';       // lot text search
+let wlFilterYear = null;    // null = ทั้งหมด, 'none' = ไม่มีวันที่, or '67'/'66'…
 
 async function loadWeightLots() {
   try {
@@ -3711,8 +3766,79 @@ function setWlUnit(unit) {
   document.getElementById('wlBtnKg')?.classList.toggle('active', unit === 'kg');
   document.getElementById('wlBtnG')?.classList.toggle('active', unit === 'g');
   const h = document.getElementById('wlWeightHead');
-  if (h) h.textContent = unit === 'kg' ? 'น้ำหนัก (kg)' : 'น้ำหนัก (g)';
+  if (h) h.textContent = unit === 'kg' ? 'น้ำหนักรวม (kg)' : 'น้ำหนักรวม (g)';
   renderWeightLot();
+}
+
+function setWlFill(val) {
+  const v = parseFloat(val);
+  wlFillG = (!isNaN(v) && v > 0) ? v : 0;
+  const h = document.getElementById('wlYieldHead');
+  if (h) h.textContent = wlFillG > 0 ? `จำนวนที่ได้ (÷ ${wlFillG}g)` : 'จำนวนที่ได้';
+  renderWeightLot();
+}
+
+function toggleWlDetail(detailId) {
+  const row = document.getElementById(detailId);
+  if (!row) return;
+  const shown = row.style.display !== 'none';
+  row.style.display = shown ? 'none' : '';
+  const btn = row.previousElementSibling?.querySelector('.wl-expand-btn');
+  if (btn) { btn.textContent = shown ? '▶ รายละเอียด' : '▼ ซ่อน'; btn.classList.toggle('open', !shown); }
+}
+
+// ---- Filter helpers ----
+function setWlProduct(val) {
+  wlFilterProduct = val || null;
+  renderWeightLot();
+}
+function setWlLotSearch(val) {
+  wlSearchLot = val.trim().toLowerCase();
+  renderWeightLot();
+}
+function setWlYear(val) {
+  wlFilterYear = val || null;
+  renderWeightLot();
+}
+
+function filteredWlData() {
+  let d = WL;
+  if (wlFilterProduct) d = d.filter(r => r.product === wlFilterProduct);
+  if (wlSearchLot) d = d.filter(r => (r.lot || '').toLowerCase().includes(wlSearchLot));
+  if (wlFilterYear === 'none') d = d.filter(r => !r.produced_date);
+  else if (wlFilterYear) d = d.filter(r => {
+    if (!r.produced_date) return false;
+    const be = String(r.produced_date.split('-')[0] - 0 + 543).slice(-2);
+    return be === wlFilterYear;
+  });
+  return d;
+}
+
+function renderWlFilters() {
+  // Product dropdown
+  const allProds = [...new Set(WL.map(r => r.product))].sort();
+  const pSel = document.getElementById('wlProductSel');
+  if (pSel) {
+    pSel.innerHTML = `<option value="">ทั้งหมด (${WL.length})</option>` +
+      allProds.map(p => {
+        const cnt = WL.filter(r => r.product === p).length;
+        return `<option value="${p}">${p} (${cnt})</option>`;
+      }).join('');
+    pSel.value = wlFilterProduct || '';
+  }
+  // Year dropdown from BE years + 'none'
+  const years = [...new Set(WL.filter(r => r.produced_date).map(r => String(r.produced_date.split('-')[0] - 0 + 543).slice(-2)))].sort().reverse();
+  const hasNone = WL.some(r => !r.produced_date);
+  const ySel = document.getElementById('wlYearSel');
+  if (ySel) {
+    ySel.innerHTML = `<option value="">ทั้งหมด</option>` +
+      years.map(y => {
+        const cnt = WL.filter(r => r.produced_date && String(r.produced_date.split('-')[0]-0+543).slice(-2)===y).length;
+        return `<option value="${y}">ปี ${y} (${cnt})</option>`;
+      }).join('') +
+      (hasNone ? `<option value="none">ไม่มีวันที่</option>` : '');
+    ySel.value = wlFilterYear || '';
+  }
 }
 
 function fmtThaiDateWl(iso) {
@@ -3735,35 +3861,87 @@ function renderWeightLot() {
   const body = document.getElementById('wlBody');
   if (!body) return;
   const admin = !!adminToken;
-  const actHead = document.getElementById('wlActHead');
-  if (actHead) actHead.style.display = admin ? '' : 'none';
   const addBtn = document.getElementById('wlAddBtn');
   if (addBtn) addBtn.style.display = admin ? '' : 'none';
 
-  if (!WL.length) {
-    body.innerHTML = `<tr><td colspan="${admin ? 6 : 5}" style="padding:24px;text-align:center;color:#94a3b8">ยังไม่มีข้อมูล</td></tr>`;
-  } else {
-    body.innerHTML = WL.map((r, i) => `<tr>
-      <td>${i + 1}</td>
-      <td><b>${escapeHtml(r.product)}</b></td>
-      <td>${r.lot ? escapeHtml(r.lot) : '<span style="color:#94a3b8">—</span>'}</td>
-      <td class="num">${wlFmtWeight(r.weight_kg)}</td>
-      <td>${fmtThaiDateWl(r.produced_date)}</td>
-      ${admin ? `<td><button class="wl-del" onclick="deleteWlRow(${r.id})">ลบ</button></td>` : ''}
-    </tr>`).join('');
+  const filtered = filteredWlData();
+  const searching = !!(wlSearchLot || wlFilterYear);
+
+  if (!filtered.length) {
+    body.innerHTML = '<tr><td colspan="6" style="padding:24px;text-align:center;color:#94a3b8">ไม่พบข้อมูลที่ตรงกับเงื่อนไข</td></tr>';
+    const el = document.getElementById('wlSummary');
+    if (el) el.innerHTML = '0 รายการ';
+    return;
   }
 
-  const totalKg = WL.reduce((s, r) => s + (r.weight_kg || 0), 0);
+  // Group by product (use filtered data)
+  const groups = {};
+  filtered.forEach(r => { if (!groups[r.product]) groups[r.product] = []; groups[r.product].push(r); });
+  const products = Object.keys(groups).sort();
+
+  let html = '';
+  products.forEach((prod, idx) => {
+    const rows = groups[prod];
+    const totalKg = rows.reduce((s, r) => s + (r.weight_kg || 0), 0);
+    const totalDisp = wlFmtWeight(totalKg);
+    const yieldVal = (wlFillG > 0)
+      ? Math.floor(totalKg * 1000 / wlFillG).toLocaleString('th-TH')
+      : '—';
+    const detId = 'wl-det-' + prod.replace(/[^a-zA-Z0-9]/g, '_');
+
+    // Product summary row
+    const autoOpen = searching;
+    html += `<tr class="wl-group-row">
+      <td>${idx + 1}</td>
+      <td><b>${escapeHtml(prod)}</b></td>
+      <td style="color:#64748b;font-size:13px">${rows.length} lot</td>
+      <td class="num"><b>${totalDisp}</b></td>
+      <td class="num wl-yield-cell">${yieldVal}</td>
+      <td><button class="wl-expand-btn${autoOpen ? ' open' : ''}" onclick="toggleWlDetail('${detId}')">${autoOpen ? '▼ ซ่อน' : '▶ รายละเอียด'}</button></td>
+    </tr>`;
+
+    // Collapsible detail row — auto-expand when searching
+    html += `<tr class="wl-detail-row" id="${detId}" style="${autoOpen ? '' : 'display:none'}">
+      <td colspan="6">
+        <table class="wl-detail-table">
+          <thead><tr>
+            <th>Lot</th>
+            <th class="num">น้ำหนัก</th>
+            <th>วันผลิต</th>
+            ${admin ? '<th></th>' : ''}
+          </tr></thead>
+          <tbody>${rows.map(r => `<tr>
+            <td>${r.lot ? escapeHtml(r.lot) : '<span style="color:#94a3b8">—</span>'}</td>
+            <td class="num">${wlFmtWeight(r.weight_kg)}</td>
+            <td>${fmtThaiDateWl(r.produced_date)}</td>
+            ${admin ? `<td><button class="wl-del" onclick="deleteWlRow(${r.id})">ลบ</button></td>` : ''}
+          </tr>`).join('')}</tbody>
+        </table>
+      </td>
+    </tr>`;
+  });
+
+  body.innerHTML = html;
+
+  // Summary bar — show filtered totals
+  const filtTotalKg = filtered.reduce((s, r) => s + (r.weight_kg || 0), 0);
   const unit2 = wlUnit === 'g' ? 'g' : 'kg';
-  const totalDisp = wlUnit === 'g'
-    ? (totalKg * 1000).toLocaleString('th-TH', {maximumFractionDigits: 0})
-    : totalKg.toLocaleString('th-TH', {minimumFractionDigits: 2, maximumFractionDigits: 3});
+  const filtDisp = wlUnit === 'g'
+    ? (filtTotalKg * 1000).toLocaleString('th-TH', {maximumFractionDigits: 0})
+    : filtTotalKg.toLocaleString('th-TH', {minimumFractionDigits: 2, maximumFractionDigits: 3});
+  const allDisp = wlUnit === 'g'
+    ? (WL.reduce((s,r)=>s+(r.weight_kg||0),0)*1000).toLocaleString('th-TH',{maximumFractionDigits:0})
+    : WL.reduce((s,r)=>s+(r.weight_kg||0),0).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:3});
   const el = document.getElementById('wlSummary');
-  if (el) el.innerHTML = `${WL.length} รายการ · รวม <b>${totalDisp} ${unit2}</b>`;
+  const isFiltered = filtered.length < WL.length;
+  if (el) el.innerHTML = isFiltered
+    ? `${products.length} สินค้า · ${filtered.length} lot · รวม <b>${filtDisp} ${unit2}</b> <span style="color:#94a3b8">(จากทั้งหมด ${WL.length} lot · ${allDisp} ${unit2})</span>`
+    : `${products.length} สินค้า · ${WL.length} lot · รวม <b>${filtDisp} ${unit2}</b>`;
 }
 
 async function initWeightLot() {
   if (!wlLoaded) await loadWeightLots();
+  renderWlFilters();
   renderWeightLot();
 }
 
