@@ -162,6 +162,57 @@ def ensure_campaigns_table():
 ensure_campaigns_table()
 
 
+def ensure_weight_lots_table():
+    """Create weight_lots table and seed initial data if empty."""
+    _SEED = [
+        ('M2', '010/24', 100.29, '2024-01-25'), ('M2', '011/24', 100.23, '2024-01-25'),
+        ('M2', '012/24',  99.22, '2024-01-26'), ('M2', '013/24',  99.97, '2024-01-26'),
+        ('M2', '015/24',  99.88, '2024-01-29'), ('M2', '016/24',  63.45, '2024-01-29'),
+        ('M2', '020/24', 100.39, '2024-03-19'), ('M2', '021/24', 100.03, '2024-03-19'),
+        ('M2', '022/24', 100.37, '2024-03-20'), ('M2', '023/24', 100.14, '2024-03-20'),
+        ('M2', '025/24', 100.52, '2024-03-21'), ('M2', '026/24',  99.87, '2024-03-22'),
+        ('M2', '027/24', 100.17, '2024-03-22'), ('M2', '028/24',  99.95, '2024-03-23'),
+        ('M2', '029/24', 100.15, '2024-03-25'), ('M2', '030/24', 100.14, '2024-03-25'),
+        ('M2', '031/24', 100.18, '2024-03-26'), ('M2', '032/24', 100.37, '2024-03-26'),
+        ('M2', '033/24', 100.35, '2024-03-27'), ('M2', '034/24', 100.19, '2024-03-27'),
+        ('M2', '035/24', 100.15, '2024-03-28'), ('M2', '036/24', 100.37, '2024-03-28'),
+        ('M2', '037/24',  99.22, '2024-09-16'), ('M2', '038/24',  99.87, '2024-09-16'),
+        ('M2', '039/24',  99.95, '2024-09-17'), ('M2', '040/24',  99.94, '2024-09-17'),
+        ('M2', '041/24',  99.74, '2024-09-18'),
+        ('K2', None,     929.56, None),
+        ('L5', None,    1704.0,  None),
+        ('M1', None,     437.0,  '2023-11-24'),
+    ]
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute(f"""
+            CREATE TABLE IF NOT EXISTS {config.DB_SCHEMA}.weight_lots (
+                id            SERIAL PRIMARY KEY,
+                product       TEXT NOT NULL,
+                lot           TEXT,
+                weight_kg     NUMERIC(10, 3) NOT NULL,
+                produced_date DATE,
+                created_at    TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cur.execute(f"SELECT COUNT(*) FROM {config.DB_SCHEMA}.weight_lots")
+        if cur.fetchone()[0] == 0:
+            for row in _SEED:
+                cur.execute(f"""
+                    INSERT INTO {config.DB_SCHEMA}.weight_lots
+                        (product, lot, weight_kg, produced_date)
+                    VALUES (%s, %s, %s, %s)
+                """, row)
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[warn] ensure_weight_lots_table failed: {e}")
+
+
+ensure_weight_lots_table()
+
+
 def num(x):
     """Decimal/None -> JSON-friendly int or float."""
     if x is None:
@@ -1186,6 +1237,88 @@ def delete_campaign():
         conn.close()
 
 
+@app.route("/api/weight-lots", methods=["GET"])
+def get_weight_lots():
+    conn = get_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute(f"""
+            SELECT id, product, lot, weight_kg, produced_date, created_at
+            FROM {config.DB_SCHEMA}.weight_lots
+            ORDER BY product, produced_date NULLS LAST, lot NULLS LAST, id
+        """)
+        rows = cur.fetchall()
+        return jsonify(lots=[{
+            'id': r[0], 'product': r[1], 'lot': r[2],
+            'weight_kg': float(r[3]) if r[3] is not None else None,
+            'produced_date': r[4].isoformat() if r[4] else None,
+        } for r in rows])
+    finally:
+        conn.close()
+
+
+@app.route("/api/weight-lots", methods=["POST"])
+@require_admin
+def create_weight_lot():
+    data = request.get_json(silent=True) or {}
+    product = str(data.get('product') or '').strip()
+    lot_raw = data.get('lot')
+    lot = str(lot_raw).strip() if lot_raw else None
+    pd_raw = data.get('produced_date')
+    produced_date = str(pd_raw).strip() if pd_raw else None
+    if not product:
+        return jsonify(error="bad_request", detail="ต้องระบุ Product"), 400
+    try:
+        weight_kg = float(data.get('weight_kg', 0) or 0)
+    except (TypeError, ValueError):
+        return jsonify(error="bad_request", detail="น้ำหนักต้องเป็นตัวเลข"), 400
+    if weight_kg <= 0:
+        return jsonify(error="bad_request", detail="น้ำหนักต้องมากกว่า 0"), 400
+    if produced_date:
+        try:
+            date.fromisoformat(produced_date)
+        except ValueError:
+            return jsonify(error="bad_request", detail="วันที่ไม่ถูกต้อง"), 400
+    conn = get_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute(f"""
+            INSERT INTO {config.DB_SCHEMA}.weight_lots (product, lot, weight_kg, produced_date)
+            VALUES (%s, %s, %s, %s)
+            RETURNING id, product, lot, weight_kg, produced_date
+        """, (product, lot, weight_kg, produced_date or None))
+        r = cur.fetchone()
+        conn.commit()
+        return jsonify(status='ok', lot={
+            'id': r[0], 'product': r[1], 'lot': r[2],
+            'weight_kg': float(r[3]), 'produced_date': r[4].isoformat() if r[4] else None,
+        }), 201
+    except Exception as e:
+        conn.rollback()
+        return jsonify(error="server_error", detail=str(e)), 500
+    finally:
+        conn.close()
+
+
+@app.route("/api/weight-lots/<int:lot_id>", methods=["DELETE"])
+@require_admin
+def delete_weight_lot(lot_id):
+    conn = get_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute(f"DELETE FROM {config.DB_SCHEMA}.weight_lots WHERE id = %s", (lot_id,))
+        if cur.rowcount == 0:
+            conn.rollback()
+            return jsonify(error="not_found"), 404
+        conn.commit()
+        return jsonify(status='ok')
+    except Exception as e:
+        conn.rollback()
+        return jsonify(error="server_error", detail=str(e)), 500
+    finally:
+        conn.close()
+
+
 @app.route("/api/movements", methods=["POST"])
 @require_admin
 def add_movement():
@@ -1233,7 +1366,8 @@ def add_movement():
         if not row:
             return jsonify(error="not_found", detail=f"ไม่พบรหัสสินค้า {code or pid_in}"), 404
         product_id, brand = row[0], row[1]
-        is_premium = (brand == "สินค้าพรีเมี่ยม")
+        # Warehouse-backed brands (ลำลูกกา/ซอย8 split, closing = lam + soi8).
+        is_premium = brand in ("สินค้าพรีเมี่ยม", "Beauterry")
 
         # Same (day, channel) -> accumulate; otherwise a new row. Conflict
         # target is the post-migration key (product_id, movement_date, channel)
@@ -1299,11 +1433,11 @@ def edit_movement():
     conn = get_conn()
     try:
         cur = conn.cursor()
-        cur.execute(f"SELECT id FROM {config.DB_SCHEMA}.products WHERE code = %s", (code,))
+        cur.execute(f"SELECT id, brand FROM {config.DB_SCHEMA}.products WHERE code = %s", (code,))
         row = cur.fetchone()
         if not row:
             return jsonify(error="not_found", detail=f"ไม่พบรหัสสินค้า {code}"), 404
-        product_id = row[0]
+        product_id, brand = row[0], row[1]
 
         # Target one (day, channel) lane — without the channel predicate this
         # would hit every channel row of the day after the migration.
@@ -1318,6 +1452,16 @@ def edit_movement():
                            detail=f"ไม่พบรายการของวันที่ {mv_date} ช่อง {channel}"), 404
 
         recompute_product(cur, product_id)
+        # For warehouse-backed products recompute_product overwrites closing with
+        # the movement-derived value; restore closing = ลำลูกกา + ซอย8.
+        if brand in ("สินค้าพรีเมี่ยม", "Beauterry"):
+            cur.execute(f"""
+                UPDATE {config.DB_SCHEMA}.products p
+                SET closing_balance = pw.lamlukka + pw.soi8,
+                    updated_at = CURRENT_TIMESTAMP
+                FROM {config.DB_SCHEMA}.premium_warehouse pw
+                WHERE p.id = %s AND pw.product_id = p.id
+            """, (product_id,))
         product = fetch_product(cur, product_id)
         conn.commit()
         return jsonify(status="ok", product=product)

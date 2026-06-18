@@ -210,6 +210,13 @@ body.admin-on .admin-bar { display: flex; }
 .sidebar { position: sticky; top: 0; align-self: flex-start; height: 100vh; width: 220px; flex: 0 0 220px; background: #0f172a; color: #cbd5e1; padding: 18px 12px; display: flex; flex-direction: column; gap: 6px; }
 .sidebar .brand { color: #fff; font-size: 15px; font-weight: 700; padding: 8px 10px 16px 10px; line-height: 1.35; border-bottom: 1px solid #1e293b; margin-bottom: 8px; }
 .sidebar .brand small { display: block; font-size: 11px; font-weight: 400; color: #94a3b8; margin-top: 4px; }
+.nav-group { display: flex; align-items: center; justify-content: space-between; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #64748b; padding: 14px 14px 6px 14px; user-select: none; cursor: pointer; transition: color .15s; }
+.nav-group:hover { color: #94a3b8; }
+.nav-group:first-of-type { padding-top: 4px; }
+.nav-caret { font-size: 10px; transition: transform .2s; }
+.nav-group.collapsed .nav-caret { transform: rotate(-90deg); }
+.nav-group-items { display: flex; flex-direction: column; gap: 6px; overflow: hidden; transition: max-height .25s ease, opacity .2s; max-height: 600px; }
+.nav-group-items.collapsed { max-height: 0; opacity: 0; }
 .nav-item { display: flex; align-items: center; gap: 10px; padding: 11px 14px; border-radius: 8px; font-size: 14px; font-weight: 600; color: #cbd5e1; cursor: pointer; user-select: none; transition: background .15s, color .15s; }
 .nav-item:hover { background: #1e293b; color: #fff; }
 .nav-item.active { background: #2563eb; color: #fff; }
@@ -337,6 +344,8 @@ body.admin-on .admin-bar { display: flex; }
   .layout { flex-direction: column; }
   .sidebar { position: fixed; top: auto; bottom: 0; left: 0; right: 0; width: 100%; height: auto; flex: 0 0 auto; flex-direction: row; gap: 0; padding: 0; z-index: 90; box-shadow: 0 -2px 10px rgba(0,0,0,0.18); }
   .sidebar .brand { display: none; }
+  .nav-group { display: none; }
+  .nav-group-items { display: contents; max-height: none; opacity: 1; }
   .nav-item { flex: 1; flex-direction: column; justify-content: center; gap: 2px; padding: 8px 4px; border-radius: 0; font-size: 11px; }
   .content { padding-bottom: 64px; }
 
@@ -420,6 +429,17 @@ body.admin-on .admin-bar { display: flex; }
 .pm-wh-input:focus { border-color: #2563eb; outline: none; box-shadow: 0 0 0 2px #2563eb22; }
 .pm-total { font-weight: 800; color: #0f172a; }
 .pm-total.neg { color: #dc2626; }
+.wl-unit-toggle { display: inline-flex; border: 1px solid #cbd5e1; border-radius: 8px; overflow: hidden; }
+.wl-unit-btn { background: none; border: none; padding: 6px 18px; font-size: 13px; font-weight: 600; color: #64748b; cursor: pointer; transition: background .15s, color .15s; }
+.wl-unit-btn.active { background: #2563eb; color: #fff; }
+.wl-unit-btn:hover:not(.active) { background: #f1f5f9; }
+#wlTable { width: 100%; border-collapse: collapse; font-size: 14px; }
+#wlTable th { background: #f8fafc; color: #64748b; font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: none; padding: 10px 14px; border-bottom: 1px solid #e2e8f0; white-space: nowrap; }
+#wlTable td { padding: 11px 14px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+#wlTable tbody tr:hover { background: #f8fbff; }
+#wlTable td.num { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+#wlTable .wl-del { background: none; border: 1px solid #fca5a5; color: #dc2626; border-radius: 6px; padding: 3px 10px; font-size: 12px; cursor: pointer; }
+#wlTable .wl-del:hover { background: #fef2f2; }
 
 </style>
 </head>
@@ -427,13 +447,21 @@ body.admin-on .admin-bar { display: flex; }
 <div class="layout">
 <aside class="sidebar">
   <div class="brand">📦 Stock Movement<small>JLC GROUP 2026</small></div>
-  <div class="nav-item active" data-page="dashboard" onclick="switchPage('dashboard')">📊 <span>Dashboard</span></div>
-  <div class="nav-item" data-page="products" onclick="switchPage('products')">📦 <span>รายการสินค้า</span></div>
-  <div class="nav-item" data-page="premium" onclick="switchPage('premium')">💎 <span>สินค้าพรีเมี่ยม</span></div>
-  <div class="nav-item" data-page="online" onclick="switchPage('online')">🛒 <span>ออนไลน์</span></div>
-  <div class="nav-item" data-page="prepack" onclick="switchPage('prepack')">🧰 <span>Prepack SKU</span></div>
-  <div class="nav-item" data-page="report" onclick="switchPage('report')">📈 <span>Report</span></div>
-  <div class="nav-item" onclick="location.href='/campaign'">🎯 <span>Campaign</span></div>
+  <div class="nav-group" onclick="toggleNavGroup(this)"><span>Ecommerce</span><span class="nav-caret">▾</span></div>
+  <div class="nav-group-items">
+    <div class="nav-item active" data-page="dashboard" onclick="switchPage('dashboard')">📊 <span>Dashboard</span></div>
+    <div class="nav-item" data-page="products" onclick="switchPage('products')">📦 <span>รายการสินค้า</span></div>
+    <div class="nav-item" data-page="premium" onclick="switchPage('premium')">💎 <span>สินค้าพรีเมี่ยม</span></div>
+    <div class="nav-item" data-page="beauterry" onclick="switchPage('beauterry')">💄 <span>Beauterry</span></div>
+    <div class="nav-item" data-page="online" onclick="switchPage('online')">🛒 <span>ออนไลน์</span></div>
+    <div class="nav-item" data-page="prepack" onclick="switchPage('prepack')">🧰 <span>Prepack SKU</span></div>
+    <div class="nav-item" data-page="report" onclick="switchPage('report')">📈 <span>Report</span></div>
+    <div class="nav-item" onclick="location.href='/campaign'">🎯 <span>Campaign</span></div>
+  </div>
+  <div class="nav-group" onclick="toggleNavGroup(this)"><span>Conversion weight</span><span class="nav-caret">▾</span></div>
+  <div class="nav-group-items">
+    <div class="nav-item" data-page="weight-lot" onclick="switchPage('weight-lot')">⚖️ <span>Weight Lot</span></div>
+  </div>
 </aside>
 <div class="content">
 
@@ -523,6 +551,62 @@ body.admin-on .admin-bar { display: flex; }
         <th class="num">คงเหลือ</th>
       </tr></thead>
       <tbody id="pmBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="app page" id="page-beauterry">
+  <div class="dash-head">
+    <h1>💄 Beauterry — สต๊อกคลังลำลูกกา / ซอย8</h1>
+    <div class="sub">สินค้าแบรนด์ Beauterry · <b>คงเหลือ = ลำลูกกา + ซอย8</b> (ยอดเดียวกับหน้ารายการสินค้า) · แสดงอย่างเดียว — เพิ่ม/ลดสต๊อกผ่านหน้า <b>รายการสินค้า → บันทึกรับ-จ่ายรายวัน</b> (เหมือนสินค้าพรีเมี่ยม) · จ่ายออกหักจากคลังซอย8 เสมอ</div>
+  </div>
+  <div class="card" style="padding:16px">
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <div class="search-wrap" style="flex:1;min-width:220px">
+        <input type="text" id="btSearch" autocomplete="off" placeholder="🔍 ค้นหา รหัส หรือ ชื่อสินค้า..." oninput="renderBeauterry()">
+      </div>
+      <span id="btSummary" class="muted"></span>
+    </div>
+  </div>
+  <div class="card" style="padding:0;margin-top:14px;overflow:auto">
+    <table id="btTable">
+      <thead><tr>
+        <th>#</th>
+        <th>รหัส</th>
+        <th>ชื่อสินค้า</th>
+        <th class="num">คลังลำลูกกา</th>
+        <th class="num">คลังซอย8</th>
+        <th class="num">คงเหลือ</th>
+      </tr></thead>
+      <tbody id="btBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="app page" id="page-weight-lot">
+  <div class="dash-head">
+    <h1>⚖️ Weight Lot</h1>
+    <div class="sub">บันทึกน้ำหนักต่อ Lot · เพิ่ม/ลบรายการได้เฉพาะโหมด Admin · จัดเก็บใน pgSQL</div>
+  </div>
+  <div class="card" style="padding:14px 16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+    <div class="wl-unit-toggle">
+      <button id="wlBtnKg" class="wl-unit-btn active" onclick="setWlUnit('kg')">kg</button>
+      <button id="wlBtnG" class="wl-unit-btn" onclick="setWlUnit('g')">g</button>
+    </div>
+    <span id="wlSummary" style="font-size:13px;color:#64748b;flex:1"></span>
+    <button id="wlAddBtn" onclick="openWlAdd()" style="display:none" class="btn btn-success">+ เพิ่มรายการ</button>
+  </div>
+  <div class="card" style="padding:0;margin-top:14px;overflow:auto">
+    <table id="wlTable">
+      <thead><tr>
+        <th>#</th>
+        <th>Product</th>
+        <th>Lot</th>
+        <th class="num" id="wlWeightHead">น้ำหนัก (kg)</th>
+        <th>วันผลิต</th>
+        <th id="wlActHead" style="display:none;width:60px"></th>
+      </tr></thead>
+      <tbody id="wlBody"><tr><td colspan="6" style="padding:24px;text-align:center;color:#94a3b8">กำลังโหลด…</td></tr></tbody>
     </table>
   </div>
 </div>
@@ -827,7 +911,7 @@ body.admin-on .admin-bar { display: flex; }
         <div class="field field-out"><label>จ่ายออก</label><input type="number" id="mvOut" value="0" step="any" min="0" inputmode="decimal" onfocus="this.select()" oninput="updatePreview()"></div>
       </div>
       <div class="field" id="mvDestField" style="display:none">
-        <label>รับเข้าที่คลัง (สินค้าพรีเมี่ยม)</label>
+        <label>รับเข้าที่คลัง (ลำลูกกา / ซอย8)</label>
         <select id="mvDest" onchange="updatePreview()">
           <option value="soi8">คลังซอย8</option>
           <option value="lamlukka">คลังลำลูกกา</option>
@@ -924,6 +1008,28 @@ body.admin-on .admin-bar { display: flex; }
 </div>
 
 <div id="toasts"></div>
+
+<!-- ===== Admin: Add Weight Lot ===== -->
+<div class="amodal" id="wlAddModal">
+  <div class="amodal-card">
+    <div class="amodal-head"><h3>⚖️ เพิ่มรายการ Weight Lot</h3><button class="close" onclick="closeWlAdd()">✕</button></div>
+    <div class="amodal-body">
+      <div class="form-msg" id="wlMsg"></div>
+      <div class="field-row">
+        <div class="field"><label>Product *</label><input type="text" id="wlInProduct" placeholder="M2, K2, L5…" autocomplete="off"></div>
+        <div class="field"><label>Lot</label><input type="text" id="wlInLot" placeholder="010/24 (ว่างได้)" autocomplete="off"></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>น้ำหนัก (kg) *</label><input type="number" id="wlInWeight" step="0.001" min="0.001" inputmode="decimal" onfocus="this.select()" placeholder="100.29"></div>
+        <div class="field"><label>วันผลิต (ไม่บังคับ)</label><input type="date" id="wlInDate"></div>
+      </div>
+      <div class="amodal-foot">
+        <button class="btn btn-ghost" onclick="closeWlAdd()">ปิด</button>
+        <button class="btn btn-success" id="wlSubmitBtn" onclick="submitWlAdd()">บันทึก</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <script>
 let DB = { products: [] };
@@ -1082,6 +1188,11 @@ function todayMoveBadges(p) {
 // ============================================================
 //  SIDEBAR NAV + DASHBOARD
 // ============================================================
+function toggleNavGroup(el) {
+  const items = el.nextElementSibling;
+  const collapsed = el.classList.toggle('collapsed');
+  if (items && items.classList.contains('nav-group-items')) items.classList.toggle('collapsed', collapsed);
+}
 function switchPage(page) {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.page === page));
   document.querySelectorAll('.page').forEach(pg => pg.classList.toggle('active', pg.id === 'page-' + page));
@@ -1091,6 +1202,8 @@ function switchPage(page) {
   if (page === 'online') initOnline();
   if (page === 'prepack') initPrepack();
   if (page === 'premium') renderPremium();
+  if (page === 'beauterry') renderBeauterry();
+  if (page === 'weight-lot') initWeightLot();
 }
 
 // ============================================================
@@ -1136,6 +1249,51 @@ function renderPremium() {
     </tr>`;
   }).join('');
   pmRenderSummary();
+}
+
+// ============================================================
+//  หน้า "Beauterry": สต๊อกคลังลำลูกกา / ซอย8 (แสดงอย่างเดียว)
+//  เก็บใน pgSQL (ตาราง premium_warehouse, ใช้ร่วมกับพรีเมี่ยม — คนละ product_id)
+//  คงเหลือ = ลำลูกกา + ซอย8 (บันทึกกลับลง products.closing_balance)
+//  เพิ่ม/ลดสต๊อกผ่านหน้า "รายการสินค้า" → บันทึกรับ-จ่ายรายวัน (เหมือนพรีเมี่ยม)
+//  จ่ายออกหักจากคลังซอย8 เสมอ; รับเข้าเลือกคลังได้ (ลำลูกกา/ซอย8)
+// ============================================================
+function beauterryProducts() { return (DB.products || []).filter(p => p.brand === 'Beauterry'); }
+
+function btRenderSummary() {
+  const list = beauterryProducts();
+  let tl = 0, ts = 0;
+  list.forEach(p => { tl += Number(p.lamlukka) || 0; ts += Number(p.soi8) || 0; });
+  const el = document.getElementById('btSummary');
+  if (el) el.innerHTML = `${list.length} รายการ · รวมลำลูกกา <b>${fmt(tl)}</b> · รวมซอย8 <b>${fmt(ts)}</b> · รวมคงเหลือ <b>${fmt(tl + ts)}</b>`;
+}
+
+function renderBeauterry() {
+  const body = document.getElementById('btBody');
+  if (!body) return;
+  const q = (document.getElementById('btSearch')?.value || '').trim().toLowerCase();
+  let list = beauterryProducts();
+  if (q) list = list.filter(p => (p.code || '').toLowerCase().includes(q) || (p.name || '').toLowerCase().includes(q));
+  list.sort((a, b) => (a.code || '').localeCompare(b.code || ''));
+  if (!list.length) {
+    body.innerHTML = '<tr><td colspan="6" class="empty" style="padding:20px;text-align:center;color:#94a3b8">ไม่พบสินค้า Beauterry</td></tr>';
+    btRenderSummary();
+    return;
+  }
+  const whCell = (p, field) => fmt(Number(p[field]) || 0);
+  body.innerHTML = list.map((p, i) => {
+    const closing = Number(p.closing) || 0;
+    const cc = escapeHtml(p.code || '');
+    return `<tr data-id="${p.id}">
+      <td>${i + 1}</td>
+      <td><code>${cc}</code></td>
+      <td>${escapeHtml(p.name || '')}</td>
+      <td class="num">${whCell(p, 'lamlukka')}</td>
+      <td class="num">${whCell(p, 'soi8')}</td>
+      <td class="num bal bt-total ${cls(closing)}">${fmt(closing)}</td>
+    </tr>`;
+  }).join('');
+  btRenderSummary();
 }
 
 // ===== หน้า "ออนไลน์": ดึงยอดออนไลน์จาก Script-Ecom -> ลงช่อง online =====
@@ -3037,6 +3195,8 @@ function updateAdminUI() {
   document.body.classList.toggle('admin-on', on);
   document.getElementById('adminBtnText').textContent = on ? 'Admin: เปิด' : 'Admin';
   if (document.getElementById('page-premium')?.classList.contains('active')) renderPremium();
+  if (document.getElementById('page-beauterry')?.classList.contains('active')) renderBeauterry();
+  if (document.getElementById('page-weight-lot')?.classList.contains('active')) renderWeightLot();
 }
 
 function onAdminBtn() {
@@ -3096,6 +3256,7 @@ function mergeProduct(product) {
   else DB.products.push(product);
   applyFilters();
   if (document.getElementById('page-premium')?.classList.contains('active')) renderPremium();
+  if (document.getElementById('page-beauterry')?.classList.contains('active')) renderBeauterry();
 }
 
 // ---- Add Product ----
@@ -3370,7 +3531,7 @@ function pickProduct(idx) {
   updatePreview();
 }
 
-function mvIsPremium() { return !!mvSelected && mvSelected.brand === 'สินค้าพรีเมี่ยม'; }
+function mvIsPremium() { return !!mvSelected && (mvSelected.brand === 'สินค้าพรีเมี่ยม' || mvSelected.brand === 'Beauterry'); }
 
 function updatePreview() {
   const prev = document.getElementById('mvPreview');
@@ -3525,6 +3686,137 @@ async function submitEditMovement() {
     msg.className = 'form-msg err show'; msg.textContent = e.message;
   } finally {
     btn.disabled = false;
+  }
+}
+
+// ============================================================
+//  หน้า "Weight Lot": บันทึกน้ำหนักต่อ Lot · เก็บใน pgSQL (ตาราง weight_lots)
+//  หน่วยสลับได้ kg ↔ g แบบ dynamic · เพิ่ม/ลบผ่าน Admin
+// ============================================================
+let WL = [];       // in-memory weight lot rows
+let wlUnit = 'kg'; // current display unit
+let wlLoaded = false;
+
+async function loadWeightLots() {
+  try {
+    const r = await fetch('/api/weight-lots');
+    const j = await r.json();
+    WL = j.lots || [];
+    wlLoaded = true;
+  } catch(e) { WL = []; }
+}
+
+function setWlUnit(unit) {
+  wlUnit = unit;
+  document.getElementById('wlBtnKg')?.classList.toggle('active', unit === 'kg');
+  document.getElementById('wlBtnG')?.classList.toggle('active', unit === 'g');
+  const h = document.getElementById('wlWeightHead');
+  if (h) h.textContent = unit === 'kg' ? 'น้ำหนัก (kg)' : 'น้ำหนัก (g)';
+  renderWeightLot();
+}
+
+function fmtThaiDateWl(iso) {
+  if (!iso) return '—';
+  const [y, m, d] = iso.split('-').map(Number);
+  const be = String(y + 543).slice(-2);
+  return `${String(d).padStart(2,'0')}/${String(m).padStart(2,'0')}/${be}`;
+}
+
+function wlFmtWeight(kg) {
+  if (kg === null || kg === undefined) return '—';
+  if (wlUnit === 'g') {
+    const g = kg * 1000;
+    return g.toLocaleString('th-TH', {minimumFractionDigits: 0, maximumFractionDigits: 0});
+  }
+  return kg.toLocaleString('th-TH', {minimumFractionDigits: 2, maximumFractionDigits: 3});
+}
+
+function renderWeightLot() {
+  const body = document.getElementById('wlBody');
+  if (!body) return;
+  const admin = !!adminToken;
+  const actHead = document.getElementById('wlActHead');
+  if (actHead) actHead.style.display = admin ? '' : 'none';
+  const addBtn = document.getElementById('wlAddBtn');
+  if (addBtn) addBtn.style.display = admin ? '' : 'none';
+
+  if (!WL.length) {
+    body.innerHTML = `<tr><td colspan="${admin ? 6 : 5}" style="padding:24px;text-align:center;color:#94a3b8">ยังไม่มีข้อมูล</td></tr>`;
+  } else {
+    body.innerHTML = WL.map((r, i) => `<tr>
+      <td>${i + 1}</td>
+      <td><b>${escapeHtml(r.product)}</b></td>
+      <td>${r.lot ? escapeHtml(r.lot) : '<span style="color:#94a3b8">—</span>'}</td>
+      <td class="num">${wlFmtWeight(r.weight_kg)}</td>
+      <td>${fmtThaiDateWl(r.produced_date)}</td>
+      ${admin ? `<td><button class="wl-del" onclick="deleteWlRow(${r.id})">ลบ</button></td>` : ''}
+    </tr>`).join('');
+  }
+
+  const totalKg = WL.reduce((s, r) => s + (r.weight_kg || 0), 0);
+  const unit2 = wlUnit === 'g' ? 'g' : 'kg';
+  const totalDisp = wlUnit === 'g'
+    ? (totalKg * 1000).toLocaleString('th-TH', {maximumFractionDigits: 0})
+    : totalKg.toLocaleString('th-TH', {minimumFractionDigits: 2, maximumFractionDigits: 3});
+  const el = document.getElementById('wlSummary');
+  if (el) el.innerHTML = `${WL.length} รายการ · รวม <b>${totalDisp} ${unit2}</b>`;
+}
+
+async function initWeightLot() {
+  if (!wlLoaded) await loadWeightLots();
+  renderWeightLot();
+}
+
+function openWlAdd() {
+  if (!adminToken) return;
+  document.getElementById('wlInProduct').value = '';
+  document.getElementById('wlInLot').value = '';
+  document.getElementById('wlInWeight').value = '';
+  document.getElementById('wlInDate').value = '';
+  const msg = document.getElementById('wlMsg');
+  if (msg) { msg.className = 'form-msg'; msg.textContent = ''; }
+  openAModal('wlAddModal');
+}
+function closeWlAdd() { closeAModal('wlAddModal'); }
+
+async function submitWlAdd() {
+  const product = document.getElementById('wlInProduct').value.trim();
+  const lot = document.getElementById('wlInLot').value.trim() || null;
+  const weightRaw = document.getElementById('wlInWeight').value;
+  const dateVal = document.getElementById('wlInDate').value || null;
+  const msg = document.getElementById('wlMsg');
+  const btn = document.getElementById('wlSubmitBtn');
+  const showErr = t => { if (msg) { msg.className = 'form-msg err show'; msg.textContent = t; } };
+  if (!product) { showErr('กรุณาระบุ Product'); return; }
+  const weight_kg = parseFloat(weightRaw);
+  if (!weightRaw || isNaN(weight_kg) || weight_kg <= 0) { showErr('กรุณาระบุน้ำหนักที่ถูกต้อง (> 0)'); return; }
+  btn.disabled = true;
+  try {
+    const data = await adminFetch('/api/weight-lots', { product, lot, weight_kg, produced_date: dateVal }, 'POST');
+    WL.push(data.lot);
+    WL.sort((a, b) => (a.product||'').localeCompare(b.product||'') ||
+      (a.produced_date||'zzz').localeCompare(b.produced_date||'zzz') ||
+      (a.lot||'').localeCompare(b.lot||''));
+    closeWlAdd();
+    renderWeightLot();
+    toast('เพิ่มรายการแล้ว', 'ok');
+  } catch(e) {
+    showErr(e.message || 'บันทึกไม่สำเร็จ');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function deleteWlRow(id) {
+  if (!adminToken) return;
+  if (!confirm('ลบรายการนี้?')) return;
+  try {
+    await adminFetch(`/api/weight-lots/${id}`, {}, 'DELETE');
+    WL = WL.filter(r => r.id !== id);
+    renderWeightLot();
+    toast('ลบแล้ว', 'ok');
+  } catch(e) {
+    toast(e.message || 'ลบไม่สำเร็จ', 'err');
   }
 }
 
