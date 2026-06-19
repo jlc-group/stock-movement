@@ -2110,7 +2110,16 @@ function renderOnlinePreview(d) {
       ? `<div style="margin-top:6px">⚠️ ข้าม (ไม่มีรหัสนี้ใน ecom_stock): ${d.skipped_items.map(s => s.code + '×' + Number(s.qty).toLocaleString()).join(', ')}</div>`
       : '');
   const wb = document.getElementById('onlineWriteBtn');
-  if (wb) wb.style.display = (d.items && d.items.length) ? '' : 'none';
+  if (wb) {
+    const willPcs = Number(d.cumulative_pcs || 0);
+    const willItems = Number(d.cumulative_items || 0);
+    wb.textContent = willPcs > 0
+      ? `✍️ เขียนยอดตัดสะสมทุกรอบ (${willItems.toLocaleString()} รายการ · ${willPcs.toLocaleString()} ชิ้น) ลงช่อง "ออนไลน์" จริง`
+      : '✍️ เขียนยอดตัดสะสมทุกรอบ ลงช่อง "ออนไลน์" จริง';
+    // โชว์ปุ่มเมื่อมี "ยอดสะสมรอบ" ให้เขียน (ไม่ผูกกับ leftover) — กดได้แม้ freeze ครบแล้ว
+    // ถ้ายังไม่มีรอบเลย (willPcs=0) ก็ยังโชว์เมื่อมีของค้าง เพื่อให้ confirm เตือนให้ freeze ก่อน
+    wb.style.display = (willPcs > 0 || (d.items && d.items.length)) ? '' : 'none';
+  }
   const pb = document.getElementById('onlinePrintBtn');
   if (pb) pb.style.display = d.date ? '' : 'none';
   const bo = document.getElementById('onlineBatchOrders'); if (bo) bo.style.display = 'none';
@@ -2121,7 +2130,24 @@ function renderOnlinePreview(d) {
 
 // ✍️ เขียนจริง (opt-in, ต้องยืนยัน) — ใช้เมื่อพิสูจน์แล้ว
 async function writeOnline() {
-  if (!confirm('ยืนยันเขียนยอดออนไลน์นี้ลงช่อง "ออนไลน์" จริง?\n(เขียนทับเฉพาะช่องออนไลน์ ไม่กระทบยอดที่กรอกมือ)')) return;
+  const d = onlineLastData || {};
+  const leftoverItems = (d.items || []).length;
+  const leftoverPcs = Number(d.total_qty || 0);
+  const willPcs = Number(d.cumulative_pcs || 0);
+  const willItems = Number(d.cumulative_items || 0);
+  const rounds = Number(d.cumulative_rounds || 0);
+  const lines = [
+    'ยืนยันเขียนยอดตัดสต็อกออนไลน์ลงช่อง "ออนไลน์" จริง?',
+    '',
+    `• จะตัดยอด "สะสมทุกรอบที่บันทึกไว้" = ${willItems.toLocaleString()} รายการ · ${willPcs.toLocaleString()} ชิ้น (${rounds} รอบ)`,
+    '• เขียนทับเฉพาะช่องออนไลน์ ไม่กระทบยอดที่กรอกมือ · กดซ้ำได้ ยอดไม่บวกเพิ่ม',
+  ];
+  if (leftoverItems > 0) {
+    lines.push('',
+      `⚠️ ยังมี ${leftoverItems.toLocaleString()} รายการ (${leftoverPcs.toLocaleString()} ชิ้น) ที่ "ยังไม่เข้ารอบ"`,
+      'ของชุดนี้จะไม่ถูกตัด (ตัดขาด) — แนะนำกด "บันทึกรอบยืนยัน" ให้ครบก่อน แล้วค่อยเขียน');
+  }
+  if (!confirm(lines.join('\n'))) return;
   await syncOnline();
 }
 

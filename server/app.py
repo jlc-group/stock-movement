@@ -1965,11 +1965,33 @@ def online_preview():
         except Exception:
             pass  # Script-Ecom ล่ม/ไม่มี batch → โชว์ยอดเต็มตามเดิม
 
+        # ---- ยอด "สะสมทุกรอบ" = ตัวเดียวกับที่ปุ่มเขียนจริง (sync) จะตัด ----
+        # ดึงมาโชว์ให้ผู้ใช้เห็นเลขที่จะเขียนจริง (ไม่ใช่เลข leftover) + กันสับสน/ตัดขาด
+        cumulative_pcs = 0.0
+        cumulative_items = 0
+        cumulative_rounds = 0
+        try:
+            cumj = script_ecom_json(
+                "/api/stock/propose-cumulative?date=" + urllib.parse.quote(p_date), timeout=20)
+            cumulative_rounds = int(cumj.get("batches_count") or 0)
+            for ci in (cumj.get("proposed") or []):
+                ccode = str((ci or {}).get("code", "")).strip()
+                if ccode in code_to:  # นับเฉพาะรหัสที่ map ได้ (เหมือนตอนเขียนจริง)
+                    cumulative_items += 1
+                    try:
+                        cumulative_pcs += float((ci or {}).get("qty", 0) or 0)
+                    except (TypeError, ValueError):
+                        pass
+        except Exception:
+            pass  # Script-Ecom ล่ม → ไม่โชว์ยอดสะสม (ปุ่มยังทำงานตามเดิม)
+
         return jsonify(status="ok", date=p_date, mode="preview",
                        total_qty=total, matched=len(items), skipped=len(skipped),
                        items=items, skipped_items=skipped,
                        delta_applied=delta_applied, batched_pcs=batched_pcs,
                        batches_count=batches_count, latest_batch_label=latest_batch_label,
+                       cumulative_pcs=cumulative_pcs, cumulative_items=cumulative_items,
+                       cumulative_rounds=cumulative_rounds,
                        platforms=payload.get("platforms") or {})
     except Exception as e:
         return jsonify(error="server_error", detail=str(e)), 500
