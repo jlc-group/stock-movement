@@ -248,6 +248,90 @@ body.admin-on .admin-bar { display: flex; }
 .mbar.in { background: #059669; opacity: .16; }
 .mbar.out { background: #b45309; opacity: .16; }
 .mbar-val { position: relative; font-variant-numeric: tabular-nums; font-weight: 600; padding: 0 4px; }
+.soon-days { font-weight: 700; color: #b45309; white-space: nowrap; }
+.soon-days.crit { color: #b91c1c; }
+/* ===== Dashboard redesign v2 (scoped: db-* / #page-dashboard — no impact on other pages) ===== */
+.db-hero { background: linear-gradient(135deg,#0f172a 0%,#1e3a8a 55%,#2563eb 100%); border-radius: 16px; padding: 22px 26px; color: #fff; box-shadow: 0 10px 28px rgba(30,58,138,.22); margin-bottom: 18px; }
+.db-hero-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+.db-hero h1 { font-size: 22px; font-weight: 800; letter-spacing: .2px; margin: 0; }
+.db-hero .db-sub { font-size: 12.5px; opacity: .82; margin-top: 4px; }
+.db-hero-search { margin-top: 18px; max-width: 580px; }
+.db-hero-search input { width: 100%; box-sizing: border-box; border: none; border-radius: 12px; padding: 13px 16px 13px 44px; font-size: 14px; color: #0f172a; background: #fff; box-shadow: 0 6px 18px rgba(0,0,0,.18); outline: none; transition: box-shadow .15s; }
+.db-hero-search input::placeholder { color: #94a3b8; }
+.db-hero-search input:focus { box-shadow: 0 0 0 3px rgba(147,197,253,.7), 0 6px 18px rgba(0,0,0,.18); }
+.db-hero-search .db-search-icon { position: absolute; left: 15px; top: 13px; font-size: 16px; opacity: .55; pointer-events: none; }
+.db-hero-search .ac-list { color: #111827; border-radius: 0 0 12px 12px; border-top: none; }
+
+.db-result { position: relative; background: #fff; border: 1px solid #eef2f7; border-radius: 14px; box-shadow: 0 2px 12px rgba(15,23,42,.06); padding: 18px 20px; margin-bottom: 18px; }
+.ssr-close { position: absolute; top: 12px; right: 14px; width: 26px; height: 26px; border: none; border-radius: 8px; background: #f1f5f9; color: #64748b; font-size: 15px; cursor: pointer; line-height: 1; }
+.ssr-close:hover { background: #e2e8f0; color: #0f172a; }
+
+.db-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(178px, 1fr)); gap: 14px; margin-bottom: 22px; }
+.db-stat { background: #fff; border: 1px solid #f1f5f9; border-radius: 14px; padding: 15px 16px; box-shadow: 0 1px 3px rgba(0,0,0,.05); display: flex; align-items: center; gap: 13px; }
+.db-stat .db-ic { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; font-size: 19px; flex-shrink: 0; background: #f1f5f9; }
+.db-stat .db-meta { min-width: 0; }
+.db-stat .db-val { font-size: 22px; font-weight: 800; line-height: 1.1; color: #0f172a; font-variant-numeric: tabular-nums; }
+.db-stat .db-val small { font-size: 12px; font-weight: 600; color: #94a3b8; }
+.db-stat .db-lbl { font-size: 11.5px; color: #64748b; font-weight: 600; margin-top: 3px; }
+.db-stat.in .db-ic { background: #ecfdf5; } .db-stat.in .db-val { color: #059669; }
+.db-stat.out .db-ic { background: #fff7ed; } .db-stat.out .db-val { color: #ea580c; }
+.db-stat.bal .db-ic { background: #eff6ff; } .db-stat.bal .db-val { color: #2563eb; }
+.db-stat.soon .db-ic { background: #fffbeb; } .db-stat.soon .db-val { color: #d97706; }
+.db-stat.low .db-ic { background: #fef2f2; } .db-stat.low .db-val { color: #dc2626; }
+
+.db-section-h { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 6px 2px; flex-wrap: wrap; }
+.db-section-h h2 { font-size: 15px; font-weight: 800; color: #1e293b; margin: 0; display: flex; align-items: center; gap: 7px; }
+.db-section-hint { font-size: 11.5px; color: #94a3b8; font-weight: 500; }
+.db-sub-range { font-size: 12px; color: #94a3b8; font-weight: 600; margin: 0 2px 12px; }
+
+.db-pills { display: inline-flex; gap: 3px; background: #eef2f7; padding: 4px; border-radius: 11px; }
+.db-pills button { border: none; background: transparent; padding: 7px 13px; border-radius: 8px; font-size: 12.5px; font-weight: 600; color: #64748b; cursor: pointer; transition: background .15s, color .15s; }
+.db-pills button:hover { color: #1e293b; }
+.db-pills button.active { background: #fff; color: #2563eb; box-shadow: 0 1px 3px rgba(0,0,0,.14); }
+
+.db-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 20px; }
+.db-card { background: #fff; border: 1px solid #f1f5f9; border-radius: 14px; box-shadow: 0 1px 3px rgba(0,0,0,.05); overflow: hidden; }
+.db-card .db-ch { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 13px 16px; border-bottom: 1px solid #f1f5f9; }
+.db-card .db-ch-title { font-size: 13.5px; font-weight: 700; color: #1e293b; display: flex; align-items: center; gap: 7px; }
+.db-card .db-ch-cnt { font-size: 11.5px; font-weight: 700; color: #475569; background: #f1f5f9; padding: 3px 10px; border-radius: 999px; white-space: nowrap; }
+.db-card .db-scroll { max-height: 380px; overflow-y: auto; }
+.db-card table { box-shadow: none; border-radius: 0; }
+.db-card thead th { position: sticky; top: 0; z-index: 2; background: #f8fafc; font-size: 11px; }
+.db-card tbody tr { transition: background .12s; cursor: pointer; }
+.db-card tbody tr:hover { background: #f0f7ff; box-shadow: inset 3px 0 0 #2563eb; }
+@media (max-width: 980px) { .db-grid { grid-template-columns: 1fr; } }
+@media (max-width: 560px) { .db-pills { width: 100%; justify-content: space-between; } .db-pills button { flex: 1; padding: 7px 4px; } }
+/* ===== กราฟจำนวนสินค้าตามแบรนด์ ===== */
+.db-brandbars { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 11px; }
+.db-bb-row { display: grid; grid-template-columns: 130px 1fr auto; align-items: center; gap: 12px; }
+.db-bb-name { font-size: 12.5px; font-weight: 600; color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.db-bb-track { background: #f1f5f9; border-radius: 999px; height: 16px; overflow: hidden; }
+.db-bb-fill { height: 100%; border-radius: 999px; min-width: 4px; transition: width .5s ease; }
+.db-bb-val { font-size: 12.5px; font-weight: 800; color: #0f172a; font-variant-numeric: tabular-nums; min-width: 30px; text-align: right; }
+@media (max-width: 560px) { .db-bb-row { grid-template-columns: 96px 1fr auto; gap: 8px; } .db-bb-name { font-size: 11.5px; } }
+/* ===== ค้นหาสต็อก result card ===== */
+.ssr-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; padding-right: 34px; padding-bottom: 14px; border-bottom: 1px solid #f1f5f9; }
+.ssr-id { display: flex; flex-direction: column; gap: 3px; }
+.ssr-code { font-family: 'SF Mono', Consolas, monospace; font-weight: 800; font-size: 19px; color: #1d4ed8; }
+.ssr-name { color: #475569; font-size: 13.5px; }
+.ssr-tags { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.ssr-brand { background: #eef2ff; color: #4338ca; font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 999px; }
+.ssr-metrics { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+.ssr-metric { flex: 1 1 120px; min-width: 118px; background: #f8fafc; border: 1px solid #eef2f7; border-radius: 12px; padding: 11px 14px; }
+.ssr-metric .m-lbl { font-size: 11.5px; color: #64748b; font-weight: 600; display: flex; align-items: center; gap: 4px; }
+.ssr-metric .m-val { font-size: 18px; font-weight: 800; color: #0f172a; font-variant-numeric: tabular-nums; margin-top: 4px; }
+.ssr-metric .m-val.in { color: #059669; }
+.ssr-metric .m-val.out { color: #ea580c; }
+.ssr-metric .m-val.date { font-size: 15px; }
+.ssr-metric.main { flex: 1 1 180px; background: #f0fdf4; border-color: #bbf7d0; }
+.ssr-metric.main .m-val { font-size: 27px; color: #166534; line-height: 1.05; }
+.ssr-metric.main .m-val small { font-size: 13px; font-weight: 600; color: #16a34a; }
+.ssr-metric.main.neg { background: #fef2f2; border-color: #fecaca; }
+.ssr-metric.main.neg .m-val { color: #b91c1c; }
+.ssr-metric.main.neg .m-val small { color: #dc2626; }
+.ssr-open { margin-top: 16px; background: #2563eb; color: #fff; border: none; border-radius: 9px; padding: 10px 18px; font-size: 13px; font-weight: 700; cursor: pointer; transition: background .15s; }
+.ssr-open:hover { background: #1d4ed8; }
+.db-stat.total .db-ic { background: #eef2f7; } .db-stat.total .db-val { color: #334155; }
 @media (max-width: 980px) { .dash-grid, .rp-chart-row { grid-template-columns: 1fr; } }
 /* ===== Report page (charts) ===== */
 .rp-chartcard { padding-bottom: 8px; }
@@ -429,6 +513,54 @@ body.admin-on .admin-bar { display: flex; }
 .pm-wh-input:focus { border-color: #2563eb; outline: none; box-shadow: 0 0 0 2px #2563eb22; }
 .pm-total { font-weight: 800; color: #0f172a; }
 .pm-total.neg { color: #dc2626; }
+#pmTable tbody tr { cursor: pointer; }
+/* การ์ดรายละเอียดพรีเมี่ยม/Beauterry */
+.pmd-card { max-width: 580px; }
+.pmd-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 18px 22px 14px; border-bottom: 1px solid #f1f5f9; }
+.pmd-head h2 { font-size: 18px; font-weight: 800; color: #0f172a; margin: 0; }
+.pmd-updated { font-size: 12.5px; color: #64748b; margin-top: 4px; }
+.pmd-updated b { color: #2563eb; }
+.pmd-body { padding: 18px 22px 22px; overflow-y: auto; }
+.pmd-wh { display: flex; gap: 10px; flex-wrap: wrap; }
+.pmd-wh-tile { flex: 1 1 120px; background: #f8fafc; border: 1px solid #eef2f7; border-radius: 12px; padding: 12px 14px; text-align: center; }
+.pmd-wh-tile .l { font-size: 12px; color: #64748b; font-weight: 600; }
+.pmd-wh-tile .v { font-size: 21px; font-weight: 800; color: #0f172a; margin-top: 4px; font-variant-numeric: tabular-nums; }
+.pmd-wh-tile.bal { background: #f0fdf4; border-color: #bbf7d0; } .pmd-wh-tile.bal .v { color: #166534; }
+.pmd-wh-tile.bal.neg { background: #fef2f2; border-color: #fecaca; } .pmd-wh-tile.bal.neg .v { color: #b91c1c; }
+.pmd-h { font-size: 13.5px; font-weight: 700; color: #1e293b; margin: 18px 0 9px; }
+.pmd-mv-row { display: flex; align-items: center; gap: 10px; padding: 9px 4px; border-bottom: 1px solid #f5f7fa; }
+.pmd-mv-row:last-child { border-bottom: none; }
+.pmd-mv-date { font-size: 12.5px; font-weight: 700; color: #475569; min-width: 80px; font-variant-numeric: tabular-nums; }
+.pmd-mv-chips { display: flex; gap: 6px; flex-wrap: wrap; flex: 1; }
+.pmd-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; font-weight: 700; padding: 3px 9px; border-radius: 999px; white-space: nowrap; }
+.pmd-chip.in { background: #ecfdf5; color: #059669; }
+.pmd-chip.out { background: #fff1f2; color: #e11d48; }
+.pmd-mv-note { font-size: 11.5px; color: #94a3b8; text-align: right; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pmd-empty { color: #94a3b8; font-size: 13px; padding: 14px 4px; text-align: center; }
+.pmd-foot { font-size: 11.5px; color: #94a3b8; margin-top: 14px; line-height: 1.5; border-top: 1px dashed #e2e8f0; padding-top: 10px; }
+/* กราฟกระจายสต๊อกตามคลัง */
+.pm-chart-card { margin-top: 14px; border-radius: 14px; border: 1px solid #e2e8f0; background: #fff; padding: 16px; }
+.pm-chart-head { font-weight: 800; font-size: 14px; color: #0f172a; margin-bottom: 14px; }
+.pm-chart-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+.pmc-tile { border-radius: 12px; padding: 12px 14px; border: 1px solid; }
+.pmc-tile.lam { background: #eff6ff; border-color: #bfdbfe; }
+.pmc-tile.soi { background: #f0fdfa; border-color: #99f6e4; }
+.pmc-l { font-size: 12.5px; font-weight: 700; color: #334155; }
+.pmc-v { font-size: 24px; font-weight: 800; color: #0f172a; font-variant-numeric: tabular-nums; line-height: 1.2; }
+.pmc-n { font-size: 11.5px; color: #64748b; }
+.pm-chart-bar { display: flex; height: 22px; border-radius: 999px; overflow: hidden; background: #f1f5f9; }
+.pmc-seg { display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; color: #fff; min-width: 2px; transition: width .5s ease; white-space: nowrap; }
+.pmc-seg.lam { background: #2563eb; }
+.pmc-seg.soi { background: #0d9488; }
+.pm-chart-legend { display: flex; gap: 16px; margin-top: 10px; font-size: 12px; color: #475569; flex-wrap: wrap; }
+.pm-chart-legend i { display: inline-block; width: 11px; height: 11px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+@media (max-width: 480px) { .pm-chart-tiles { grid-template-columns: 1fr; } }
+
+/* หัวข้อเหนือตารางรายการสินค้า */
+.pm-table-head { padding: 13px 16px; font-weight: 800; font-size: 14px; color: #0f172a; border-bottom: 1px solid #eef2f7; display: flex; align-items: center; gap: 8px; }
+.pm-table-cnt { font-size: 12px; font-weight: 600; color: #64748b; }
+.pm-wh-filter { padding: 9px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 13px; font-weight: 600; color: #334155; background: #fff; cursor: pointer; }
+.pm-wh-filter:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 3px #2563eb22; }
 .wl-unit-toggle { display: inline-flex; border: 1px solid #cbd5e1; border-radius: 8px; overflow: hidden; }
 .wl-unit-btn { background: none; border: none; padding: 6px 18px; font-size: 13px; font-weight: 600; color: #64748b; cursor: pointer; transition: background .15s, color .15s; }
 .wl-unit-btn.active { background: #2563eb; color: #fff; }
@@ -567,10 +699,17 @@ body.admin-on .admin-bar { display: flex; }
       <div class="search-wrap" style="flex:1;min-width:220px">
         <input type="text" id="pmSearch" autocomplete="off" placeholder="🔍 ค้นหา รหัส หรือ ชื่อสินค้า..." oninput="renderPremium()">
       </div>
+      <select id="pmWhFilter" class="pm-wh-filter" onchange="renderPremium()">
+        <option value="all">📦 แสดงทั้งหมด</option>
+        <option value="soi8">🏪 เฉพาะมีของในซอย8</option>
+        <option value="lamlukka">🏭 เฉพาะมีของในลำลูกกา</option>
+      </select>
       <span id="pmSummary" class="muted"></span>
     </div>
   </div>
+  <div id="pmChart"></div>
   <div class="card" style="padding:0;margin-top:14px;overflow:auto">
+    <div class="pm-table-head">📋 รายการสินค้าทั้งหมด <span id="pmTableCnt" class="pm-table-cnt"></span></div>
     <table id="pmTable">
       <thead><tr>
         <th>#</th>
@@ -663,31 +802,71 @@ body.admin-on .admin-bar { display: flex; }
 </div>
 
 <div class="app page active" id="page-dashboard">
-  <div class="dash-head">
-    <h1>📊 Dashboard สรุปภาพรวม</h1>
-    <div class="sub">บริษัท เจแอลซี กรุ๊ป จำกัด · ช่วง <span id="dashDate"></span></div>
-  </div>
-  <div class="dash-filter" id="dashFilter">
-    <button data-r="today" onclick="setDashRange('today')">วันนี้</button>
-    <button data-r="yesterday" onclick="setDashRange('yesterday')">เมื่อวาน</button>
-    <button data-r="7d" onclick="setDashRange('7d')">7 วันย้อนหลัง</button>
-    <button data-r="month" onclick="setDashRange('month')">เดือนนี้</button>
-    <button data-r="all" onclick="setDashRange('all')">ทั้งหมด</button>
-  </div>
-  <div class="kpis" id="dashKpis"></div>
-  <div class="dash-grid">
-    <div class="dash-card">
-      <div class="dc-head"><span>📥 รายการรับ<span class="dc-hint">เรียงจากล่าสุด</span></span><span class="cnt" id="dashInCnt"></span></div>
-      <div class="scroll dash-move"><table><thead><tr><th>วันที่</th><th>รหัส</th><th>ชื่อสินค้า</th><th class="num">รับ</th><th class="num">คงเหลือ</th></tr></thead><tbody id="dashInBody"></tbody></table></div>
+  <!-- Hero: หัวข้อ + ช่องค้นหาสต็อก (พิมพ์รหัส/ชื่อ → ดูคงเหลือปัจจุบัน) -->
+  <div class="db-hero">
+    <div class="db-hero-top">
+      <div>
+        <h1>📊 Dashboard สรุปภาพรวม</h1>
+        <div class="db-sub">บริษัท เจแอลซี กรุ๊ป จำกัด · ระบบติดตามสต็อก JLC GROUP 2026</div>
+      </div>
     </div>
-    <div class="dash-card">
-      <div class="dc-head"><span>📤 รายการออก<span class="dc-hint">เรียงจากล่าสุด</span></span><span class="cnt" id="dashOutCnt"></span></div>
-      <div class="scroll dash-move"><table><thead><tr><th>วันที่</th><th>รหัส</th><th>ชื่อสินค้า</th><th class="num">ออก</th><th class="num">คงเหลือ</th></tr></thead><tbody id="dashOutBody"></tbody></table></div>
+    <div class="search-wrap db-hero-search">
+      <span class="db-search-icon">🔍</span>
+      <input type="text" id="dashStockSearch" autocomplete="off" placeholder="ค้นหาสต็อก: พิมพ์รหัสหรือชื่อสินค้า เช่น L3-8G, มาส์ก… แล้วเลือกเพื่อดูคงเหลือปัจจุบัน"
+        oninput="dashStockAc(this.value)" onfocus="dashStockAc(this.value)" onblur="setTimeout(dashStockHideAc, 150)" onkeydown="dashStockKeydown(event)" />
+      <div class="ac-list" id="dashStockAcList"></div>
     </div>
   </div>
-  <div class="dash-card">
-    <div class="dc-head"><span>⚠️ สินค้าคงเหลือน้อย / ติดลบ (≤ 0)</span><span class="cnt" id="dashLowCnt"></span></div>
-    <div class="scroll"><table><thead><tr><th>รหัส</th><th>ชื่อสินค้า</th><th>หมวด</th><th class="num">คงเหลือ</th></tr></thead><tbody id="dashLowBody"></tbody></table></div>
+
+  <!-- การ์ดผลค้นหา (ซ่อนจนกว่าจะเลือกสินค้า) -->
+  <div id="dashStockResult" class="db-result" style="display:none"></div>
+
+  <!-- KPI -->
+  <div class="db-stats" id="dashKpis"></div>
+
+  <!-- จำนวนสินค้าตามแบรนด์ -->
+  <div class="db-card" style="margin-bottom:20px">
+    <div class="db-ch"><span class="db-ch-title">🏷️ จำนวนสินค้าตามแบรนด์</span><span class="db-ch-cnt" id="dashBrandCnt"></span></div>
+    <div class="db-brandbars" id="dashBrandBars"></div>
+  </div>
+
+  <!-- รายการเคลื่อนไหว (มีตัวกรองช่วงเวลา) -->
+  <div class="db-section-h">
+    <h2>🔄 รายการเคลื่อนไหว</h2>
+    <div class="db-pills" id="dashFilter">
+      <button data-r="today" onclick="setDashRange('today')">วันนี้</button>
+      <button data-r="yesterday" onclick="setDashRange('yesterday')">เมื่อวาน</button>
+      <button data-r="7d" onclick="setDashRange('7d')">7 วัน</button>
+      <button data-r="month" onclick="setDashRange('month')">เดือนนี้</button>
+      <button data-r="all" onclick="setDashRange('all')">ทั้งหมด</button>
+    </div>
+  </div>
+  <div class="db-sub-range">ช่วงที่แสดง: <span id="dashDate"></span></div>
+  <div class="db-grid">
+    <div class="db-card">
+      <div class="db-ch"><span class="db-ch-title">📥 รายการรับ</span><span class="db-ch-cnt" id="dashInCnt"></span></div>
+      <div class="db-scroll dash-move"><table><thead><tr><th>วันที่</th><th>รหัส</th><th>ชื่อสินค้า</th><th class="num">รับ</th><th class="num">คงเหลือ</th></tr></thead><tbody id="dashInBody"></tbody></table></div>
+    </div>
+    <div class="db-card">
+      <div class="db-ch"><span class="db-ch-title">📤 รายการออก</span><span class="db-ch-cnt" id="dashOutCnt"></span></div>
+      <div class="db-scroll dash-move"><table><thead><tr><th>วันที่</th><th>รหัส</th><th>ชื่อสินค้า</th><th class="num">ออก</th><th class="num">คงเหลือ</th></tr></thead><tbody id="dashOutBody"></tbody></table></div>
+    </div>
+  </div>
+
+  <!-- แจ้งเตือนสต็อก -->
+  <div class="db-section-h">
+    <h2>⚠️ แจ้งเตือนสต็อก</h2>
+    <span class="db-section-hint">“ใกล้หมด” ประเมินจากยอดออกเฉลี่ย 30 วันล่าสุด</span>
+  </div>
+  <div class="db-grid">
+    <div class="db-card">
+      <div class="db-ch"><span class="db-ch-title">⏳ ใกล้หมดสต็อก (≤ 7 วัน)</span><span class="db-ch-cnt" id="dashSoonCnt"></span></div>
+      <div class="db-scroll"><table><thead><tr><th>รหัส</th><th>ชื่อสินค้า</th><th class="num">คงเหลือ</th><th class="num">ออก/วัน</th><th class="num">หมดใน</th></tr></thead><tbody id="dashSoonBody"></tbody></table></div>
+    </div>
+    <div class="db-card">
+      <div class="db-ch"><span class="db-ch-title">🛑 คงเหลือ ≤ 0</span><span class="db-ch-cnt" id="dashLowCnt"></span></div>
+      <div class="db-scroll"><table><thead><tr><th>รหัส</th><th>ชื่อสินค้า</th><th>หมวด</th><th class="num">คงเหลือ</th></tr></thead><tbody id="dashLowBody"></tbody></table></div>
+    </div>
   </div>
 </div>
 
@@ -870,6 +1049,25 @@ body.admin-on .admin-bar { display: flex; }
         </thead>
         <tbody id="m-tbody"></tbody>
       </table>
+    </div>
+  </div>
+</div>
+
+<!-- ===== รายละเอียดสินค้าพรีเมี่ยม/Beauterry (คลิกแถว) ===== -->
+<div class="modal" id="pmDetailModal" onclick="if(event.target===this)closePmDetail()">
+  <div class="modal-content pmd-card">
+    <div class="pmd-head">
+      <div>
+        <h2 id="pmdTitle"></h2>
+        <div class="pmd-updated" id="pmdUpdated"></div>
+      </div>
+      <button class="close" onclick="closePmDetail()">✕</button>
+    </div>
+    <div class="pmd-body">
+      <div class="pmd-wh" id="pmdWh"></div>
+      <div class="pmd-h">🔄 ประวัติเคลื่อนไหวล่าสุด</div>
+      <div id="pmdHistory"></div>
+      <div class="pmd-foot" id="pmdFoot"></div>
     </div>
   </div>
 </div>
@@ -1265,8 +1463,8 @@ function switchPage(page) {
 // ============================================================
 function premiumProducts() { return (DB.products || []).filter(p => p.brand === 'สินค้าพรีเมี่ยม'); }
 
-function pmRenderSummary() {
-  const list = premiumProducts();
+function pmRenderSummary(srcList) {
+  const list = srcList || premiumProducts();
   let tl = 0, ts = 0;
   list.forEach(p => { tl += Number(p.lamlukka) || 0; ts += Number(p.soi8) || 0; });
   const el = document.getElementById('pmSummary');
@@ -1277,12 +1475,20 @@ function renderPremium() {
   const body = document.getElementById('pmBody');
   if (!body) return;
   const q = (document.getElementById('pmSearch')?.value || '').trim().toLowerCase();
+  const whf = document.getElementById('pmWhFilter')?.value || 'all';
+  const totalCount = premiumProducts().length;
   let list = premiumProducts();
   if (q) list = list.filter(p => (p.code || '').toLowerCase().includes(q) || (p.name || '').toLowerCase().includes(q));
+  if (whf === 'soi8') list = list.filter(p => (Number(p.soi8) || 0) > 0);
+  else if (whf === 'lamlukka') list = list.filter(p => (Number(p.lamlukka) || 0) > 0);
   list.sort((a, b) => (a.code || '').localeCompare(b.code || ''));
+  const isFiltered = !!q || whf !== 'all';
   if (!list.length) {
     body.innerHTML = '<tr><td colspan="6" class="empty" style="padding:20px;text-align:center;color:#94a3b8">ไม่พบสินค้าพรีเมี่ยม</td></tr>';
-    pmRenderSummary();
+    const cntEl0 = document.getElementById('pmTableCnt');
+    if (cntEl0) cntEl0.textContent = isFiltered ? `(0 จาก ${totalCount} รายการ)` : '(0 รายการ)';
+    pmRenderSummary(list);
+    renderPmChart(list);
     return;
   }
   // คลังลำลูกกา/ซอย8 แสดงอย่างเดียว แก้ไม่ได้ — เพิ่ม/ลดสต๊อกผ่าน "บันทึกรับ-จ่ายรายวัน"
@@ -1290,7 +1496,7 @@ function renderPremium() {
   body.innerHTML = list.map((p, i) => {
     const closing = Number(p.closing) || 0;
     const cc = escapeHtml(p.code || '');
-    return `<tr data-id="${p.id}">
+    return `<tr data-id="${p.id}" onclick="openPmDetail(${p.id})" title="คลิกดูรายละเอียด / ประวัติเคลื่อนไหว">
       <td>${i + 1}</td>
       <td><code>${cc}</code></td>
       <td>${escapeHtml(p.name || '')}</td>
@@ -1299,8 +1505,84 @@ function renderPremium() {
       <td class="num bal pm-total ${cls(closing)}">${fmt(closing)}</td>
     </tr>`;
   }).join('');
-  pmRenderSummary();
+  const cntEl = document.getElementById('pmTableCnt');
+  if (cntEl) cntEl.textContent = isFiltered ? `(${list.length} จาก ${totalCount} รายการ)` : `(${list.length} รายการ)`;
+  pmRenderSummary(list);
+  renderPmChart(list);
 }
+
+// กราฟกระจายสต๊อก: เทียบยอดรวม + จำนวนรายการที่มีของ ระหว่างคลังลำลูกกา ↔ ซอย8
+function renderPmChart(srcList) {
+  const box = document.getElementById('pmChart');
+  if (!box) return;
+  const list = srcList || premiumProducts();
+  let lamQty = 0, soiQty = 0, lamN = 0, soiN = 0;
+  list.forEach(p => {
+    const l = Number(p.lamlukka) || 0, s = Number(p.soi8) || 0;
+    lamQty += l; soiQty += s;
+    if (l > 0) lamN++;
+    if (s > 0) soiN++;
+  });
+  const total = lamQty + soiQty || 1;
+  const lamPct = Math.round(lamQty / total * 100), soiPct = 100 - lamPct;
+  box.innerHTML = `<div class="pm-chart-card">
+    <div class="pm-chart-head">📊 กระจายสต๊อกตามคลัง (${list.length} รายการ · รวม ${fmt(lamQty + soiQty)} ชิ้น)</div>
+    <div class="pm-chart-tiles">
+      <div class="pmc-tile lam"><div class="pmc-l">🏭 คลังลำลูกกา</div><div class="pmc-v">${fmt(lamQty)}</div><div class="pmc-n">${lamN} รายการที่มีของ</div></div>
+      <div class="pmc-tile soi"><div class="pmc-l">🏪 คลังซอย8</div><div class="pmc-v">${fmt(soiQty)}</div><div class="pmc-n">${soiN} รายการที่มีของ</div></div>
+    </div>
+    <div class="pm-chart-bar">
+      <div class="pmc-seg lam" style="width:${lamPct}%" title="ลำลูกกา ${fmt(lamQty)} (${lamPct}%)">${lamPct >= 10 ? lamPct + '%' : ''}</div>
+      <div class="pmc-seg soi" style="width:${soiPct}%" title="ซอย8 ${fmt(soiQty)} (${soiPct}%)">${soiPct >= 10 ? soiPct + '%' : ''}</div>
+    </div>
+    <div class="pm-chart-legend">
+      <span><i style="background:#2563eb"></i>ลำลูกกา ${fmt(lamQty)} ชิ้น (${lamN} รายการ)</span>
+      <span><i style="background:#0d9488"></i>ซอย8 ${fmt(soiQty)} ชิ้น (${soiN} รายการ)</span>
+    </div>
+  </div>`;
+}
+
+// การ์ดรายละเอียด: ยอดแยกคลัง + อัปเดตล่าสุด + ประวัติเคลื่อนไหว
+// ใช้ร่วมกันทั้งพรีเมี่ยม (คงเหลือ=ลำลูกกา+ซอย8) และ Beauterry (คงเหลือ=ลำลูกกา−ซอย8)
+function openPmDetail(id) {
+  const p = (DB.products || []).find(x => x.id === id);
+  if (!p) return;
+  const isBta = p.brand === 'Beauterry';
+  const lam = Number(p.lamlukka) || 0, soi = Number(p.soi8) || 0, closing = Number(p.closing) || 0;
+
+  document.getElementById('pmdTitle').textContent = `${p.code} · ${p.name || ''}`;
+
+  // แถวเคลื่อนไหวจริง (ตัดแถวยกยอดว่างที่ in=0/out=0 ออก) เรียงใหม่ล่าสุดก่อน
+  const moved = (p.tx || []).filter(t => (t[1] || 0) > 0 || (t[2] || 0) > 0)
+    .slice().sort((a, b) => (b[0] || '').localeCompare(a[0] || ''));
+  const lastDate = moved.length ? formatDate(moved[0][0]) : '—';
+  document.getElementById('pmdUpdated').innerHTML = `อัปเดตเคลื่อนไหวล่าสุด <b>${lastDate}</b>`;
+
+  const balClass = (isBta ? closing < 0 : closing <= 0) ? 'neg' : '';
+  document.getElementById('pmdWh').innerHTML = `
+    <div class="pmd-wh-tile"><div class="l">คลังลำลูกกา</div><div class="v">${fmt(lam)}</div></div>
+    <div class="pmd-wh-tile"><div class="l">คลังซอย8</div><div class="v">${fmt(soi)}</div></div>
+    <div class="pmd-wh-tile bal ${balClass}"><div class="l">คงเหลือ ${isBta ? '(ลำลูกกา−ซอย8)' : '(ลำลูกกา+ซอย8)'}</div><div class="v">${fmt(closing)}</div></div>
+  `;
+
+  const rows = moved.slice(0, 20).map(t => {
+    const qin = Number(t[1]) || 0, qout = Number(t[2]) || 0;
+    const note = escapeHtml(t[4] || t[5] || '');
+    const chips = [];
+    if (qin > 0) chips.push(`<span class="pmd-chip in">📥 รับเข้า +${fmt(qin)}</span>`);
+    if (qout > 0) chips.push(`<span class="pmd-chip out">📤 ออกซอย8 −${fmt(qout)}</span>`);
+    return `<div class="pmd-mv-row"><span class="pmd-mv-date">${formatDate(t[0])}</span><span class="pmd-mv-chips">${chips.join('')}</span>${note ? `<span class="pmd-mv-note" title="${note}">${note}</span>` : ''}</div>`;
+  }).join('');
+  document.getElementById('pmdHistory').innerHTML = rows
+    || '<div class="pmd-empty">ยังไม่มีรายการเคลื่อนไหว</div>';
+
+  document.getElementById('pmdFoot').innerHTML =
+    'หมายเหตุ: "ออก" หักจากคลังซอย8 เสมอ · "รับเข้า" เป็นยอดรับรวม (ระบบยังไม่ได้บันทึกแยกว่าเข้าคลังไหนต่อรายการ)';
+
+  document.getElementById('pmDetailModal').classList.add('show');
+}
+function closePmDetail() { document.getElementById('pmDetailModal').classList.remove('show'); }
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePmDetail(); });
 
 // ============================================================
 //  หน้า "Beauterry": สต๊อกคลังลำลูกกา / ซอย8 (แสดงอย่างเดียว)
@@ -2147,6 +2429,16 @@ async function writeOnline() {
       `⚠️ ยังมี ${leftoverItems.toLocaleString()} รายการ (${leftoverPcs.toLocaleString()} ชิ้น) ที่ "ยังไม่เข้ารอบ"`,
       'ของชุดนี้จะไม่ถูกตัด (ตัดขาด) — แนะนำกด "บันทึกรอบยืนยัน" ให้ครบก่อน แล้วค่อยเขียน');
   }
+  const cumSkipped = d.cumulative_skipped || [];
+  if (cumSkipped.length > 0) {
+    const skipPcs = cumSkipped.reduce((s, it) => s + Number(it.qty || 0), 0);
+    lines.push('',
+      `⚠️ มี ${cumSkipped.length.toLocaleString()} รหัสที่ "ไม่มีในระบบ" จะไม่ถูกตัด (รวม ${skipPcs.toLocaleString()} ชิ้น):`);
+    for (const it of cumSkipped) {
+      lines.push(`   • ${it.code || '?'}  × ${Number(it.qty || 0).toLocaleString()} ชิ้น`);
+    }
+    lines.push('→ ถ้าต้องตัดด้วย ให้ไปสร้างรหัสนี้ก่อน แล้วค่อยกดเขียน');
+  }
   if (!confirm(lines.join('\n'))) return;
   await syncOnline();
 }
@@ -2596,29 +2888,142 @@ function renderDashboard() {
   outList.sort(byDateQty);
   const lowList = products.filter(p => (p.closing || 0) <= 0).sort((a, b) => (a.closing || 0) - (b.closing || 0));
 
+  // ใกล้หมด: ประเมินยอดออกเฉลี่ยจาก 30 วันล่าสุด → จะหมดใน ≤ 7 วัน (อิง computeReportStats เดิม)
+  const now = new Date();
+  const back30 = new Date(now); back30.setDate(now.getDate() - 29);
+  const win30 = { from: RP_ISO(back30), to: RP_ISO(now), days: 30 };
+  const soonList = products
+    .map(p => ({ p, s: computeReportStats(p, win30) }))
+    .filter(r => r.s.forecast !== null && r.s.forecast <= 7 && r.s.closing > 0)
+    .sort((a, b) => a.s.forecast - b.s.forecast);
+
   const totalIn = inList.reduce((s, x) => s + x.qty, 0);
   const totalOut = outList.reduce((s, x) => s + x.qty, 0);
   const totalBal = products.reduce((s, p) => s + (p.closing || 0), 0);
 
   document.getElementById('dashKpis').innerHTML = `
-    <div class="kpi in"><div class="label">📥 รับ (รายการ)</div><div class="value">${inList.length} <span style="font-size:12px;color:#6b7280;font-weight:400">/ ${fmt(totalIn)} ชิ้น</span></div></div>
-    <div class="kpi out"><div class="label">📤 ออก (รายการ)</div><div class="value">${outList.length} <span style="font-size:12px;color:#6b7280;font-weight:400">/ ${fmt(totalOut)} ชิ้น</span></div></div>
-    <div class="kpi bal"><div class="label">📦 คงเหลือรวม (ชิ้น)</div><div class="value">${fmt(totalBal)}</div></div>
-    <div class="kpi"><div class="label">รวมรายการสินค้า</div><div class="value">${products.length.toLocaleString()}</div></div>
-    <div class="kpi"><div class="label">⚠️ คงเหลือ ≤ 0</div><div class="value" style="color:#dc2626">${lowList.length}</div></div>
+    <div class="db-stat in"><div class="db-ic">📥</div><div class="db-meta"><div class="db-val">${inList.length} <small>/ ${fmt(totalIn)} ชิ้น</small></div><div class="db-lbl">รับ (รายการ / ชิ้น)</div></div></div>
+    <div class="db-stat out"><div class="db-ic">📤</div><div class="db-meta"><div class="db-val">${outList.length} <small>/ ${fmt(totalOut)} ชิ้น</small></div><div class="db-lbl">ออก (รายการ / ชิ้น)</div></div></div>
+    <div class="db-stat bal"><div class="db-ic">📦</div><div class="db-meta"><div class="db-val">${fmt(totalBal)}</div><div class="db-lbl">คงเหลือรวม (ชิ้น)</div></div></div>
+    <div class="db-stat total"><div class="db-ic">📋</div><div class="db-meta"><div class="db-val">${products.length.toLocaleString()}</div><div class="db-lbl">รวมรายการสินค้า</div></div></div>
+    <div class="db-stat soon"><div class="db-ic">⏳</div><div class="db-meta"><div class="db-val">${soonList.length}</div><div class="db-lbl">จะหมดใน ≤ 7 วัน</div></div></div>
+    <div class="db-stat low"><div class="db-ic">🛑</div><div class="db-meta"><div class="db-val">${lowList.length}</div><div class="db-lbl">คงเหลือ ≤ 0</div></div></div>
   `;
 
   const idx = p => DB.products.indexOf(p);
   document.getElementById('dashInCnt').textContent = inList.length ? `${inList.length} รายการ` : '';
   document.getElementById('dashOutCnt').textContent = outList.length ? `${outList.length} รายการ` : '';
+  document.getElementById('dashSoonCnt').textContent = soonList.length ? `${soonList.length} รายการ` : '';
   document.getElementById('dashLowCnt').textContent = lowList.length ? `${lowList.length} รายการ` : '';
+
+  renderBrandChart(products);
 
   renderMoveTable('dashInBody', inList, 'in');
   renderMoveTable('dashOutBody', outList, 'out');
 
+  document.getElementById('dashSoonBody').innerHTML = soonList.length
+    ? soonList.map(r => `<tr onclick="openProduct(${idx(r.p)})" title="คงเหลือ ${fmt(r.s.closing)} · ออกเฉลี่ย ${Math.round(r.s.avg).toLocaleString()}/วัน"><td class="code">${escapeHtml(r.p.code)}</td><td>${escapeHtml(r.p.name)}</td><td class="num">${fmt(r.s.closing)}</td><td class="num">${Math.round(r.s.avg).toLocaleString()}</td><td class="num soon-days ${r.s.forecast <= 3 ? 'crit' : ''}">${r.s.forecast} วัน</td></tr>`).join('')
+    : '<tr><td colspan="5" class="dash-empty">ไม่มีสินค้าที่ใกล้หมดใน 7 วัน 👍</td></tr>';
+
   document.getElementById('dashLowBody').innerHTML = lowList.length
     ? lowList.map(p => `<tr onclick="openProduct(${idx(p)})"><td class="code">${escapeHtml(p.code)}</td><td>${escapeHtml(p.name)}</td><td><span class="badge ${p.category}">${p.category}</span></td><td class="num bal ${cls(p.closing)}">${fmt(p.closing)}</td></tr>`).join('')
     : '<tr><td colspan="4" class="dash-empty">ไม่มีสินค้าคงเหลือ ≤ 0</td></tr>';
+
+  if (dashStockSelId != null) renderDashStockResult(); // คงผลค้นหาไว้เมื่อสลับช่วงเวลา
+}
+
+// สีแบรนด์ (วนใช้ซ้ำถ้าแบรนด์เกินจำนวนสี)
+const DASH_BRAND_COLORS = ['#2563eb', '#059669', '#ea580c', '#7c3aed', '#db2777', '#0891b2', '#ca8a04', '#475569'];
+function renderBrandChart(products) {
+  const bars = document.getElementById('dashBrandBars');
+  if (!bars) return;
+  const counts = {};
+  (products || []).forEach(p => { const b = p.brand || 'อื่นๆ'; counts[b] = (counts[b] || 0) + 1; });
+  const rows = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  const cntEl = document.getElementById('dashBrandCnt');
+  if (cntEl) cntEl.textContent = `${rows.length} แบรนด์ · ${(products || []).length.toLocaleString()} รายการ`;
+  if (!rows.length) { bars.innerHTML = '<div class="dash-empty">ไม่มีข้อมูลแบรนด์</div>'; return; }
+  const max = rows[0][1] || 1;
+  bars.innerHTML = rows.map(([name, n], i) => {
+    const pct = Math.max(4, Math.round((n / max) * 100));
+    const color = DASH_BRAND_COLORS[i % DASH_BRAND_COLORS.length];
+    return `<div class="db-bb-row" title="${escapeHtml(name)}: ${n} รายการ"><div class="db-bb-name">${escapeHtml(name)}</div><div class="db-bb-track"><div class="db-bb-fill" style="width:${pct}%;background:${color}"></div></div><div class="db-bb-val">${n}</div></div>`;
+  }).join('');
+}
+
+// ============================================================
+//  ค้นหาสต็อก (dashboard) — ดูยอดคงเหลือปัจจุบันของสินค้าทันที
+//  อ่าน DB.products เท่านั้น · reuse searchProducts/hl/openProduct
+// ============================================================
+let dashStockSelId = null;   // เก็บ product.id ที่เลือกไว้
+let dashStockAcIndex = -1;
+
+function dashStockAc(q) {
+  const list = document.getElementById('dashStockAcList');
+  const matches = searchProducts(q);
+  dashStockAcIndex = -1;
+  if (!q.trim()) { list.classList.remove('show'); return; }
+  if (!matches.length) {
+    list.innerHTML = '<div class="ac-empty">ไม่พบสินค้า</div>';
+    list.classList.add('show');
+    return;
+  }
+  list.innerHTML = matches.map(p =>
+    `<div class="ac-item" onmousedown="dashStockPick(${DB.products.indexOf(p)})">
+      <span class="ac-code">${hl(p.code, q)}</span> <span class="ac-name">${hl(p.name, q)}</span>
+      <span class="ac-bal">คงเหลือ ${fmt(p.closing)}</span>
+    </div>`).join('');
+  list.classList.add('show');
+}
+
+function dashStockHideAc() { document.getElementById('dashStockAcList').classList.remove('show'); }
+
+function dashStockKeydown(e) {
+  const list = document.getElementById('dashStockAcList');
+  const items = list.querySelectorAll('.ac-item');
+  if (!items.length) return;
+  if (e.key === 'ArrowDown') { e.preventDefault(); dashStockAcIndex = Math.min(dashStockAcIndex + 1, items.length - 1); }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); dashStockAcIndex = Math.max(dashStockAcIndex - 1, 0); }
+  else if (e.key === 'Enter') { e.preventDefault(); if (dashStockAcIndex >= 0) items[dashStockAcIndex].dispatchEvent(new Event('mousedown')); return; }
+  else return;
+  items.forEach((it, i) => it.classList.toggle('active', i === dashStockAcIndex));
+}
+
+function dashStockPick(idx) {
+  const p = DB.products[idx];
+  if (!p) return;
+  dashStockSelId = p.id;
+  document.getElementById('dashStockSearch').value = p.code;
+  dashStockHideAc();
+  renderDashStockResult();
+}
+
+function clearDashStock() {
+  dashStockSelId = null;
+  const inp = document.getElementById('dashStockSearch');
+  if (inp) inp.value = '';
+  renderDashStockResult();
+}
+
+function renderDashStockResult() {
+  const el = document.getElementById('dashStockResult');
+  if (!el) return;
+  const p = (DB.products || []).find(x => x.id === dashStockSelId);
+  if (!p) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  el.style.display = '';
+  el.innerHTML = `
+    <button class="ssr-close" onclick="clearDashStock()" title="ปิด">✕</button>
+    <div class="ssr-top">
+      <div class="ssr-id"><span class="ssr-code">${escapeHtml(p.code)}</span><span class="ssr-name">${escapeHtml(p.name || '')}</span></div>
+      <div class="ssr-tags">${p.brand ? `<span class="ssr-brand">${escapeHtml(p.brand)}</span>` : ''}<span class="badge ${p.category}">${p.category || ''}</span></div>
+    </div>
+    <div class="ssr-metrics">
+      <div class="ssr-metric main ${cls(p.closing)}"><div class="m-lbl">📦 คงเหลือปัจจุบัน</div><div class="m-val">${fmt(p.closing)} <small>ชิ้น</small></div></div>
+      <div class="ssr-metric"><div class="m-lbl">📥 รับรวม</div><div class="m-val in">${fmt(p.total_in)}</div></div>
+      <div class="ssr-metric"><div class="m-lbl">📤 ออกรวม</div><div class="m-val out">${fmt(p.total_out)}</div></div>
+    </div>
+    <button class="ssr-open" onclick="openProduct(${DB.products.indexOf(p)})">ดูประวัติเต็ม →</button>
+  `;
 }
 
 // Movement table with an inline proportional bar per row (replaces the treemap).

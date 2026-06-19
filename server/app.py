@@ -1970,18 +1970,23 @@ def online_preview():
         cumulative_pcs = 0.0
         cumulative_items = 0
         cumulative_rounds = 0
+        cumulative_skipped = []  # รหัสในยอดสะสมที่ map ไม่ได้ → จะไม่ถูกตัด (โชว์เตือนก่อนเขียน)
         try:
             cumj = script_ecom_json(
                 "/api/stock/propose-cumulative?date=" + urllib.parse.quote(p_date), timeout=20)
             cumulative_rounds = int(cumj.get("batches_count") or 0)
             for ci in (cumj.get("proposed") or []):
                 ccode = str((ci or {}).get("code", "")).strip()
+                try:
+                    cqty = float((ci or {}).get("qty", 0) or 0)
+                except (TypeError, ValueError):
+                    cqty = 0.0
                 if ccode in code_to:  # นับเฉพาะรหัสที่ map ได้ (เหมือนตอนเขียนจริง)
                     cumulative_items += 1
-                    try:
-                        cumulative_pcs += float((ci or {}).get("qty", 0) or 0)
-                    except (TypeError, ValueError):
-                        pass
+                    cumulative_pcs += cqty
+                else:  # map ไม่ได้ → จะไม่ถูกตัด เก็บไว้เตือนผู้ใช้
+                    cumulative_skipped.append(
+                        {"code": ccode, "qty": cqty, "name": (ci or {}).get("name", "")})
         except Exception:
             pass  # Script-Ecom ล่ม → ไม่โชว์ยอดสะสม (ปุ่มยังทำงานตามเดิม)
 
@@ -1992,6 +1997,7 @@ def online_preview():
                        batches_count=batches_count, latest_batch_label=latest_batch_label,
                        cumulative_pcs=cumulative_pcs, cumulative_items=cumulative_items,
                        cumulative_rounds=cumulative_rounds,
+                       cumulative_skipped=cumulative_skipped,
                        platforms=payload.get("platforms") or {})
     except Exception as e:
         return jsonify(error="server_error", detail=str(e)), 500
