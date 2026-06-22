@@ -125,6 +125,16 @@ body.admin-on .tx-col-act { display: table-cell; }
 .tx-table th, .tx-table td { padding: 8px 12px; border-bottom: 1px solid #f3f4f6; }
 .tx-row-movement { background: #fffbeb; }
 .tx-row-movement:hover { background: #fef3c7; }
+/* online per-platform breakdown sub-row (A1) */
+.pf-row td { background: #fff7ed; padding: 6px 12px 8px; }
+.pf-line { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: 12.5px; }
+.pf-lead { color: #9a3412; font-weight: 600; }
+.pf-chip { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 999px; font-weight: 600; font-size: 12px; }
+.pf-chip .dot { width: 7px; height: 7px; border-radius: 50%; }
+.pf-shopee { background: #fff1e6; color: #ea580c; } .pf-shopee .dot { background: #ea580c; }
+.pf-lazada { background: #e8efff; color: #1d4ed8; } .pf-lazada .dot { background: #1d4ed8; }
+.pf-tiktok { background: #e6f7f3; color: #0f766e; } .pf-tiktok .dot { background: #0f766e; }
+.pf-total { margin-left: auto; color: #334155; font-weight: 700; }
 .empty { padding: 40px; text-align: center; color: #9ca3af; }
 .results-count { font-size: 13px; color: #6b7280; padding: 8px 4px; }
 .tx-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 12px; }
@@ -3484,10 +3494,11 @@ function renderHistory() {
   // Show latest date first (newest → oldest)
   txs = txs.slice().sort((a, b) => (b[0] || '').localeCompare(a[0] || ''));
   tbody.innerHTML = txs.map(t => {
-    // t = [date, in, out, balance, doc, note, channel]  (channel appended at index 6 post-migration)
+    // t = [date, in, out, balance, doc, note, channel, shopee, lazada, tiktok]
+    // (channel at index 6; per-platform online qty at 7..9, post-migration)
     const movement = (t[1] || 0) !== 0 || (t[2] || 0) !== 0;
     const ch = t[6] || DEFAULT_CHANNEL;
-    return `<tr class="${movement ? 'tx-row-movement' : ''}">
+    const row = `<tr class="${movement ? 'tx-row-movement' : ''}">
       <td>${formatDate(t[0])}</td>
       <td>${escapeHtml(t[4])}</td>
       <td>${channelBadge(ch)}</td>
@@ -3497,7 +3508,24 @@ function renderHistory() {
       <td>${escapeHtml(t[5])}</td>
       <td class="tx-col-act"><button class="tx-edit-btn" onclick="openEditMovement('${t[0]}', '${escapeHtml(ch)}')">✏️ แก้ไข</button></td>
     </tr>`;
+    return row + platformBreakdownRow(ch, t[7], t[8], t[9]);
   }).join('');
+}
+
+// A1 breakdown: a sub-row under an online movement showing per-platform qty.
+// Only rendered for channel='online' rows that actually carry per-platform data.
+function platformBreakdownRow(ch, shopee, lazada, tiktok) {
+  if (ch !== 'online') return '';
+  const sp = Number(shopee || 0), lz = Number(lazada || 0), tt = Number(tiktok || 0);
+  const total = sp + lz + tt;
+  if (total <= 0) return '';
+  const chips = [];
+  if (sp) chips.push(`<span class="pf-chip pf-shopee"><span class="dot"></span>Shopee ${sp.toLocaleString()}</span>`);
+  if (tt) chips.push(`<span class="pf-chip pf-tiktok"><span class="dot"></span>TikTok ${tt.toLocaleString()}</span>`);
+  if (lz) chips.push(`<span class="pf-chip pf-lazada"><span class="dot"></span>Lazada ${lz.toLocaleString()}</span>`);
+  return `<tr class="pf-row"><td colspan="8"><div class="pf-line">` +
+    `<span class="pf-lead">↳ แยกช่องทาง</span>${chips.join('')}` +
+    `<span class="pf-total">รวม ${total.toLocaleString()} ชิ้น</span></div></td></tr>`;
 }
 
 function formatDate(iso) {

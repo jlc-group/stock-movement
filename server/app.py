@@ -497,17 +497,19 @@ def fetch_product(cur, product_id):
     if not p:
         return None
     cur.execute(f"""
-        SELECT movement_date, qty_in, qty_out, balance, doc_no, note, channel
+        SELECT movement_date, qty_in, qty_out, balance, doc_no, note, channel,
+               qty_shopee, qty_lazada, qty_tiktok
         FROM {config.DB_SCHEMA}.stock_movements
         WHERE product_id = %s
         ORDER BY movement_date, id
     """, (product_id,))
-    # channel is appended LAST (index 6) so the existing 0..5 fields keep their
-    # positions for every export/create/POST/PUT consumer of this shape.
+    # channel is at index 6; per-platform online qty appended at 7..9 (additive) so the
+    # existing 0..6 fields keep their positions for every export/create/POST/PUT consumer.
     tx = [[
         r[0].isoformat() if r[0] else "",
         num(r[1]), num(r[2]), num(r[3]),
         r[4] or "", r[5] or "", r[6] or "mixed",
+        num(r[7]), num(r[8]), num(r[9]),
     ] for r in cur.fetchall()]
     return {
         "id": p[0], "sheet": p[1], "code": p[2], "name": p[3] or "", "category": p[4],
@@ -644,11 +646,12 @@ def products():
     prod_rows = cur.fetchall()
 
     cur.execute(f"""
-        SELECT product_id, movement_date, qty_in, qty_out, balance, doc_no, note, channel
+        SELECT product_id, movement_date, qty_in, qty_out, balance, doc_no, note, channel,
+               qty_shopee, qty_lazada, qty_tiktok
         FROM {config.DB_SCHEMA}.stock_movements
         ORDER BY product_id, movement_date, id
     """)
-    # channel appended LAST (index 6 of each tx row), mirroring fetch_product.
+    # channel at index 6 (mirrors fetch_product); per-platform online qty at 7..9 (additive).
     # ORDER BY adds `id` so same-day multi-channel rows have a stable order
     # matching recompute_product's running-balance order.
     tx_by_product = defaultdict(list)
@@ -657,6 +660,7 @@ def products():
             r[1].isoformat() if r[1] else "",
             num(r[2]), num(r[3]), num(r[4]),
             r[5] or "", r[6] or "", r[7] or "mixed",
+            num(r[8]), num(r[9]), num(r[10]),
         ])
 
     cur.close()
@@ -1828,13 +1832,19 @@ def online_sync():
             if pid is None:
                 skipped.append(code)
                 continue
+            sp = float((it or {}).get("shopee", 0) or 0)
+            lz = float((it or {}).get("lazada", 0) or 0)
+            tt = float((it or {}).get("tiktok", 0) or 0)
             cur.execute(f"""
                 INSERT INTO {config.DB_SCHEMA}.stock_movements
-                    (product_id, movement_date, doc_no, qty_in, qty_out, balance, note, channel)
-                VALUES (%s, %s, %s, 0, %s, 0, %s, 'online')
+                    (product_id, movement_date, doc_no, qty_in, qty_out, balance, note, channel,
+                     qty_shopee, qty_lazada, qty_tiktok)
+                VALUES (%s, %s, %s, 0, %s, 0, %s, 'online', %s, %s, %s)
                 ON CONFLICT (product_id, movement_date, channel) DO UPDATE SET
-                    qty_out = EXCLUDED.qty_out, doc_no = EXCLUDED.doc_no, note = EXCLUDED.note
-            """, (pid, p_date, doc_no, qty, "ตัดสต็อกออนไลน์ (auto)"))
+                    qty_out = EXCLUDED.qty_out, doc_no = EXCLUDED.doc_no, note = EXCLUDED.note,
+                    qty_shopee = EXCLUDED.qty_shopee, qty_lazada = EXCLUDED.qty_lazada,
+                    qty_tiktok = EXCLUDED.qty_tiktok
+            """, (pid, p_date, doc_no, qty, "ตัดสต็อกออนไลน์ (auto)", sp, lz, tt))
             affected.add(pid)
             applied.append({
                 "code": code,
