@@ -300,6 +300,9 @@ body.admin-on .admin-bar { display: flex; }
 .db-pills button.active { background: #fff; color: #2563eb; box-shadow: 0 1px 3px rgba(0,0,0,.14); }
 .db-ch-filter { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: #64748b; }
 .db-ch-filter select { border: 1px solid #d1d5db; background: #fff; border-radius: 8px; padding: 7px 10px; font-size: 12.5px; font-weight: 600; color: #1e293b; cursor: pointer; }
+.db-custom-range { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 0 2px 12px; }
+.db-custom-range label { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: #64748b; }
+.db-custom-range input[type=date] { border: 1px solid #d1d5db; background: #fff; border-radius: 8px; padding: 6px 10px; font-size: 12.5px; font-weight: 600; color: #1e293b; cursor: pointer; }
 
 .db-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 20px; }
 .db-card { background: #fff; border: 1px solid #f1f5f9; border-radius: 14px; box-shadow: 0 1px 3px rgba(0,0,0,.05); overflow: hidden; }
@@ -551,13 +554,13 @@ body.admin-on .admin-bar { display: flex; }
 #pmTable th, #pmTable td { padding: 10px 12px; border-bottom: 1px solid #eef2f7; text-align: left; white-space: nowrap; }
 #pmTable th { background: #f8fafc; color: #475569; font-weight: 700; position: sticky; top: 0; z-index: 2; }
 #pmTable th.num, #pmTable td.num { text-align: right; }
-#pmTable tbody tr:hover { background: #f8fbff; }
+#pmTable tbody tr:hover, #btTable tbody tr:hover { background: #f8fbff; }
 #pmTable code { color: #2563eb; font-weight: 700; }
 .pm-wh-input { width: 92px; text-align: right; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font: inherit; }
 .pm-wh-input:focus { border-color: #2563eb; outline: none; box-shadow: 0 0 0 2px #2563eb22; }
 .pm-total { font-weight: 800; color: #0f172a; }
 .pm-total.neg { color: #dc2626; }
-#pmTable tbody tr { cursor: pointer; }
+#pmTable tbody tr, #btTable tbody tr { cursor: pointer; }
 /* การ์ดรายละเอียดพรีเมี่ยม/Beauterry */
 .pmd-card { max-width: 580px; }
 .pmd-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 18px 22px 14px; border-bottom: 1px solid #f1f5f9; }
@@ -778,10 +781,17 @@ body.admin-on .admin-bar { display: flex; }
       <div class="search-wrap" style="flex:1;min-width:220px">
         <input type="text" id="btSearch" autocomplete="off" placeholder="🔍 ค้นหา รหัส หรือ ชื่อสินค้า..." oninput="renderBeauterry()">
       </div>
+      <select id="btWhFilter" class="pm-wh-filter" onchange="renderBeauterry()">
+        <option value="all">📦 แสดงทั้งหมด</option>
+        <option value="soi8">🏪 เฉพาะมีของในซอย8</option>
+        <option value="lamlukka">🏭 เฉพาะมีของในลำลูกกา</option>
+      </select>
       <span id="btSummary" class="muted"></span>
     </div>
   </div>
+  <div id="btChart"></div>
   <div class="card" style="padding:0;margin-top:14px;overflow:auto">
+    <div class="pm-table-head">📋 รายการสินค้าทั้งหมด <span id="btTableCnt" class="pm-table-cnt"></span></div>
     <table id="btTable">
       <thead><tr>
         <th>#</th>
@@ -883,10 +893,15 @@ body.admin-on .admin-bar { display: flex; }
       <button data-r="7d" onclick="setDashRange('7d')">7 วัน</button>
       <button data-r="month" onclick="setDashRange('month')">เดือนนี้</button>
       <button data-r="all" onclick="setDashRange('all')">ทั้งหมด</button>
+      <button data-r="custom" onclick="setDashRange('custom')">กำหนดเอง</button>
     </div>
     <label class="db-ch-filter">ช่องทาง:
       <select id="dashChannel" onchange="setDashChannel(this.value)"></select>
     </label>
+  </div>
+  <div class="db-custom-range" id="dashCustomRange" style="display:none">
+    <label>จาก <input type="date" id="dashFrom" onchange="onDashCustomChange()"></label>
+    <label>ถึง <input type="date" id="dashTo" onchange="onDashCustomChange()"></label>
   </div>
   <div class="db-sub-range">ช่วงที่แสดง: <span id="dashDate"></span></div>
   <div class="db-card" id="dashOutChartCard" style="margin-bottom:20px">
@@ -1670,19 +1685,27 @@ function renderBeauterry() {
   const body = document.getElementById('btBody');
   if (!body) return;
   const q = (document.getElementById('btSearch')?.value || '').trim().toLowerCase();
+  const whf = document.getElementById('btWhFilter')?.value || 'all';
+  const totalCount = beauterryProducts().length;
   let list = beauterryProducts();
   if (q) list = list.filter(p => (p.code || '').toLowerCase().includes(q) || (p.name || '').toLowerCase().includes(q));
+  if (whf === 'soi8') list = list.filter(p => (Number(p.soi8) || 0) > 0);
+  else if (whf === 'lamlukka') list = list.filter(p => (Number(p.lamlukka) || 0) > 0);
   list.sort((a, b) => (a.code || '').localeCompare(b.code || ''));
+  const isFiltered = !!q || whf !== 'all';
   if (!list.length) {
     body.innerHTML = '<tr><td colspan="6" class="empty" style="padding:20px;text-align:center;color:#94a3b8">ไม่พบสินค้า Beauterry</td></tr>';
+    const cntEl0 = document.getElementById('btTableCnt');
+    if (cntEl0) cntEl0.textContent = isFiltered ? `(0 จาก ${totalCount} รายการ)` : '(0 รายการ)';
     btRenderSummary();
+    renderBtChart(list);
     return;
   }
   const whCell = (p, field) => fmt(Number(p[field]) || 0);
   body.innerHTML = list.map((p, i) => {
     const closing = Number(p.closing) || 0;
     const cc = escapeHtml(p.code || '');
-    return `<tr data-id="${p.id}">
+    return `<tr data-id="${p.id}" onclick="openPmDetail(${p.id})" title="คลิกดูรายละเอียด / ประวัติเคลื่อนไหว">
       <td>${i + 1}</td>
       <td><code>${cc}</code></td>
       <td>${escapeHtml(p.name || '')}</td>
@@ -1691,7 +1714,42 @@ function renderBeauterry() {
       <td class="num bal bt-total ${cls(closing)}">${fmt(closing)}</td>
     </tr>`;
   }).join('');
+  const cntEl = document.getElementById('btTableCnt');
+  if (cntEl) cntEl.textContent = isFiltered ? `(${list.length} จาก ${totalCount} รายการ)` : `(${list.length} รายการ)`;
   btRenderSummary();
+  renderBtChart(list);
+}
+
+// กราฟกระจายสต๊อก Beauterry: เทียบยอดรวม + จำนวนรายการที่มีของ ระหว่างคลังลำลูกกา ↔ ซอย8
+// แสดงผลอย่างเดียว (ไม่ยุ่งกับสูตรคงเหลือ) — โครงสร้าง/CSS เดียวกับหน้าพรีเมี่ยม
+function renderBtChart(srcList) {
+  const box = document.getElementById('btChart');
+  if (!box) return;
+  const list = srcList || beauterryProducts();
+  let lamQty = 0, soiQty = 0, lamN = 0, soiN = 0;
+  list.forEach(p => {
+    const l = Number(p.lamlukka) || 0, s = Number(p.soi8) || 0;
+    lamQty += l; soiQty += s;
+    if (l > 0) lamN++;
+    if (s > 0) soiN++;
+  });
+  const total = lamQty + soiQty || 1;
+  const lamPct = Math.round(lamQty / total * 100), soiPct = 100 - lamPct;
+  box.innerHTML = `<div class="pm-chart-card">
+    <div class="pm-chart-head">📊 กระจายสต๊อกตามคลัง (${list.length} รายการ · รวม ${fmt(lamQty + soiQty)} ชิ้น)</div>
+    <div class="pm-chart-tiles">
+      <div class="pmc-tile lam"><div class="pmc-l">🏭 คลังลำลูกกา</div><div class="pmc-v">${fmt(lamQty)}</div><div class="pmc-n">${lamN} รายการที่มีของ</div></div>
+      <div class="pmc-tile soi"><div class="pmc-l">🏪 คลังซอย8</div><div class="pmc-v">${fmt(soiQty)}</div><div class="pmc-n">${soiN} รายการที่มีของ</div></div>
+    </div>
+    <div class="pm-chart-bar">
+      <div class="pmc-seg lam" style="width:${lamPct}%" title="ลำลูกกา ${fmt(lamQty)} (${lamPct}%)">${lamPct >= 10 ? lamPct + '%' : ''}</div>
+      <div class="pmc-seg soi" style="width:${soiPct}%" title="ซอย8 ${fmt(soiQty)} (${soiPct}%)">${soiPct >= 10 ? soiPct + '%' : ''}</div>
+    </div>
+    <div class="pm-chart-legend">
+      <span><i style="background:#2563eb"></i>ลำลูกกา ${fmt(lamQty)} ชิ้น (${lamN} รายการ)</span>
+      <span><i style="background:#0d9488"></i>ซอย8 ${fmt(soiQty)} ชิ้น (${soiN} รายการ)</span>
+    </div>
+  </div>`;
 }
 
 // ===== หน้า "ออนไลน์": ดึงยอดออนไลน์จาก Script-Ecom -> ลงช่อง online =====
@@ -2915,7 +2973,24 @@ async function pollPull() {
 }
 
 let dashRange = '7d';
-function setDashRange(r) { dashRange = r; renderDashboard(); }
+let dashFrom = '', dashTo = '';  // ISO dates for the 'custom' range
+function setDashRange(r) {
+  dashRange = r;
+  // เมื่อเลือก "กำหนดเอง" ครั้งแรก ตั้งค่าเริ่มต้นเป็น 7 วันย้อนหลัง ถ้ายังว่าง
+  if (r === 'custom' && (!dashFrom || !dashTo)) {
+    const now = new Date();
+    const d = x => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+    const s = new Date(now); s.setDate(now.getDate() - 6);
+    dashFrom = d(s); dashTo = d(now);
+  }
+  renderDashboard();
+}
+function onDashCustomChange() {
+  dashFrom = document.getElementById('dashFrom').value;
+  dashTo = document.getElementById('dashTo').value;
+  dashRange = 'custom';
+  renderDashboard();
+}
 let dashChannel = 'all';
 function setDashChannel(v) { dashChannel = v; renderDashboard(); }
 
@@ -2929,6 +3004,12 @@ function dashRangeInfo() {
   if (dashRange === 'yesterday') { const y = new Date(now); y.setDate(now.getDate() - 1); const yd = d(y); return { from: yd, to: yd, label: `เมื่อวาน (${dm(yd)})` }; }
   if (dashRange === '7d') { const s = new Date(now); s.setDate(now.getDate() - 6); return { from: d(s), to: today, label: `7 วันย้อนหลัง (${dm(d(s))} – ${dm(today)})` }; }
   if (dashRange === 'month') { const s = new Date(now.getFullYear(), now.getMonth(), 1); return { from: d(s), to: today, label: `เดือนนี้ (${dm(d(s))} – ${dm(today)})` }; }
+  if (dashRange === 'custom') {
+    let f = dashFrom || null, t = dashTo || null;
+    if (f && t && f > t) { const tmp = f; f = t; t = tmp; }  // สลับให้ จาก ≤ ถึง
+    const lbl = (f || t) ? `กำหนดเอง (${f ? dm(f) : '…'} – ${t ? dm(t) : '…'})` : 'กำหนดเอง (เลือกวันที่)';
+    return { from: f, to: t, label: lbl };
+  }
   return { from: null, to: today, label: 'ทั้งหมด (ถึงวันนี้)' };
 }
 
@@ -3065,6 +3146,12 @@ function renderDashboard() {
   const { from, to, label } = dashRangeInfo();
   document.getElementById('dashDate').textContent = label;
   document.querySelectorAll('#dashFilter button').forEach(b => b.classList.toggle('active', b.dataset.r === dashRange));
+  const customRow = document.getElementById('dashCustomRange');
+  customRow.style.display = dashRange === 'custom' ? 'flex' : 'none';
+  if (dashRange === 'custom') {
+    document.getElementById('dashFrom').value = dashFrom || '';
+    document.getElementById('dashTo').value = dashTo || '';
+  }
   syncDashChannelSelect();
 
   // Collect every real movement row inside the range (one entry per record, not per product).
