@@ -298,6 +298,8 @@ body.admin-on .admin-bar { display: flex; }
 .db-pills button { border: none; background: transparent; padding: 7px 13px; border-radius: 8px; font-size: 12.5px; font-weight: 600; color: #64748b; cursor: pointer; transition: background .15s, color .15s; }
 .db-pills button:hover { color: #1e293b; }
 .db-pills button.active { background: #fff; color: #2563eb; box-shadow: 0 1px 3px rgba(0,0,0,.14); }
+.db-ch-filter { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: #64748b; }
+.db-ch-filter select { border: 1px solid #d1d5db; background: #fff; border-radius: 8px; padding: 7px 10px; font-size: 12.5px; font-weight: 600; color: #1e293b; cursor: pointer; }
 
 .db-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 20px; }
 .db-card { background: #fff; border: 1px solid #f1f5f9; border-radius: 14px; box-shadow: 0 1px 3px rgba(0,0,0,.05); overflow: hidden; }
@@ -319,6 +321,38 @@ body.admin-on .admin-bar { display: flex; }
 .db-bb-fill { height: 100%; border-radius: 999px; min-width: 4px; transition: width .5s ease; }
 .db-bb-val { font-size: 12.5px; font-weight: 800; color: #0f172a; font-variant-numeric: tabular-nums; min-width: 30px; text-align: right; }
 @media (max-width: 560px) { .db-bb-row { grid-template-columns: 96px 1fr auto; gap: 8px; } .db-bb-name { font-size: 11.5px; } }
+/* ===== กราฟรายการออก (stacked by channel) ===== */
+.db-oc-bars { padding: 10px 16px 16px; display: flex; flex-direction: column; gap: 10px; }
+.db-oc-row { display: grid; grid-template-columns: 160px 1fr auto; align-items: center; gap: 12px; }
+.db-oc-name { font-size: 12.5px; font-weight: 600; color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.db-oc-name small { color: #94a3b8; font-weight: 500; }
+.db-oc-track { background: #f1f5f9; border-radius: 999px; height: 18px; overflow: hidden; display: flex; }
+.db-oc-seg { height: 100%; min-width: 2px; transition: width .5s ease; }
+.db-oc-seg:first-child { border-radius: 999px 0 0 999px; }
+.db-oc-seg:last-child { border-radius: 0 999px 999px 0; }
+.db-oc-val { font-size: 12.5px; font-weight: 800; color: #0f172a; font-variant-numeric: tabular-nums; min-width: 44px; text-align: right; }
+.db-oc-empty { padding: 22px 16px; text-align: center; color: #94a3b8; font-size: 13px; }
+/* per-channel summary (ยอดออกแยกตามช่องทาง) */
+.db-oc-chans { padding: 14px 16px 6px; display: flex; flex-direction: column; gap: 10px; }
+.db-oc-chan { display: grid; grid-template-columns: 138px 1fr auto; align-items: center; gap: 12px; }
+.db-oc-chan-lbl { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 700; color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.db-oc-chan-lbl .dot { width: 12px; height: 12px; border-radius: 3px; flex: none; }
+.db-oc-chan-track { background: #f1f5f9; border-radius: 999px; height: 22px; overflow: hidden; }
+.db-oc-chan-fill { height: 100%; border-radius: 999px; min-width: 3px; overflow: hidden; display: flex; transition: width .5s ease; }
+.db-oc-chan-seg { height: 100%; min-width: 1px; box-shadow: inset -1px 0 0 rgba(255,255,255,.5); }
+.db-oc-chan-seg:last-child { box-shadow: none; }
+.db-oc-chan-val { font-size: 13.5px; font-weight: 800; color: #0f172a; font-variant-numeric: tabular-nums; min-width: 104px; text-align: right; }
+.db-oc-chan-val small { color: #94a3b8; font-weight: 600; margin-left: 6px; }
+.db-oc-platleg { display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 4px 16px 2px; margin-left: 150px; }
+.db-oc-platleg .lg { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 600; color: #475569; }
+.db-oc-platleg .lg i { width: 10px; height: 10px; border-radius: 3px; }
+.db-oc-platleg .lg small { color: #94a3b8; font-weight: 600; }
+.db-oc-subhead { padding: 14px 16px 2px; margin-top: 6px; border-top: 1px solid #f1f5f9; font-size: 12.5px; font-weight: 700; color: #64748b; }
+@media (max-width: 560px) {
+  .db-oc-row { grid-template-columns: 110px 1fr auto; gap: 8px; } .db-oc-name { font-size: 11.5px; }
+  .db-oc-chan { grid-template-columns: 92px 1fr auto; gap: 8px; } .db-oc-chan-lbl { font-size: 11.5px; } .db-oc-chan-val { min-width: 76px; font-size: 12px; }
+  .db-oc-platleg { margin-left: 0; }
+}
 /* ===== ค้นหาสต็อก result card ===== */
 .ssr-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; padding-right: 34px; padding-bottom: 14px; border-bottom: 1px solid #f1f5f9; }
 .ssr-id { display: flex; flex-direction: column; gap: 3px; }
@@ -850,16 +884,25 @@ body.admin-on .admin-bar { display: flex; }
       <button data-r="month" onclick="setDashRange('month')">เดือนนี้</button>
       <button data-r="all" onclick="setDashRange('all')">ทั้งหมด</button>
     </div>
+    <label class="db-ch-filter">ช่องทาง:
+      <select id="dashChannel" onchange="setDashChannel(this.value)"></select>
+    </label>
   </div>
   <div class="db-sub-range">ช่วงที่แสดง: <span id="dashDate"></span></div>
+  <div class="db-card" id="dashOutChartCard" style="margin-bottom:20px">
+    <div class="db-ch"><span class="db-ch-title">📊 รายการออก — ตามช่องทาง</span><span class="db-ch-cnt" id="dashOutChartCnt"></span></div>
+    <div class="db-oc-chans" id="dashOutChChannels"></div>
+    <div class="db-oc-subhead" id="dashOutProdHead">สินค้าออกมากสุด</div>
+    <div class="db-oc-bars" id="dashOutChartBars"></div>
+  </div>
   <div class="db-grid">
     <div class="db-card">
       <div class="db-ch"><span class="db-ch-title">📥 รายการรับ</span><span class="db-ch-cnt" id="dashInCnt"></span></div>
-      <div class="db-scroll dash-move"><table><thead><tr><th>วันที่</th><th>รหัส</th><th>ชื่อสินค้า</th><th class="num">รับ</th><th class="num">คงเหลือ</th></tr></thead><tbody id="dashInBody"></tbody></table></div>
+      <div class="db-scroll dash-move"><table><thead><tr><th>วันที่</th><th>รหัส</th><th>ชื่อสินค้า</th><th>ช่องทาง</th><th class="num">รับ</th><th class="num">คงเหลือ</th></tr></thead><tbody id="dashInBody"></tbody></table></div>
     </div>
     <div class="db-card">
       <div class="db-ch"><span class="db-ch-title">📤 รายการออก</span><span class="db-ch-cnt" id="dashOutCnt"></span></div>
-      <div class="db-scroll dash-move"><table><thead><tr><th>วันที่</th><th>รหัส</th><th>ชื่อสินค้า</th><th class="num">ออก</th><th class="num">คงเหลือ</th></tr></thead><tbody id="dashOutBody"></tbody></table></div>
+      <div class="db-scroll dash-move"><table><thead><tr><th>วันที่</th><th>รหัส</th><th>ชื่อสินค้า</th><th>ช่องทาง</th><th class="num">ออก</th><th class="num">คงเหลือ</th></tr></thead><tbody id="dashOutBody"></tbody></table></div>
     </div>
   </div>
 
@@ -1426,6 +1469,18 @@ function todayTx(p) {
   return (p.tx || []).find(r => r[0] === today);
 }
 
+// Sum in/out across ALL today rows (a product can have multiple rows per day —
+// one per channel, e.g. a leading mixed 0/0 row plus the real online out row).
+// Using .find() (todayTx) only catches the first, so out-today products with a
+// mixed row first were missed. Aggregate instead.
+function todayTotals(p) {
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  let tin = 0, tout = 0, has = false;
+  (p.tx || []).forEach(r => { if (r[0] === today) { has = true; tin += (r[1] || 0); tout += (r[2] || 0); } });
+  return { in: tin, out: tout, has };
+}
+
 // Badges flagging in/out movement. When a date range is active they reflect the
 // range totals (matches the table columns); otherwise they reflect today only.
 function todayMoveBadges(p) {
@@ -1434,9 +1489,9 @@ function todayMoveBadges(p) {
     const s = p._range || computeRangeStats(p);
     qin = s.in; qout = s.out; lbl = 'ในช่วง';
   } else {
-    const t = todayTx(p);
-    if (!t) return '';
-    qin = t[1]; qout = t[2]; lbl = 'วันนี้';
+    const tt = todayTotals(p);
+    if (!tt.has) return '';
+    qin = tt.in; qout = tt.out; lbl = 'วันนี้';
   }
   let html = '';
   if ((qin || 0) > 0) html += `<span class="mv-today mv-in" title="รับ${lbl} ${fmt(qin)}">▼ รับ</span>`;
@@ -2861,6 +2916,8 @@ async function pollPull() {
 
 let dashRange = '7d';
 function setDashRange(r) { dashRange = r; renderDashboard(); }
+let dashChannel = 'all';
+function setDashChannel(v) { dashChannel = v; renderDashboard(); }
 
 // Resolve the active range to {from,to} ISO dates (to is capped at today) + a Thai label.
 function dashRangeInfo() {
@@ -2875,13 +2932,143 @@ function dashRangeInfo() {
   return { from: null, to: today, label: 'ทั้งหมด (ถึงวันนี้)' };
 }
 
+// สีประจำช่องทางสำหรับกราฟ stacked (คงที่ต่อ key เพื่ออ่านง่าย)
+const DASH_CH_COLORS = {
+  online: '#2563eb', offline: '#0891b2', wholesale: '#7c3aed', redemption: '#db2777',
+  kol: '#ea580c', influencer: '#f59e0b', return: '#059669', receive: '#16a34a',
+  adjust: '#64748b', mixed: '#94a3b8',
+};
+const dashChColor = k => DASH_CH_COLORS[k] || '#94a3b8';
+
+// แพลตฟอร์มย่อยของช่องทาง "ออนไลน์" (มาจาก tx index 7=shopee, 8=lazada, 9=tiktok)
+const DASH_PLATFORMS = [
+  { key: 'sh', label: 'Shopee', color: '#ee4d2d' },
+  { key: 'la', label: 'Lazada', color: '#3d1cc4' },
+  { key: 'tk', label: 'TikTok', color: '#ff2b55' },
+];
+const DASH_PLAT_OTHER = { label: 'ออนไลน์ (ไม่ระบุแพลตฟอร์ม)', color: '#93c5fd' };
+
+// กราฟรายการออก: สรุปยอดออกต่อช่องทาง (ออนไลน์แยก Shopee/Lazada/TikTok) + อันดับสินค้า
+const DASH_OUT_TOPN = 15;
+function renderOutChart(outList) {
+  const bars = document.getElementById('dashOutChartBars');
+  const chansEl = document.getElementById('dashOutChChannels');
+  const subhead = document.getElementById('dashOutProdHead');
+  const cnt = document.getElementById('dashOutChartCnt');
+  if (!bars) return;
+
+  // group: product -> { p, total, byCh:{ch:qty} }
+  const byProd = new Map();
+  const chTotals = {};
+  outList.forEach(x => {
+    let g = byProd.get(x.p);
+    if (!g) { g = { p: x.p, total: 0, byCh: {} }; byProd.set(x.p, g); }
+    g.total += x.qty;
+    g.byCh[x.ch] = (g.byCh[x.ch] || 0) + x.qty;
+    chTotals[x.ch] = (chTotals[x.ch] || 0) + x.qty;
+  });
+
+  if (!byProd.size) {
+    if (chansEl) chansEl.innerHTML = '';
+    if (subhead) subhead.style.display = 'none';
+    if (cnt) cnt.textContent = '';
+    bars.innerHTML = '<div class="db-oc-empty">ไม่มีรายการออกในช่วงนี้</div>';
+    return;
+  }
+
+  const grandTotal = Object.values(chTotals).reduce((s, v) => s + v, 0);
+  // ช่องทางที่ปรากฏจริง เรียงตามยอดมาก→น้อย
+  const chOrder = Object.keys(chTotals).sort((a, b) => chTotals[b] - chTotals[a]);
+  const chMax = chTotals[chOrder[0]] || 1;
+
+  // ยอดออกแยกแพลตฟอร์ม (เฉพาะ channel ออนไลน์)
+  const plat = { sh: 0, la: 0, tk: 0 };
+  outList.forEach(x => { if (x.ch === 'online') { plat.sh += x.sh || 0; plat.la += x.la || 0; plat.tk += x.tk || 0; } });
+  const onlineTotal = chTotals['online'] || 0;
+  const platSum = plat.sh + plat.la + plat.tk;
+  const platOther = Math.max(0, onlineTotal - platSum); // ออนไลน์ที่ยังไม่มี platform tag
+
+  if (cnt) cnt.textContent = `${byProd.size} สินค้า · ${chOrder.length} ช่องทาง · รวมออก ${fmt(grandTotal)} ชิ้น`;
+
+  // ---- สรุปยอดออกต่อช่องทาง (ออนไลน์ = แบ่ง Shopee/Lazada/TikTok ในแถบเดียว) ----
+  const chanRows = chOrder.map(ch => {
+    const v = chTotals[ch];
+    const wPct = Math.max(3, Math.round(v / chMax * 100));
+    const pct = grandTotal ? Math.round(v / grandTotal * 100) : 0;
+    let fill;
+    if (ch === 'online' && v > 0) {
+      const parts = DASH_PLATFORMS.map(pl => ({ label: pl.label, color: pl.color, q: plat[pl.key] }));
+      if (platOther > 0) parts.push({ label: DASH_PLAT_OTHER.label, color: DASH_PLAT_OTHER.color, q: platOther });
+      fill = parts.filter(s => s.q > 0).map(s => {
+        const sp = Math.round(s.q / v * 100);
+        return `<div class="db-oc-chan-seg" style="width:${s.q / v * 100}%;background:${s.color}" title="${escapeHtml(s.label)}: ${fmt(s.q)} ชิ้น (${sp}%)"></div>`;
+      }).join('');
+    } else {
+      fill = `<div class="db-oc-chan-seg" style="width:100%;background:${dashChColor(ch)}"></div>`;
+    }
+    return `<div class="db-oc-chan" title="${escapeHtml(channelLabel(ch))}: ${fmt(v)} ชิ้น (${pct}%)">
+      <span class="db-oc-chan-lbl"><span class="dot" style="background:${dashChColor(ch)}"></span>${escapeHtml(channelLabel(ch))}</span>
+      <div class="db-oc-chan-track"><div class="db-oc-chan-fill" style="width:${wPct}%">${fill}</div></div>
+      <span class="db-oc-chan-val">${fmt(v)}<small>${pct}%</small></span>
+    </div>`;
+  }).join('');
+
+  // legend แพลตฟอร์ม (โชว์เมื่อมีออนไลน์)
+  let platLeg = '';
+  if (onlineTotal > 0) {
+    const legParts = DASH_PLATFORMS.map(pl => ({ label: pl.label, color: pl.color, q: plat[pl.key] }));
+    if (platOther > 0) legParts.push({ label: 'ไม่ระบุ', color: DASH_PLAT_OTHER.color, q: platOther });
+    platLeg = `<div class="db-oc-platleg">` + legParts.filter(s => s.q > 0).map(s => {
+      const sp = onlineTotal ? Math.round(s.q / onlineTotal * 100) : 0;
+      return `<span class="lg"><i style="background:${s.color}"></i>${escapeHtml(s.label)} ${fmt(s.q)} <small>${sp}%</small></span>`;
+    }).join('') + `</div>`;
+  }
+  if (chansEl) chansEl.innerHTML = chanRows + platLeg;
+
+  // ---- อันดับสินค้าออกมากสุด (stack แยกสีตามช่องทาง) ----
+  const rows = [...byProd.values()].sort((a, b) => b.total - a.total);
+  const top = rows.slice(0, DASH_OUT_TOPN);
+  const max = top[0].total || 1;
+  if (subhead) {
+    subhead.style.display = '';
+    subhead.textContent = 'สินค้าออกมากสุด' + (rows.length > top.length ? ` (Top ${top.length} จาก ${rows.length} รายการ)` : ` (${rows.length} รายการ)`);
+  }
+
+  bars.innerHTML = top.map(g => {
+    const wPct = Math.max(2, Math.round(g.total / max * 100));
+    const segs = chOrder.filter(ch => g.byCh[ch]).map(ch => {
+      const segPct = Math.round(g.byCh[ch] / g.total * 100);
+      return `<div class="db-oc-seg" style="width:${segPct}%;background:${dashChColor(ch)}" title="${escapeHtml(channelLabel(ch))}: ${fmt(g.byCh[ch])}"></div>`;
+    }).join('');
+    return `<div class="db-oc-row" onclick="openProduct(${DB.products.indexOf(g.p)})" style="cursor:pointer" title="${escapeHtml(g.p.code)} · ${escapeHtml(g.p.name)} · ออกรวม ${fmt(g.total)}">
+      <div class="db-oc-name">${escapeHtml(g.p.code)} <small>${escapeHtml(g.p.name)}</small></div>
+      <div class="db-oc-track" style="width:${wPct}%">${segs}</div>
+      <div class="db-oc-val">${fmt(g.total)}</div>
+    </div>`;
+  }).join('');
+}
+
+// Fill the dashboard channel <select> with "ทุกช่องทาง" + every known channel (keeps current pick).
+function syncDashChannelSelect() {
+  const sel = document.getElementById('dashChannel');
+  if (!sel) return;
+  const opts = ['<option value="all">ทุกช่องทาง</option>']
+    .concat(CHANNELS.map(c => `<option value="${escapeHtml(c.key)}">${escapeHtml(c.label)}</option>`));
+  const html = opts.join('');
+  if (sel.innerHTML !== html) sel.innerHTML = html;
+  if (!CHANNELS.some(c => c.key === dashChannel) && dashChannel !== 'all') dashChannel = 'all';
+  sel.value = dashChannel;
+}
+
 function renderDashboard() {
   const products = DB.products || [];
   const { from, to, label } = dashRangeInfo();
   document.getElementById('dashDate').textContent = label;
   document.querySelectorAll('#dashFilter button').forEach(b => b.classList.toggle('active', b.dataset.r === dashRange));
+  syncDashChannelSelect();
 
   // Collect every real movement row inside the range (one entry per record, not per product).
+  // Filter by movement channel (t[6]); 'all' keeps every channel.
   const inList = [], outList = [];
   products.forEach(p => {
     (p.tx || []).forEach(t => {
@@ -2889,8 +3076,10 @@ function renderDashboard() {
       if (!date) return;
       if (from && date < from) return;
       if (to && date > to) return;
-      if ((t[1] || 0) > 0) inList.push({ p, date, qty: t[1], bal: t[3] });
-      if ((t[2] || 0) > 0) outList.push({ p, date, qty: t[2], bal: t[3] });
+      const ch = t[6] || DEFAULT_CHANNEL;
+      if (dashChannel !== 'all' && ch !== dashChannel) return;
+      if ((t[1] || 0) > 0) inList.push({ p, date, qty: t[1], bal: t[3], ch });
+      if ((t[2] || 0) > 0) outList.push({ p, date, qty: t[2], bal: t[3], ch, sh: t[7] || 0, la: t[8] || 0, tk: t[9] || 0 });
     });
   });
   const byDateQty = (a, b) => b.date.localeCompare(a.date) || (b.qty - a.qty);
@@ -2930,6 +3119,7 @@ function renderDashboard() {
 
   renderMoveTable('dashInBody', inList, 'in');
   renderMoveTable('dashOutBody', outList, 'out');
+  renderOutChart(outList);
 
   document.getElementById('dashSoonBody').innerHTML = soonList.length
     ? soonList.map(r => `<tr onclick="openProduct(${idx(r.p)})" title="คงเหลือ ${fmt(r.s.closing)} · ออกเฉลี่ย ${Math.round(r.s.avg).toLocaleString()}/วัน"><td class="code">${escapeHtml(r.p.code)}</td><td>${escapeHtml(r.p.name)}</td><td class="num">${fmt(r.s.closing)}</td><td class="num">${Math.round(r.s.avg).toLocaleString()}</td><td class="num soon-days ${r.s.forecast <= 3 ? 'crit' : ''}">${r.s.forecast} วัน</td></tr>`).join('')
@@ -3041,7 +3231,7 @@ function renderMoveTable(bodyId, list, kind) {
   const el = document.getElementById(bodyId);
   if (!el) return;
   if (!list.length) {
-    el.innerHTML = `<tr><td colspan="5" class="dash-empty">ไม่มี${kind === 'in' ? 'รายการรับ' : 'รายการออก'}ในช่วงนี้</td></tr>`;
+    el.innerHTML = `<tr><td colspan="6" class="dash-empty">ไม่มี${kind === 'in' ? 'รายการรับ' : 'รายการออก'}ในช่วงนี้</td></tr>`;
     return;
   }
   const max = Math.max(...list.map(x => x.qty)) || 1;
@@ -3051,6 +3241,7 @@ function renderMoveTable(bodyId, list, kind) {
       <td class="dt">${x.date.split('-').reverse().join('/')}</td>
       <td class="code">${escapeHtml(x.p.code)}</td>
       <td>${escapeHtml(x.p.name)}</td>
+      <td>${channelBadge(x.ch)}</td>
       <td class="num"><div class="mbar-wrap"><div class="mbar ${kind}" style="width:${pct}%"></div><span class="mbar-val">${fmt(x.qty)}</span></div></td>
       <td class="num">${fmt(x.bal)}</td>
     </tr>`;
@@ -3313,9 +3504,9 @@ function applyFilters() {
     if (!q && (p.closing || 0) === 0) return false;
     if (rangeActive() && !p._range.hasMovement) return false;
     if (todayMove) {
-      const t = todayTx(p);
-      if (todayMove === 'in' && !(t && (t[1] || 0) > 0)) return false;
-      if (todayMove === 'out' && !(t && (t[2] || 0) > 0)) return false;
+      const tt = todayTotals(p);
+      if (todayMove === 'in' && !(tt.in > 0)) return false;
+      if (todayMove === 'out' && !(tt.out > 0)) return false;
     }
     return true;
   });
