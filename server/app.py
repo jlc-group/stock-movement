@@ -573,9 +573,8 @@ def recompute_product(cur, product_id):
 def apply_premium_warehouse_delta(cur, product_id, qty_in, qty_out, in_dest, brand=""):
     """For warehouse-backed products: qty_out is deducted from ซอย8,
     qty_in is added to the chosen warehouse (`soi8` or `lamlukka`).
-    closing_balance formula is brand-aware:
-      - Beauterry: ลำลูกกา − ซอย8  (soi8 = consumed stock)
-      - others:    ลำลูกกา + ซอย8
+    closing_balance = ลำลูกกา + ซอย8 (both are real warehouses holding stock;
+    qty_out draws down ซอย8 so closing decreases).
     Overrides the movement-derived closing set by recompute_product."""
     cur.execute(f"""
         SELECT lamlukka, soi8 FROM {config.DB_SCHEMA}.premium_warehouse
@@ -591,7 +590,7 @@ def apply_premium_warehouse_delta(cur, product_id, qty_in, qty_out, in_dest, bra
     else:
         soi += qty_in
 
-    closing = lam - soi if brand == "Beauterry" else lam + soi
+    closing = lam + soi
 
     cur.execute(f"""
         INSERT INTO {config.DB_SCHEMA}.premium_warehouse (product_id, lamlukka, soi8, updated_at)
@@ -1049,7 +1048,7 @@ def set_premium_warehouse():
         if not row:
             return jsonify(error="not_found", detail="ไม่พบสินค้า"), 404
         brand = row[0] or ""
-        closing = lam - soi if brand == "Beauterry" else lam + soi
+        closing = lam + soi
         cur.execute(f"""
             INSERT INTO {config.DB_SCHEMA}.premium_warehouse
                 (product_id, lamlukka, soi8, updated_at)
@@ -1465,13 +1464,11 @@ def edit_movement():
         recompute_product(cur, product_id)
         # For warehouse-backed products recompute_product overwrites closing with
         # the movement-derived value; restore the warehouse-backed closing.
-        # Formula is brand-aware: Beauterry = lam - soi; others = lam + soi.
+        # closing = ลำลูกกา + ซอย8 (both premium and Beauterry).
         if brand in ("สินค้าพรีเมี่ยม", "Beauterry"):
             cur.execute(f"""
                 UPDATE {config.DB_SCHEMA}.products p
-                SET closing_balance = CASE WHEN p.brand = 'Beauterry'
-                                          THEN pw.lamlukka - pw.soi8
-                                          ELSE pw.lamlukka + pw.soi8 END,
+                SET closing_balance = pw.lamlukka + pw.soi8,
                     updated_at = CURRENT_TIMESTAMP
                 FROM {config.DB_SCHEMA}.premium_warehouse pw
                 WHERE p.id = %s AND pw.product_id = p.id
@@ -1629,11 +1626,12 @@ def import_movements():
     conn = get_conn()
     try:
         cur = conn.cursor()
-        cur.execute(f"SELECT code, id, name FROM {config.DB_SCHEMA}.products")
-        code_to_id, code_to_name = {}, {}
-        for c, i, nm in cur.fetchall():
+        cur.execute(f"SELECT code, id, name, brand FROM {config.DB_SCHEMA}.products")
+        code_to_id, code_to_name, code_to_brand = {}, {}, {}
+        for c, i, nm, br in cur.fetchall():
             code_to_id[c] = i
             code_to_name[c] = nm or ""
+            code_to_brand[c] = br or ""
         file_codes = {r["code"] for r in rows}
         unknown_set = {c for c in file_codes if c not in code_to_id}
         unknown = sorted(unknown_set)
@@ -1669,6 +1667,7 @@ def import_movements():
             )
 
         affected = set()
+        prem_delta = {}  # pid -> [qty_in_sum, qty_out_sum] for warehouse-backed brands
         for r in rows:
             pid = code_to_id[r["code"]]
             # Legacy Excel import has no per-row channel -> lands in 'mixed' so
@@ -1685,9 +1684,20 @@ def import_movements():
                     note    = COALESCE(EXCLUDED.note,  {config.DB_SCHEMA}.stock_movements.note)
             """, (pid, r["date"], r["doc_no"], r["qty_in"], r["qty_out"], r["note"]))
             affected.add(pid)
+            # Warehouse-backed brands: remember the imported in/out so we can
+            # draw it from ซอย8 after recompute (mirrors add_movement).
+            if code_to_brand.get(r["code"]) in ("สินค้าพรีเมี่ยม", "Beauterry"):
+                d = prem_delta.setdefault(pid, [0.0, 0.0])
+                d[0] += r["qty_in"]
+                d[1] += r["qty_out"]
 
         for pid in affected:
             recompute_product(cur, pid)
+        # Warehouse-backed brands: qty_out draws from ซอย8, qty_in lands in ซอย8
+        # (Excel import has no destination column), then closing = ลำลูกกา + ซอย8
+        # (overrides the movement-derived closing set by recompute_product).
+        for pid, (in_sum, out_sum) in prem_delta.items():
+            apply_premium_warehouse_delta(cur, pid, in_sum, out_sum, "soi8")
         conn.commit()
         return jsonify(status="ok",
                        imported_rows=len(rows),

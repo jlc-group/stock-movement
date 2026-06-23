@@ -774,7 +774,7 @@ body.admin-on .admin-bar { display: flex; }
 <div class="app page" id="page-beauterry">
   <div class="dash-head">
     <h1>💄 Beauterry — สต๊อกคลังลำลูกกา / ซอย8</h1>
-    <div class="sub">สินค้าแบรนด์ Beauterry · <b>คงเหลือสุทธิ = ลำลูกกา − ซอย8</b> (ยอดเดียวกับหน้ารายการสินค้า) · แสดงอย่างเดียว — เพิ่ม/ลดสต๊อกผ่านหน้า <b>รายการสินค้า → บันทึกรับ-จ่ายรายวัน</b> (เหมือนสินค้าพรีเมี่ยม) · จ่ายออกหักจากคลังซอย8 เสมอ</div>
+    <div class="sub">สินค้าแบรนด์ Beauterry · <b>คงเหลือ = ลำลูกกา + ซอย8</b> (ยอดเดียวกับหน้ารายการสินค้า) · แสดงอย่างเดียว — เพิ่ม/ลดสต๊อกผ่านหน้า <b>รายการสินค้า → บันทึกรับ-จ่ายรายวัน</b> (เหมือนสินค้าพรีเมี่ยม) · จ่ายออกหักจากคลังซอย8 เสมอ</div>
   </div>
   <div class="card" style="padding:16px">
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
@@ -1678,7 +1678,7 @@ function btRenderSummary() {
   let tl = 0, ts = 0;
   list.forEach(p => { tl += Number(p.lamlukka) || 0; ts += Number(p.soi8) || 0; });
   const el = document.getElementById('btSummary');
-  if (el) el.innerHTML = `${list.length} รายการ · รวมลำลูกกา <b>${fmt(tl)}</b> · รวมซอย8 <b>${fmt(ts)}</b> · รวมคงเหลือสุทธิ <b>${fmt(tl - ts)}</b>`;
+  if (el) el.innerHTML = `${list.length} รายการ · รวมลำลูกกา <b>${fmt(tl)}</b> · รวมซอย8 <b>${fmt(ts)}</b> · รวมคงเหลือ <b>${fmt(tl + ts)}</b>`;
 }
 
 function renderBeauterry() {
