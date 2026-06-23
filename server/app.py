@@ -1073,6 +1073,75 @@ def set_premium_warehouse():
         conn.close()
 
 
+@app.route("/api/premium/transfer", methods=["POST"])
+@require_admin
+def transfer_premium_warehouse():
+    """Internal warehouse move (warehouse-backed brands only): shift `qty` from
+    ลำลูกกา to ซอย8. ลำลูกกา decreases, ซอย8 increases, closing (lam+soi) is
+    UNCHANGED. Does NOT touch the ledger (stock_movements) or total_in/out."""
+    data = request.get_json(silent=True) or {}
+    pid = data.get("id")
+    try:
+        qty = float(data.get("qty", 0) or 0)
+    except (TypeError, ValueError):
+        return jsonify(error="bad_request", detail="จำนวนต้องเป็นตัวเลข"), 400
+    if not pid:
+        return jsonify(error="bad_request", detail="ต้องระบุ id ของสินค้า"), 400
+    if qty <= 0:
+        return jsonify(error="bad_request", detail="จำนวนที่ย้ายต้องมากกว่า 0"), 400
+
+    conn = get_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute(f"SELECT brand FROM {config.DB_SCHEMA}.products WHERE id = %s", (pid,))
+        row = cur.fetchone()
+        if not row:
+            return jsonify(error="not_found", detail="ไม่พบสินค้า"), 404
+        brand = row[0] or ""
+        if brand not in ("สินค้าพรีเมี่ยม", "Beauterry"):
+            return jsonify(error="bad_request",
+                           detail="ย้ายคลังได้เฉพาะสินค้าพรีเมี่ยม/Beauterry"), 400
+
+        cur.execute(f"""
+            SELECT lamlukka, soi8 FROM {config.DB_SCHEMA}.premium_warehouse
+            WHERE product_id = %s
+        """, (pid,))
+        wh = cur.fetchone()
+        lam = float(wh[0]) if wh else 0.0
+        soi = float(wh[1]) if wh else 0.0
+
+        if qty > lam:
+            return jsonify(error="bad_request",
+                           detail=f"ย้ายได้สูงสุด {lam:g} ชิ้น (เท่ายอดลำลูกกา)"), 400
+
+        lam -= qty
+        soi += qty
+        # closing = lam + soi is unchanged (internal move); still upsert so the
+        # split is persisted and products.closing stays in sync.
+        cur.execute(f"""
+            INSERT INTO {config.DB_SCHEMA}.premium_warehouse
+                (product_id, lamlukka, soi8, updated_at)
+            VALUES (%s, %s, %s, CURRENT_TIMESTAMP)
+            ON CONFLICT (product_id) DO UPDATE SET
+                lamlukka = EXCLUDED.lamlukka,
+                soi8     = EXCLUDED.soi8,
+                updated_at = CURRENT_TIMESTAMP
+        """, (pid, lam, soi))
+        cur.execute(f"""
+            UPDATE {config.DB_SCHEMA}.products
+            SET closing_balance = %s, updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
+        """, (lam + soi, pid))
+        product = fetch_product(cur, pid)
+        conn.commit()
+        return jsonify(status="ok", product=product)
+    except Exception as e:
+        conn.rollback()
+        return jsonify(error="server_error", detail=str(e)), 500
+    finally:
+        conn.close()
+
+
 # ---- Campaigns ----------------------------------------------------------
 CAMPAIGN_CHANNELS = {"lazada", "tiktok", "shopee", "other"}
 

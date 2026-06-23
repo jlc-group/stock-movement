@@ -1223,7 +1223,7 @@ body.admin-on .admin-bar { display: flex; }
         <label>ช่องทาง (channel)</label>
         <select id="mvChannel" onchange="onMvChannelChange()"></select>
       </div>
-      <div class="field-row">
+      <div class="field-row" id="mvInOutRow">
         <div class="field field-in"><label>รับเข้า</label><input type="number" id="mvIn" value="0" step="any" min="0" inputmode="decimal" onfocus="this.select()" oninput="updatePreview()"></div>
         <div class="field field-out"><label>จ่ายออก</label><input type="number" id="mvOut" value="0" step="any" min="0" inputmode="decimal" onfocus="this.select()" oninput="updatePreview()"></div>
       </div>
@@ -1234,6 +1234,11 @@ body.admin-on .admin-bar { display: flex; }
           <option value="lamlukka">คลังลำลูกกา</option>
         </select>
         <div class="hint" style="font-size:12px;color:#9ca3af;margin-top:4px">จ่ายออกจะตัดจากคลังซอย8 เสมอ</div>
+      </div>
+      <div class="field" id="mvTransferField" style="display:none">
+        <label>จำนวนที่ย้าย (ลำลูกกา → ซอย8)</label>
+        <input type="number" id="mvTransferQty" value="0" step="any" min="0" inputmode="decimal" onfocus="this.select()" oninput="updatePreview()">
+        <div class="hint" style="font-size:12px;color:#9ca3af;margin-top:4px">ย้ายได้สูงสุด <b id="mvTransferMax">0</b> ชิ้น (เท่ายอดคลังลำลูกกา) · คงเหลือสุทธิเท่าเดิม</div>
       </div>
       <div class="field"><label>หมายเหตุ</label><input type="text" id="mvNote" placeholder="หมายเหตุ (ถ้ามี)"></div>
       <div class="preview-bal" id="mvPreview" style="display:none"></div>
@@ -4259,6 +4264,10 @@ function openAddMovement() {
   document.getElementById('mvNote').value = '';
   document.getElementById('mvDate').value = new Date().toISOString().slice(0, 10);
   fillChannelSelect(document.getElementById('mvChannel'), DEFAULT_CHANNEL);
+  document.getElementById('mvTransferQty').value = '0';
+  document.getElementById('mvTransferField').style.display = 'none';
+  document.getElementById('mvInOutRow').style.display = 'flex';
+  document.getElementById('mvDestField').style.display = 'none';
   document.getElementById('mvSelCard').classList.remove('show');
   document.getElementById('mvAcList').classList.remove('show');
   document.getElementById('mvPreview').style.display = 'none';
@@ -4315,18 +4324,63 @@ function pickProduct(idx) {
   document.getElementById('mvSelBal').textContent = fmt(mvSelected.closing);
   document.getElementById('mvSelCard').classList.add('show');
   document.getElementById('mvSubmit').disabled = false;
-  document.getElementById('mvDestField').style.display = mvIsPremium() ? 'block' : 'none';
+  // Premium/Beauterry get the warehouse destination field + the internal
+  // "ย้ายคลัง" (ลำลูกกา→ซอย8) channel option; reset channel + transfer mode.
+  syncTransferChannelOption();
+  document.getElementById('mvChannel').value = DEFAULT_CHANNEL;
+  applyTransferMode();
   updatePreview();
 }
 
 function mvIsPremium() { return !!mvSelected && (mvSelected.brand === 'สินค้าพรีเมี่ยม' || mvSelected.brand === 'Beauterry'); }
 
+const MV_TRANSFER = '__transfer__';   // UI-only channel value (never sent to /api/movements)
+function mvIsTransfer() { return document.getElementById('mvChannel').value === MV_TRANSFER; }
+
+// Add/remove the "ย้ายคลัง" option in #mvChannel depending on the selected product.
+function syncTransferChannelOption() {
+  const sel = document.getElementById('mvChannel');
+  const existing = sel.querySelector(`option[value="${MV_TRANSFER}"]`);
+  if (mvIsPremium()) {
+    if (!existing) {
+      const opt = document.createElement('option');
+      opt.value = MV_TRANSFER;
+      opt.textContent = '🔄 ย้ายคลัง (ลำลูกกา→ซอย8)';
+      sel.appendChild(opt);
+    }
+  } else if (existing) {
+    existing.remove();
+  }
+}
+
+// Toggle the form between normal (in/out) mode and transfer mode.
+function applyTransferMode() {
+  const transfer = mvIsTransfer();
+  document.getElementById('mvInOutRow').style.display = transfer ? 'none' : 'flex';
+  document.getElementById('mvDestField').style.display = (!transfer && mvIsPremium()) ? 'block' : 'none';
+  document.getElementById('mvTransferField').style.display = transfer ? 'block' : 'none';
+  if (transfer) {
+    document.getElementById('mvTransferMax').textContent = fmt(Number(mvSelected && mvSelected.lamlukka) || 0);
+  }
+}
+
 function updatePreview() {
   const prev = document.getElementById('mvPreview');
   if (!mvSelected) { prev.style.display = 'none'; return; }
+  prev.style.display = 'block';
+  if (mvIsTransfer()) {
+    const max = Number(mvSelected.lamlukka) || 0;
+    const soi0 = Number(mvSelected.soi8) || 0;
+    const qty = parseFloat(document.getElementById('mvTransferQty').value) || 0;
+    const over = qty > max;
+    prev.innerHTML = `ย้าย <b class="${over ? 'neg' : ''}">${fmt(qty)}</b> ชิ้น · ` +
+      `ลำลูกกา ${fmt(max)} → <b>${fmt(max - qty)}</b> · ซอย8 ${fmt(soi0)} → <b>${fmt(soi0 + qty)}</b> ` +
+      `<span style="color:#9ca3af;font-size:12px">· คงเหลือสุทธิ ${fmt(max + soi0)} (เท่าเดิม)</span>` +
+      (over ? `<span class="neg" style="font-size:12px"> · เกินยอดลำลูกกา</span>` : '');
+    return;
+  }
   const qin = parseFloat(document.getElementById('mvIn').value) || 0;
   const qout = parseFloat(document.getElementById('mvOut').value) || 0;
-  prev.style.display = 'block';
   if (mvIsPremium()) {
     const dest = document.getElementById('mvDest').value;
     let lam = Number(mvSelected.lamlukka) || 0;
@@ -4346,6 +4400,9 @@ function updatePreview() {
 // When the channel changes, gently steer focus to the matching qty field for
 // in/out-only channels (does not force values — adjust/mixed leave both editable).
 function onMvChannelChange() {
+  applyTransferMode();
+  updatePreview();
+  if (mvIsTransfer()) { document.getElementById('mvTransferQty').focus(); return; }
   const key = document.getElementById('mvChannel').value;
   const dir = (CHANNEL_MAP[key] && CHANNEL_MAP[key].dir) || 'both';
   if (dir === 'in') document.getElementById('mvIn').focus();
@@ -4368,6 +4425,8 @@ async function submitMovement() {
   const msg = document.getElementById('mvMsg');
   const btn = document.getElementById('mvSubmit');
   if (!mvSelected) { msg.className = 'form-msg err show'; msg.textContent = 'กรุณาเลือกสินค้า'; return; }
+  // Internal warehouse move (premium only): ลำลูกกา → ซอย8, closing unchanged.
+  if (mvIsTransfer()) { await submitTransfer(); return; }
   const date = document.getElementById('mvDate').value;
   const qty_in = parseFloat(document.getElementById('mvIn').value) || 0;
   const qty_out = parseFloat(document.getElementById('mvOut').value) || 0;
@@ -4392,6 +4451,32 @@ async function submitMovement() {
     msg.className = 'form-msg ok show';
     msg.textContent = `บันทึกแล้ว · คงเหลือใหม่ ${fmt(data.product.closing)} ชิ้น`;
     toast('บันทึกรายการ ' + data.product.code + ' สำเร็จ', 'ok');
+  } catch (e) {
+    msg.className = 'form-msg err show'; msg.textContent = e.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function submitTransfer() {
+  const msg = document.getElementById('mvMsg');
+  const btn = document.getElementById('mvSubmit');
+  const qty = parseFloat(document.getElementById('mvTransferQty').value) || 0;
+  const max = Number(mvSelected.lamlukka) || 0;
+  if (qty <= 0) { msg.className = 'form-msg err show'; msg.textContent = 'กรุณากรอกจำนวนที่ย้าย'; return; }
+  if (qty > max) { msg.className = 'form-msg err show'; msg.textContent = `ย้ายได้สูงสุด ${fmt(max)} ชิ้น (เท่ายอดลำลูกกา)`; return; }
+  btn.disabled = true;
+  try {
+    const data = await adminFetch('/api/premium/transfer', { id: mvSelected.id, qty });
+    mergeProduct(data.product);
+    mvSelected = data.product;   // keep selection updated with new split
+    document.getElementById('mvSelBal').textContent = fmt(mvSelected.closing);
+    document.getElementById('mvTransferQty').value = '0';
+    document.getElementById('mvTransferMax').textContent = fmt(Number(mvSelected.lamlukka) || 0);
+    updatePreview();
+    msg.className = 'form-msg ok show';
+    msg.textContent = `ย้ายแล้ว · ลำลูกกา ${fmt(mvSelected.lamlukka)} · ซอย8 ${fmt(mvSelected.soi8)} · คงเหลือ ${fmt(mvSelected.closing)}`;
+    toast('ย้ายคลัง ' + data.product.code + ' สำเร็จ', 'ok');
   } catch (e) {
     msg.className = 'form-msg err show'; msg.textContent = e.message;
   } finally {
