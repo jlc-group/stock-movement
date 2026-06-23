@@ -1488,6 +1488,7 @@ def edit_movement():
     mv_date = str(data.get("date", "")).strip()
     doc_no = (str(data.get("doc_no", "")).strip() or None)
     note = (str(data.get("note", "")).strip() or None)
+    in_dest = str(data.get("in_dest", "soi8")).strip() or "soi8"
     try:
         qty_in = float(data.get("qty_in", 0) or 0)
         qty_out = float(data.get("qty_out", 0) or 0)
@@ -1500,6 +1501,8 @@ def edit_movement():
 
     if not code:
         return jsonify(error="bad_request", detail="ต้องระบุรหัสสินค้า"), 400
+    if in_dest not in ("soi8", "lamlukka"):
+        return jsonify(error="bad_request", detail="คลังปลายทางต้องเป็น soi8 หรือ lamlukka"), 400
     if not mv_date:
         return jsonify(error="bad_request", detail="ต้องระบุวันที่"), 400
     try:
@@ -1517,6 +1520,21 @@ def edit_movement():
         if not row:
             return jsonify(error="not_found", detail=f"ไม่พบรหัสสินค้า {code}"), 404
         product_id, brand = row[0], row[1]
+        is_premium = brand in ("สินค้าพรีเมี่ยม", "Beauterry")
+
+        # Read the pre-edit qty so warehouse-backed brands can apply only the
+        # NET change (new − old) to the ลำลูกกา/ซอย8 split below.
+        cur.execute(f"""
+            SELECT qty_in, qty_out FROM {config.DB_SCHEMA}.stock_movements
+            WHERE product_id = %s AND movement_date = %s AND channel = %s
+        """, (product_id, mv_date, channel))
+        before = cur.fetchone()
+        if before is None:
+            conn.rollback()
+            return jsonify(error="not_found",
+                           detail=f"ไม่พบรายการของวันที่ {mv_date} ช่อง {channel}"), 404
+        old_in = float(before[0] or 0)
+        old_out = float(before[1] or 0)
 
         # Target one (day, channel) lane — without the channel predicate this
         # would hit every channel row of the day after the migration.
@@ -1525,23 +1543,15 @@ def edit_movement():
             SET qty_in = %s, qty_out = %s, doc_no = %s, note = %s
             WHERE product_id = %s AND movement_date = %s AND channel = %s
         """, (qty_in, qty_out, doc_no, note, product_id, mv_date, channel))
-        if cur.rowcount == 0:
-            conn.rollback()
-            return jsonify(error="not_found",
-                           detail=f"ไม่พบรายการของวันที่ {mv_date} ช่อง {channel}"), 404
 
         recompute_product(cur, product_id)
-        # For warehouse-backed products recompute_product overwrites closing with
-        # the movement-derived value; restore the warehouse-backed closing.
-        # closing = ลำลูกกา + ซอย8 (both premium and Beauterry).
-        if brand in ("สินค้าพรีเมี่ยม", "Beauterry"):
-            cur.execute(f"""
-                UPDATE {config.DB_SCHEMA}.products p
-                SET closing_balance = pw.lamlukka + pw.soi8,
-                    updated_at = CURRENT_TIMESTAMP
-                FROM {config.DB_SCHEMA}.premium_warehouse pw
-                WHERE p.id = %s AND pw.product_id = p.id
-            """, (product_id,))
+        # Warehouse-backed brands: apply the NET change of this row to the
+        # ลำลูกกา/ซอย8 split (qty_out draws from ซอย8, qty_in lands in in_dest),
+        # then closing = ลำลูกกา + ซอย8 (overrides recompute's movement-derived
+        # closing). Passing the delta keeps the warehouse in sync with the edit.
+        if is_premium:
+            apply_premium_warehouse_delta(
+                cur, product_id, qty_in - old_in, qty_out - old_out, in_dest, brand)
         product = fetch_product(cur, product_id)
         conn.commit()
         return jsonify(status="ok", product=product)

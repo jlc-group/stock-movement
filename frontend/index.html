@@ -1265,6 +1265,14 @@ body.admin-on .admin-bar { display: flex; }
         <div class="field field-in"><label>รับเข้า</label><input type="number" id="emIn" value="0" step="any" min="0" inputmode="decimal" onfocus="this.select()" oninput="updateEditPreview()"></div>
         <div class="field field-out"><label>จ่ายออก</label><input type="number" id="emOut" value="0" step="any" min="0" inputmode="decimal" onfocus="this.select()" oninput="updateEditPreview()"></div>
       </div>
+      <div class="field" id="emDestField" style="display:none">
+        <label>รับเข้าที่คลัง (ลำลูกกา / ซอย8)</label>
+        <select id="emDest">
+          <option value="soi8">คลังซอย8</option>
+          <option value="lamlukka">คลังลำลูกกา</option>
+        </select>
+        <div class="hint" style="font-size:12px;color:#9ca3af;margin-top:4px">จ่ายออกจะตัดจากคลังซอย8 เสมอ · ส่วนต่างของรับเข้าจะเข้าคลังที่เลือก</div>
+      </div>
       <div class="field"><label>เลขที่เอกสาร</label><input type="text" id="emDoc" placeholder="เช่น PO-001"></div>
       <div class="field"><label>หมายเหตุ</label><input type="text" id="emNote" placeholder="หมายเหตุ (ถ้ามี)"></div>
       <div class="preview-bal" id="emPreview" style="display:none"></div>
@@ -1628,11 +1636,10 @@ function renderPmChart(srcList) {
 }
 
 // การ์ดรายละเอียด: ยอดแยกคลัง + อัปเดตล่าสุด + ประวัติเคลื่อนไหว
-// ใช้ร่วมกันทั้งพรีเมี่ยม (คงเหลือ=ลำลูกกา+ซอย8) และ Beauterry (คงเหลือ=ลำลูกกา−ซอย8)
+// ใช้ร่วมกันทั้งพรีเมี่ยม และ Beauterry (คงเหลือ=ลำลูกกา+ซอย8 เหมือนกัน)
 function openPmDetail(id) {
   const p = (DB.products || []).find(x => x.id === id);
   if (!p) return;
-  const isBta = p.brand === 'Beauterry';
   const lam = Number(p.lamlukka) || 0, soi = Number(p.soi8) || 0, closing = Number(p.closing) || 0;
 
   document.getElementById('pmdTitle').textContent = `${p.code} · ${p.name || ''}`;
@@ -1643,11 +1650,11 @@ function openPmDetail(id) {
   const lastDate = moved.length ? formatDate(moved[0][0]) : '—';
   document.getElementById('pmdUpdated').innerHTML = `อัปเดตเคลื่อนไหวล่าสุด <b>${lastDate}</b>`;
 
-  const balClass = (isBta ? closing < 0 : closing <= 0) ? 'neg' : '';
+  const balClass = closing <= 0 ? 'neg' : '';
   document.getElementById('pmdWh').innerHTML = `
     <div class="pmd-wh-tile"><div class="l">คลังลำลูกกา</div><div class="v">${fmt(lam)}</div></div>
     <div class="pmd-wh-tile"><div class="l">คลังซอย8</div><div class="v">${fmt(soi)}</div></div>
-    <div class="pmd-wh-tile bal ${balClass}"><div class="l">คงเหลือ ${isBta ? '(ลำลูกกา−ซอย8)' : '(ลำลูกกา+ซอย8)'}</div><div class="v">${fmt(closing)}</div></div>
+    <div class="pmd-wh-tile bal ${balClass}"><div class="l">คงเหลือ (ลำลูกกา+ซอย8)</div><div class="v">${fmt(closing)}</div></div>
   `;
 
   const rows = moved.slice(0, 20).map(t => {
@@ -1672,7 +1679,7 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePmDet
 // ============================================================
 //  หน้า "Beauterry": สต๊อกคลังลำลูกกา / ซอย8 (แสดงอย่างเดียว)
 //  เก็บใน pgSQL (ตาราง premium_warehouse, ใช้ร่วมกับพรีเมี่ยม — คนละ product_id)
-//  คงเหลือสุทธิ = ลำลูกกา − ซอย8 (บันทึกกลับลง products.closing_balance)
+//  คงเหลือ = ลำลูกกา + ซอย8 (บันทึกกลับลง products.closing_balance)
 //  เพิ่ม/ลดสต๊อกผ่านหน้า "รายการสินค้า" → บันทึกรับ-จ่ายรายวัน (เหมือนพรีเมี่ยม)
 //  จ่ายออกหักจากคลังซอย8 เสมอ; รับเข้าเลือกคลังได้ (ลำลูกกา/ซอย8)
 // ============================================================
@@ -4519,6 +4526,10 @@ function openEditMovement(dateIso, channel) {
   document.getElementById('emOut').value = t[2] || 0;
   document.getElementById('emDoc').value = t[4] || '';
   document.getElementById('emNote').value = t[5] || '';
+  // Warehouse-backed brands: show the คลังปลายทาง selector (mirrors บันทึกรับ-จ่าย).
+  const isPrem = p.brand === 'สินค้าพรีเมี่ยม' || p.brand === 'Beauterry';
+  document.getElementById('emDestField').style.display = isPrem ? 'block' : 'none';
+  document.getElementById('emDest').value = 'soi8';
   document.getElementById('emMsg').className = 'form-msg';
   updateEditPreview();
   openAModal('editMovementModal');
@@ -4548,7 +4559,8 @@ async function submitEditMovement() {
   btn.disabled = true;
   try {
     const channel = emChannel || DEFAULT_CHANNEL;
-    const data = await adminFetch('/api/movements', { code: p.code, date: emDate, qty_in, qty_out, doc_no, note, channel }, 'PUT');
+    const in_dest = document.getElementById('emDest').value || 'soi8';
+    const data = await adminFetch('/api/movements', { code: p.code, date: emDate, qty_in, qty_out, doc_no, note, channel, in_dest }, 'PUT');
     mergeProduct(data.product);
     currentProduct = data.product;   // refresh the open product modal with latest data
     renderSummary();
