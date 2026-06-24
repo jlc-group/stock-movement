@@ -873,6 +873,84 @@ def export_movements():
     )
 
 
+@app.route("/api/warehouse/export")
+def export_warehouse():
+    """Stream a flat, database-ready warehouse snapshot (.xlsx or .csv) for one
+    brand (premium / Beauterry). One row per product, a single header row, no
+    decorative title cells — ready to re-import elsewhere. Pulls live values
+    (lamlukka / soi8 / closing) from the DB; exports the whole brand list.
+    """
+    brand_key = request.args.get("brand", "").strip().lower()
+    fmt = request.args.get("format", "xlsx").strip().lower()
+    BRANDS = {"premium": "สินค้าพรีเมี่ยม", "beauterry": "Beauterry"}
+    if brand_key not in BRANDS:
+        return jsonify(error="bad_request", detail="brand ต้องเป็น premium หรือ beauterry"), 400
+    if fmt not in ("xlsx", "csv"):
+        return jsonify(error="bad_request", detail="format ต้องเป็น xlsx หรือ csv"), 400
+    brand = BRANDS[brand_key]
+
+    conn = get_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute(f"""
+            SELECT p.code, p.name, p.brand,
+                   COALESCE(pw.lamlukka, 0), COALESCE(pw.soi8, 0), p.closing_balance
+            FROM {config.DB_SCHEMA}.products p
+            LEFT JOIN {config.DB_SCHEMA}.premium_warehouse pw ON pw.product_id = p.id
+            WHERE p.brand = %s
+            ORDER BY p.code
+        """, (brand,))
+        rows = cur.fetchall()
+    finally:
+        conn.close()
+
+    exported_at = datetime.now().isoformat(timespec="seconds")
+    headers = ["code", "name", "brand", "lamlukka", "soi8", "closing", "exported_at"]
+    data = [[r[0], r[1] or "", r[2] or "",
+             num(r[3]), num(r[4]), num(r[5]), exported_at] for r in rows]
+    fname = f"warehouse_{brand_key}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+    if fmt == "csv":
+        import csv
+        sio = io.StringIO()
+        w = csv.writer(sio)
+        w.writerow(headers)
+        for d in data:
+            w.writerow(d)
+        # BOM so Excel opens the Thai/UTF-8 text correctly
+        buf = io.BytesIO(("\ufeff" + sio.getvalue()).encode("utf-8"))
+        return send_file(buf, mimetype="text/csv; charset=utf-8",
+                         as_attachment=True, download_name=fname + ".csv")
+
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "warehouse"
+    head_fill = PatternFill("solid", fgColor="2563EB")
+    for i, h in enumerate(headers, start=1):
+        c = ws.cell(row=1, column=i, value=h)
+        c.font = Font(bold=True, color="FFFFFF")
+        c.fill = head_fill
+    for ri, d in enumerate(data, start=2):
+        for ci, v in enumerate(d, start=1):
+            ws.cell(row=ri, column=ci, value=v)
+    ws.freeze_panes = "A2"
+    widths = [16, 42, 18, 12, 12, 12, 22]
+    for i, wd in enumerate(widths, start=1):
+        ws.column_dimensions[chr(64 + i)].width = wd
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return send_file(
+        buf,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        as_attachment=True,
+        download_name=fname + ".xlsx",
+    )
+
+
 @app.route("/api/report/compare-export", methods=["POST"])
 def export_report_compare():
     """Stream the Report-page 1/3/6-month comparison as a real .xlsx.

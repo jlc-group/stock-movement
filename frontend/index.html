@@ -751,6 +751,8 @@ body.admin-on .admin-bar { display: flex; }
         <option value="soi8">🏪 เฉพาะมีของในซอย8</option>
         <option value="lamlukka">🏭 เฉพาะมีของในลำลูกกา</option>
       </select>
+      <button class="export-btn" onclick="exportWarehouse('premium','xlsx')" title="ส่งออก Excel (ทุกรายการพรีเมี่ยม)">⬇️ Excel</button>
+      <button class="export-btn" onclick="exportWarehouse('premium','csv')" title="ส่งออก CSV (ทุกรายการพรีเมี่ยม)">⬇️ CSV</button>
       <span id="pmSummary" class="muted"></span>
     </div>
   </div>
@@ -786,6 +788,8 @@ body.admin-on .admin-bar { display: flex; }
         <option value="soi8">🏪 เฉพาะมีของในซอย8</option>
         <option value="lamlukka">🏭 เฉพาะมีของในลำลูกกา</option>
       </select>
+      <button class="export-btn" onclick="exportWarehouse('beauterry','xlsx')" title="ส่งออก Excel (ทุกรายการ Beauterry)">⬇️ Excel</button>
+      <button class="export-btn" onclick="exportWarehouse('beauterry','csv')" title="ส่งออก CSV (ทุกรายการ Beauterry)">⬇️ CSV</button>
       <span id="btSummary" class="muted"></span>
     </div>
   </div>
@@ -3832,6 +3836,18 @@ function closeModal() {
 function exportProduct() {
   if (!currentProduct) return;
   const url = '/api/products/export?code=' + encodeURIComponent(currentProduct.code);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = '';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+// Export a brand's warehouse snapshot (พรีเมี่ยม / Beauterry) as xlsx or csv.
+function exportWarehouse(brand, format) {
+  const url = '/api/warehouse/export?brand=' + encodeURIComponent(brand) +
+              '&format=' + encodeURIComponent(format);
   const a = document.createElement('a');
   a.href = url;
   a.download = '';
