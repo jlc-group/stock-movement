@@ -617,6 +617,11 @@ def campaign():
     return send_from_directory(config.FRONTEND_DIR, "campaign.html")
 
 
+@app.route("/warehouse")
+def warehouse():
+    return send_from_directory(config.FRONTEND_DIR, "warehouse.html")
+
+
 @app.route("/api/health")
 def health():
     try:

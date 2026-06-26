@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>แปลนเก็บสินค้า - JLC GROUP 2026</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, 'Segoe UI', 'Sarabun', Tahoma, sans-serif; background: #f4f5f7; color: #1f2937; }
+body.wh-dev-locked { overflow: hidden; }
+.wh-page { width: 100%; max-width: 1600px; margin: 0 auto; padding: clamp(14px, 2vw, 28px) clamp(14px, 2.4vw, 32px) 60px; }
+
+/* ----- top bar ----- */
+.wh-top { background: linear-gradient(135deg, #1e3a8a, #3b82f6); color: #fff; padding: 18px 24px; border-radius: 12px; margin-bottom: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+.wh-top h1 { font-size: 20px; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
+.wh-top .sub { font-size: 12px; opacity: .9; max-width: 720px; line-height: 1.5; }
+.wh-top-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.wh-badge-draft { background: #fbbf24; color: #78350f; font-size: 11px; font-weight: 800; border-radius: 6px; padding: 3px 9px; letter-spacing: .04em; }
+.wh-back { color: #fff; text-decoration: none; font-size: 13px; background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.4); border-radius: 8px; padding: 7px 14px; transition: background 0.15s; }
+.wh-back:hover { background: rgba(255,255,255,0.28); }
+
+/* ----- toolbar ----- */
+.wh-toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.wh-search { flex: 1 1 240px; min-width: 200px; padding: 9px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; font-family: inherit; }
+.wh-search:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,.12); }
+.wh-legend { display: flex; align-items: center; gap: 14px; font-size: 12px; color: #64748b; flex-wrap: wrap; }
+.wh-legend b { color: #0f172a; }
+.wh-legend .lg-swatch { display: inline-flex; align-items: center; gap: 5px; }
+.wh-legend .lg-box { width: 14px; height: 14px; border-radius: 3px; }
+
+/* ----- board (⊓ planogram) ----- */
+.wh-board { background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; padding: clamp(14px, 1.8vw, 24px); box-shadow: 0 1px 3px rgba(0,0,0,0.05); overflow-x: auto; }
+.wh-grid { display: grid; grid-template-columns: max-content minmax(0, 1fr) max-content; grid-template-rows: max-content 1fr; gap: 14px; min-width: 760px; }
+/* shelf walls = labeled trays */
+.wh-shelf-row { display: flex; gap: 8px; background: #f6f8fb; border: 1px solid #e8edf3; border-radius: 13px; padding: 13px; align-content: flex-start; }
+.wh-shelf-row::before { font-size: 11px; font-weight: 800; color: #475569; letter-spacing: .03em; }
+/* top bar = centered above the work area (column 2 only), 10 slots share one row */
+.wh-top-row { grid-column: 2; grid-row: 1; flex-wrap: wrap; justify-content: flex-start; }
+.wh-top-row::before { content: '▤ ชั้นวางด้านบน · ช่อง 1–10'; flex-basis: 100%; margin-bottom: 6px; padding-bottom: 6px; border-bottom: 1px dashed #d8e0ea; }
+/* left leg = long wall (18–39), full height on the left */
+.wh-leftleg { grid-column: 1; grid-row: 1 / 3; flex-direction: column; }
+.wh-leftleg::before { content: '▤ ผนังยาว · ช่อง 18–39'; margin-bottom: 4px; padding-bottom: 6px; border-bottom: 1px dashed #d8e0ea; }
+/* right leg = short wall (11–17), top of the right side */
+.wh-rightleg { grid-column: 3; grid-row: 1 / 3; flex-direction: column; align-self: start; }
+.wh-rightleg::before { content: '▤ ฝั่งขวา · ช่อง 11–17'; margin-bottom: 4px; padding-bottom: 6px; border-bottom: 1px dashed #d8e0ea; }
+
+/* center open area = warehouse floor */
+.wh-center { grid-column: 2; grid-row: 2; position: relative; min-height: 280px;
+  border: 1.5px dashed #c7d2e0; border-radius: 13px;
+  background-color: #fbfcfe;
+  background-image: linear-gradient(#eef2f8 1px, transparent 1px), linear-gradient(90deg, #eef2f8 1px, transparent 1px);
+  background-size: 32px 32px; background-position: -1px -1px;
+  display: flex; align-items: center; justify-content: center; }
+.wh-center-label { font-size: 12px; font-weight: 700; color: #aab6c6; letter-spacing: .04em; }
+
+/* ----- slot card (clean 2D) ----- */
+.wh-slot { width: 104px; flex: 0 0 auto; border: 1px solid #e5e9f0; border-top: 3px solid var(--accent, #94a3b8); border-radius: 9px; background: #fff; padding: 8px 9px 9px; display: flex; flex-direction: column; gap: 5px; box-shadow: 0 1px 2px rgba(15,23,42,0.05); transition: box-shadow .12s, border-color .12s, transform .12s; cursor: default; }
+.wh-slot:hover { box-shadow: 0 6px 16px rgba(15,23,42,0.12); border-color: #cbd5e1; transform: translateY(-1px); }
+.wh-slot.dim { opacity: .28; }
+.wh-slot.hit { box-shadow: 0 0 0 2px #f59e0b; border-top-color: #f59e0b; }
+.wh-slot-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.wh-num { font-size: 10px; font-weight: 700; color: #64748b; background: #f1f5f9; border-radius: 5px; padding: 1px 6px; }
+.wh-cat { font-size: 9px; font-weight: 700; color: #fff; background: var(--accent, #94a3b8); border-radius: 5px; padding: 1px 6px; letter-spacing: .02em; }
+.wh-code { font-size: 12px; font-weight: 700; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wh-qty { font-size: 15px; font-weight: 800; color: #0f172a; line-height: 1; }
+.wh-qty span { font-size: 9px; font-weight: 600; color: #94a3b8; margin-left: 3px; }
+.wh-bar { height: 4px; border-radius: 3px; background: #eef2f7; overflow: hidden; }
+.wh-bar i { display: block; height: 100%; border-radius: 3px; background: var(--accent, #94a3b8); }
+
+/* top bar cards: shrink to share one row (10 across) */
+.wh-top-row .wh-slot { width: auto; flex: 1 1 0; min-width: 0; max-width: 104px; }
+/* side-leg slots: compact horizontal list rows stacked vertically */
+.wh-leftleg .wh-slot, .wh-rightleg .wh-slot { width: 156px; border-top: 1px solid #e5e9f0; border-left: 3px solid var(--accent, #94a3b8); border-radius: 9px; flex-direction: row; align-items: center; gap: 8px; padding: 8px 10px; }
+.wh-leftleg .wh-slot .wh-num, .wh-rightleg .wh-slot .wh-num { flex: 0 0 auto; }
+.wh-leftleg .wh-slot .wh-l-body, .wh-rightleg .wh-slot .wh-l-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.wh-leftleg .wh-slot .wh-bar, .wh-rightleg .wh-slot .wh-bar,
+.wh-leftleg .wh-slot .wh-cat, .wh-rightleg .wh-slot .wh-cat { display: none; }
+
+/* ----- "under development" overlay (minimal) ----- */
+.wh-dev-overlay { position: fixed; inset: 0; z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 24px; background: #f8fafc; }
+.wh-dev-card { text-align: center; max-width: 420px; }
+.wh-dev-tag { display: inline-block; font-size: 12px; font-weight: 700; letter-spacing: .08em; color: #2563eb; background: #eff6ff; border-radius: 999px; padding: 5px 14px; margin-bottom: 22px; }
+.wh-dev-card h2 { font-size: 26px; font-weight: 700; color: #0f172a; letter-spacing: -.01em; margin-bottom: 12px; }
+.wh-dev-card p { font-size: 14px; color: #94a3b8; line-height: 1.7; margin-bottom: 28px; }
+.wh-dev-back { display: inline-block; color: #2563eb; text-decoration: none; font-size: 14px; font-weight: 600; }
+.wh-dev-back:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="wh-page">
+  <div class="wh-top">
+    <div>
+      <h1>🗺️ แปลนเก็บสินค้า <span class="wh-badge-draft">MOCKUP</span></h1>
+      <div class="sub">ผังตำแหน่งจัดเก็บสินค้าในคลัง (มองจากด้านบน) · ชั้นวางทรงตัวยู — แถวบน (1–10) · ผนังยาวฝั่งซ้าย (18–39) · ฝั่งขวา (11–17) · ตรงกลางเป็นพื้นที่ว่าง · ข้อมูลเป็นตัวอย่าง ยังไม่ผูกกับฐานข้อมูลจริง</div>
+    </div>
+    <div class="wh-top-actions">
+      <a href="/" class="wh-back">← กลับหน้าหลัก</a>
+    </div>
+  </div>
+
+  <div class="wh-toolbar">
+    <input type="text" id="whSearch" class="wh-search" placeholder="🔍 ค้นหารหัส / ตำแหน่ง…" autocomplete="off" oninput="renderPlan()">
+    <div class="wh-legend" id="whLegend">
+      <span>รวม <b id="whCount">0</b> ช่อง · <b id="whTotal">0</b> ชิ้น</span>
+    </div>
+  </div>
+
+  <div class="wh-board">
+    <div class="wh-grid">
+      <div class="wh-shelf-row wh-top-row" id="whTopRow"></div>
+      <div class="wh-shelf-row wh-leftleg" id="whLeftCol"></div>
+      <div class="wh-center"><div class="wh-center-label">พื้นที่ปฏิบัติงาน / ทางเดิน</div></div>
+      <div class="wh-shelf-row wh-rightleg" id="whRightCol"></div>
+    </div>
+  </div>
+
+  <div class="wh-dev-overlay" id="whDevOverlay">
+    <div class="wh-dev-card">
+      <span class="wh-dev-tag">ระบบกำลังพัฒนา</span>
+      <h2>หน้านี้กำลังพัฒนา</h2>
+      <p>กำลังจัดทำแปลนเก็บสินค้า เร็ว ๆ นี้จะเชื่อมต่อกับข้อมูลสต็อกจริง</p>
+      <a href="/" class="wh-dev-back">← กลับหน้าหลัก</a>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+//  แปลนเก็บสินค้า — MOCKUP (frontend อย่างเดียว ไม่มีฐานข้อมูล)
+//  ข้อมูลตำแหน่งทั้งหมดเป็นตัวอย่างตาม "โครงแปลน" ในรูปต้นแบบ
+// ============================================================
+
+// แถวบน (ช่อง 11–17)
+const TOP = [
+  { n: 11, code: 'L10-7GX6', qty: 120 },
+  { n: 12, code: 'L19-8GX6', qty: 120 },
+  { n: 13, code: 'L6-8GX6',  qty: 120 },
+  { n: 14, code: 'L21-100G', qty: 120 },
+  { n: 15, code: 'L20-7GX6', qty: 120 },
+  { n: 16, code: 'L13-10GX6',qty: 120 },
+  { n: 17, code: 'C4-35G',   qty: 120 },
+];
+
+// คอลัมน์ซ้าย (ช่อง 10 → 1, บนลงล่าง)
+const LEFT = [
+  { n: 10, code: 'C3-30G',    qty: 120 },
+  { n: 9,  code: 'SET_L14X2', qty: 198 },
+  { n: 8,  code: 'D2X2-240',  qty: 120 },
+  { n: 7,  code: 'SET_L6X2',  qty: 490 },
+  { n: 6,  code: 'DUO_L4L6',  qty: 490 },
+  { n: 5,  code: 'DUO_C4X2',  qty: 438 },
+  { n: 4,  code: 'SET_L3L1',  qty: 490 },
+  { n: 3,  code: 'SET_L10X',  qty: 490 },
+  { n: 2,  code: 'SET_L3X2',  qty: 490 },
+  { n: 1,  code: 'SET_L3X2',  qty: 240 },
+];
+
+// แถวล่าง (ช่อง 18–39)
+const BOTTOM = [
+  { n: 18, code: 'L3-40G',    qty: 1500 },
+  { n: 19, code: 'L10-30G',   qty: 600 },
+  { n: 20, code: 'L3-8GX6',   qty: 600 },
+  { n: 21, code: 'L6-40G',    qty: 300 },
+  { n: 22, code: 'L4-40G',    qty: 300 },
+  { n: 23, code: 'L20-30G',   qty: 180 },
+  { n: 24, code: 'D2-70G',    qty: 120 },
+  { n: 25, code: 'L7-30G',    qty: 120 },
+  { n: 26, code: 'L14-70G',   qty: 120 },
+  { n: 27, code: 'L4-8GX6',   qty: 300 },
+  { n: 28, code: 'SET_D3X1',  qty: 105 },
+  { n: 29, code: 'L19-48G',   qty: 120 },
+  { n: 30, code: 'T5A-2.5G',  qty: 120 },
+  { n: 31, code: 'T5B-2.5G',  qty: 120 },
+  { n: 32, code: 'T5C-2.5G',  qty: 120 },
+  { n: 33, code: 'L9-48G',    qty: 120 },
+  { n: 34, code: 'DUO_L4S3',  qty: 280 },
+  { n: 35, code: 'SET_D3X2',  qty: 210 },
+  { n: 36, code: 'SET_L13X2', qty: 490 },
+  { n: 37, code: 'SET_D3X4',  qty: 420 },
+  { n: 38, code: 'SET_D3X3',  qty: 315 },
+  { n: 39, code: 'L13-40G',   qty: 600 },
+];
+
+const ALL = TOP.concat(LEFT, BOTTOM);
+const MAXQTY = Math.max(...ALL.map(x => x.qty));
+
+// หมวดสินค้า → สี accent (ชุดสีคงที่ ดูเป็น professional ไม่สุ่ม)
+const CATS = [
+  { test: c => c.startsWith('SET'), key: 'SET', label: 'เซ็ต',  c: '#7c3aed' },
+  { test: c => c.startsWith('DUO'), key: 'DUO', label: 'คู่',    c: '#db2777' },
+  { test: c => c.startsWith('T'),   key: 'T',   label: 'T',      c: '#0891b2' },
+  { test: c => c.startsWith('D'),   key: 'D',   label: 'D',      c: '#0d9488' },
+  { test: c => c.startsWith('C'),   key: 'C',   label: 'C',      c: '#ea580c' },
+  { test: c => c.startsWith('L'),   key: 'L',   label: 'L',      c: '#2563eb' },
+];
+const CAT_OTHER = { key: 'OTHER', label: 'อื่นๆ', c: '#64748b' };
+function catOf(code) { return CATS.find(cat => cat.test(code)) || CAT_OTHER; }
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+function slotHtml(s, horizontal) {
+  const cat = catOf(s.code);
+  const pct = Math.max(6, Math.round(s.qty / MAXQTY * 100));
+  const num = `<span class="wh-num">#${s.n}</span>`;
+  const code = `<span class="wh-code" title="${esc(s.code)}">${esc(s.code)}</span>`;
+  const qty = `<div class="wh-qty">${s.qty.toLocaleString('en-US')}<span>ชิ้น</span></div>`;
+  if (horizontal) {
+    return `<div class="wh-slot" style="--accent:${cat.c}" data-code="${esc(s.code)}" data-n="${s.n}">${num}<div class="wh-l-body">${code}${qty}</div></div>`;
+  }
+  return `<div class="wh-slot" style="--accent:${cat.c}" data-code="${esc(s.code)}" data-n="${s.n}">`
+    + `<div class="wh-slot-top">${num}<span class="wh-cat">${cat.label}</span></div>`
+    + `${code}${qty}<div class="wh-bar"><i style="width:${pct}%"></i></div></div>`;
+}
+
+function renderLegend() {
+  const present = [];
+  const seen = new Set();
+  ALL.forEach(s => { const c = catOf(s.code); if (!seen.has(c.key)) { seen.add(c.key); present.push(c); } });
+  const order = ['L', 'C', 'D', 'T', 'SET', 'DUO', 'OTHER'];
+  present.sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key));
+  const swatches = present.map(c =>
+    `<span class="lg-swatch"><span class="lg-box" style="background:${c.c}"></span>${c.label}</span>`
+  ).join('');
+  document.getElementById('whLegend').innerHTML =
+    swatches + `<span>รวม <b id="whCount">0</b> ช่อง · <b id="whTotal">0</b> ชิ้น</span>`;
+}
+
+function renderPlan() {
+  const q = (document.getElementById('whSearch').value || '').trim().toLowerCase();
+  // ผังทรง ⊓ : แถวบนยาว (1–10) · ขาซ้ายยาว (18–39) · ขาขวาสั้น (11–17) · กลางว่าง
+  document.getElementById('whTopRow').innerHTML = LEFT.slice().reverse().map(s => slotHtml(s, false)).join('');
+  document.getElementById('whLeftCol').innerHTML = BOTTOM.map(s => slotHtml(s, true)).join('');
+  document.getElementById('whRightCol').innerHTML = TOP.map(s => slotHtml(s, true)).join('');
+
+  // ค้นหา: เน้น/หรี่ช่องที่ตรง
+  document.querySelectorAll('.wh-slot').forEach(el => {
+    el.classList.remove('dim', 'hit');
+    if (!q) return;
+    const match = (el.dataset.code || '').toLowerCase().includes(q) || String(el.dataset.n) === q;
+    el.classList.toggle('hit', match);
+    el.classList.toggle('dim', !match);
+  });
+
+  document.getElementById('whCount').textContent = ALL.length;
+  document.getElementById('whTotal').textContent = ALL.reduce((s, x) => s + x.qty, 0).toLocaleString('en-US');
+}
+
+renderLegend();
+renderPlan();
+
+// หน้านี้ยังอยู่ระหว่างพัฒนา — ล็อกไม่ให้เลื่อนหลัง overlay
+document.body.classList.add('wh-dev-locked');
+</script>
+</body>
+</html>
