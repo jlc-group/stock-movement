@@ -1467,9 +1467,19 @@ function computeRangeStats(p) {
   return { in: inSum, out: outSum, opening: openBal, closing: closeBal, hasMovement: hasMv };
 }
 
+// สินค้าที่ยึดยอดคลังจริง (ลำลูกกา+ซอย8) เป็นคงเหลือ — premium/Beauterry
+function isWarehouseProduct(p) {
+  return p.brand === 'สินค้าพรีเมี่ยม' || p.brand === 'Beauterry';
+}
+
 // Stats used by table/KPIs (range-aware)
 function pStats(p) {
-  if (rangeActive()) return p._range;
+  if (rangeActive()) {
+    // premium/Beauterry: คงเหลือยึดคลังจริงเสมอ (ตรงกับหน้า Beauterry) — เปิด filter ก็ไม่เพี้ยน
+    // รับ/ออก ยังคงกรองตามช่วงที่เลือก
+    if (isWarehouseProduct(p)) return { ...p._range, closing: Number(p.closing) || 0 };
+    return p._range;
+  }
   return { in: p.total_in, out: p.total_out, opening: p.opening, closing: p.closing, hasMovement: true };
 }
 
