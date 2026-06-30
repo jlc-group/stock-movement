@@ -470,6 +470,47 @@ def script_ecom_json(path, method="GET", payload=None, timeout=30):
         return json.loads(r.read().decode("utf-8"))
 
 
+def online_issue_number(value):
+    try:
+        return num(value or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def online_mapping_issue(kind, row, reason):
+    row = row or {}
+    sku = str(row.get("sku") or row.get("code") or "").strip()
+    return {
+        "kind": kind,
+        "sku": sku,
+        "code": str(row.get("code") or sku).strip(),
+        "name": row.get("name", "") or "",
+        "qty": online_issue_number(row.get("qty")),
+        "shopee": online_issue_number(row.get("shopee")),
+        "lazada": online_issue_number(row.get("lazada")),
+        "tiktok": online_issue_number(row.get("tiktok")),
+        "candidate": row.get("candidate"),
+        "reason": reason,
+    }
+
+
+def online_upstream_mapping_issues(payload):
+    issues = []
+    for row in (payload or {}).get("unmatched") or []:
+        issues.append(online_mapping_issue(
+            "unmatched",
+            row,
+            "ยังไม่มี mapping ไปยังรหัสสินค้าใน stock-movement",
+        ))
+    for row in (payload or {}).get("skipped") or []:
+        issues.append(online_mapping_issue(
+            "skipped",
+            row,
+            "ถูกตั้งค่าให้ข้าม ไม่ตัดสต็อก",
+        ))
+    return issues
+
+
 # ---- Admin auth ---------------------------------------------------------
 def require_admin(fn):
     @wraps(fn)
@@ -1981,6 +2022,7 @@ def online_sync():
 
     p_date = (payload.get("date") or mv_date or "").strip()
     proposed = payload.get("proposed") or []
+    mapping_issues = online_upstream_mapping_issues(payload)
     try:
         date.fromisoformat(p_date)
     except ValueError:
@@ -2002,7 +2044,17 @@ def online_sync():
                 qty = 0
             pid = code_to_id.get(code)
             if pid is None:
-                skipped.append(code)
+                skipped.append({
+                    "kind": "missing_product",
+                    "code": code,
+                    "sku": (it or {}).get("sku", ""),
+                    "name": (it or {}).get("name", ""),
+                    "qty": online_issue_number((it or {}).get("qty")),
+                    "shopee": online_issue_number((it or {}).get("shopee")),
+                    "lazada": online_issue_number((it or {}).get("lazada")),
+                    "tiktok": online_issue_number((it or {}).get("tiktok")),
+                    "reason": "มีรหัสที่ map แล้ว แต่ไม่มีสินค้าใน stock-movement",
+                })
                 continue
             sp = float((it or {}).get("shopee", 0) or 0)
             lz = float((it or {}).get("lazada", 0) or 0)
@@ -2031,7 +2083,9 @@ def online_sync():
             recompute_product(cur, pid)
         conn.commit()
         return jsonify(status="ok", date=p_date, written=len(applied),
-                       skipped=len(skipped), skipped_codes=skipped, items=applied,
+                       skipped=len(skipped), skipped_codes=[x.get("code") for x in skipped],
+                       skipped_items=skipped, items=applied,
+                       mapping_issues=mapping_issues,
                        platforms=payload.get("platforms") or {})
     except Exception as e:
         conn.rollback()
@@ -2070,6 +2124,7 @@ def online_preview():
 
     p_date = (payload.get("date") or mv_date or "").strip()
     proposed = payload.get("proposed") or []
+    mapping_issues = online_upstream_mapping_issues(payload)
     try:
         date.fromisoformat(p_date)
     except ValueError:
@@ -2096,7 +2151,17 @@ def online_preview():
                 qty = 0
             info = code_to.get(code)
             if info is None:
-                skipped.append({"code": code, "qty": qty, "name": (it or {}).get("name", "")})
+                skipped.append({
+                    "kind": "missing_product",
+                    "code": code,
+                    "sku": (it or {}).get("sku", ""),
+                    "qty": qty,
+                    "name": (it or {}).get("name", ""),
+                    "shopee": online_issue_number((it or {}).get("shopee")),
+                    "lazada": online_issue_number((it or {}).get("lazada")),
+                    "tiktok": online_issue_number((it or {}).get("tiktok")),
+                    "reason": "มีรหัสที่ map แล้ว แต่ไม่มีสินค้าใน stock-movement",
+                })
                 continue
             total += qty
             items.append({
@@ -2152,10 +2217,12 @@ def online_preview():
         cumulative_pcs = 0.0
         cumulative_items = 0
         cumulative_rounds = 0
+        cumulative_mapping_issues = []
         cumulative_skipped = []  # รหัสในยอดสะสมที่ map ไม่ได้ → จะไม่ถูกตัด (โชว์เตือนก่อนเขียน)
         try:
             cumj = script_ecom_json(
                 "/api/stock/propose-cumulative?date=" + urllib.parse.quote(p_date), timeout=20)
+            cumulative_mapping_issues = online_upstream_mapping_issues(cumj)
             cumulative_rounds = int(cumj.get("batches_count") or 0)
             for ci in (cumj.get("proposed") or []):
                 ccode = str((ci or {}).get("code", "")).strip()
@@ -2168,17 +2235,29 @@ def online_preview():
                     cumulative_pcs += cqty
                 else:  # map ไม่ได้ → จะไม่ถูกตัด เก็บไว้เตือนผู้ใช้
                     cumulative_skipped.append(
-                        {"code": ccode, "qty": cqty, "name": (ci or {}).get("name", "")})
+                        {
+                            "kind": "missing_product",
+                            "code": ccode,
+                            "sku": (ci or {}).get("sku", ""),
+                            "qty": cqty,
+                            "name": (ci or {}).get("name", ""),
+                            "shopee": online_issue_number((ci or {}).get("shopee")),
+                            "lazada": online_issue_number((ci or {}).get("lazada")),
+                            "tiktok": online_issue_number((ci or {}).get("tiktok")),
+                            "reason": "มีรหัสที่ map แล้ว แต่ไม่มีสินค้าใน stock-movement",
+                        })
         except Exception:
             pass  # Script-Ecom ล่ม → ไม่โชว์ยอดสะสม (ปุ่มยังทำงานตามเดิม)
 
         return jsonify(status="ok", date=p_date, mode="preview",
                        total_qty=total, matched=len(items), skipped=len(skipped),
                        items=items, skipped_items=skipped,
+                       mapping_issues=mapping_issues,
                        delta_applied=delta_applied, batched_pcs=batched_pcs,
                        batches_count=batches_count, latest_batch_label=latest_batch_label,
                        cumulative_pcs=cumulative_pcs, cumulative_items=cumulative_items,
                        cumulative_rounds=cumulative_rounds,
+                       cumulative_mapping_issues=cumulative_mapping_issues,
                        cumulative_skipped=cumulative_skipped,
                        platforms=payload.get("platforms") or {})
     except Exception as e:
