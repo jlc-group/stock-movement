@@ -1098,6 +1098,12 @@ def admin_logout():
     return jsonify(status="ok")
 
 
+@app.route("/api/admin/validate")
+@require_admin
+def admin_validate():
+    return jsonify(status="ok", admin=True)
+
+
 @app.route("/api/products", methods=["POST"])
 @require_admin
 def create_product():
