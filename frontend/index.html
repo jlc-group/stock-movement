@@ -688,14 +688,14 @@ body.admin-on .admin-bar { display: flex; }
       <label>วันที่: <input type="date" id="onlineDate"></label>
       <button class="btn btn-primary" id="onlinePreviewBtn" onclick="previewOnline()">🔍 ดูยอดออนไลน์ที่ควรตัด</button>
       <button class="btn" id="onlinePullBtn" onclick="pullOrders()">⟳ ดึงออเดอร์ใหม่จากแพลตฟอร์ม</button>
-      <button class="btn btn-ghost" id="onlineBatchBtn" onclick="createOnlineBatch()">บันทึกรอบยืนยัน</button>
+      <button class="btn btn-ghost" id="onlineBatchBtn" onclick="createOnlineBatch()">บันทึกรอบยืนยัน (ยังไม่ตัดสต็อก)</button>
       <span id="onlineMsg" class="muted"></span>
     </div>
     <div style="margin-top:10px;color:#64748b;font-size:13.5px;line-height:1.9">
       <b>วิธีใช้ (โหมดพิสูจน์ — ยังไม่เขียนทับสต็อก):</b> กดปุ่ม <b>Admin</b> (มุมขวาบน) ใส่รหัสก่อน 1 ครั้ง<br>
       • <b>🔍 ดูยอดออนไลน์ที่ควรตัด</b> — ระบบคำนวณยอดขายออนไลน์รายสินค้าให้ดู เอาไว้เทียบกับที่กรอกมือ <b>(ดูอย่างเดียว ไม่แตะสต็อกจริง)</b><br>
       • <b>⟳ ดึงออเดอร์ใหม่จากแพลตฟอร์ม</b> — ถ้ายอดของวันนี้ยังไม่ถูกดึง กดอันนี้เพื่อดึง Shopee/Lazada/TikTok ก่อน แล้วระบบจะโชว์ยอดให้<br>
-      • <b>บันทึกรอบยืนยัน</b> — แสตมป์ "ออเดอร์ใหม่ที่ยังไม่เข้ารอบ" เป็นรอบ (ก่อนเที่ยง/หลังเที่ยง) ไม่นับซ้ำกับรอบก่อน · กดที่รอบเพื่อดูยอด/เช็กลิสต์พิมพ์ของรอบนั้น<br>
+      • <b>บันทึกรอบยืนยัน</b> — แสตมป์ "ออเดอร์ใหม่ที่ยังไม่เข้ารอบ" เป็นรอบ (ก่อนเที่ยง/หลังเที่ยง) ไม่นับซ้ำกับรอบก่อน · <b>ยังไม่ตัดสต็อกจริง</b><br>
       <span style="color:#94a3b8">* ช่วงนี้เป็นช่วง "พิสูจน์ความถูกต้อง" — เมื่อมั่นใจว่ายอดตรงทุกวันแล้ว ค่อยกดเขียนลงสต็อกจริง (ปุ่มอยู่ในตารางผลลัพธ์)</span>
     </div>
   </div>
@@ -2061,8 +2061,9 @@ async function createOnlineBatch() {
     const d = await readApiJson(res);
     if (!res.ok) throw new Error(d.detail || 'บันทึกรอบไม่สำเร็จ');
     const b = d.batch || {};
-    msg.textContent = `✅ บันทึกรอบ ${b.label || b.id} แล้ว · ${Number(b.order_count || 0).toLocaleString()} ออเดอร์ · ${Number(b.total_qty || 0).toLocaleString()} ชิ้น (เฉพาะออเดอร์ใหม่ของรอบนี้)`;
+    msg.textContent = `✅ บันทึกรอบ ${b.label || b.id} แล้ว · ${Number(b.order_count || 0).toLocaleString()} ออเดอร์ · ${Number(b.total_qty || 0).toLocaleString()} ชิ้น — ยังไม่ตัดสต็อกจริง ให้กดปุ่ม "เขียนยอดตัดสะสมทุกรอบ" อีกครั้ง`;
     loadOnlineBatches();
+    previewOnline();
     if (b.id) viewOnlineBatch(b.id);
   } catch (e) {
     msg.textContent = '❌ ' + e.message;
