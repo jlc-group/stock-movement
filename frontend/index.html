@@ -701,6 +701,7 @@ body.admin-on .admin-bar { display: flex; }
   </div>
   <div class="card" id="onlineConfirmedCard" style="display:none;padding:14px 16px;margin-top:14px;border:1px solid #bbf7d0;background:#f0fdf4"></div>
   <div class="card" id="onlineBatchCard" style="display:none;padding:12px 16px;margin-top:14px"></div>
+  <div class="card" id="onlineReconcileCard" style="display:none;padding:14px 16px;margin-top:14px;border:1px solid #bfdbfe;background:#eff6ff"></div>
   <div class="card" id="onlineResultCard" style="display:none;padding:16px;margin-top:14px">
     <h3 id="onlineResultTitle" style="margin:0 0 10px"></h3>
     <div style="max-height:420px;overflow:auto">
@@ -1804,6 +1805,7 @@ async function loadOnlineConfirmed() {
     const d = await readApiJson(await fetch('/api/online/confirmed?date=' + encodeURIComponent(date),
       { headers: { 'Authorization': 'Bearer ' + adminToken } }));
     renderOnlineConfirmed(d);
+    renderOnlineReconcile();
   } catch (e) { /* เงียบ */ }
 }
 
@@ -1815,10 +1817,12 @@ async function accumulateOnline() {
     const d = await readApiJson(await fetch('/api/online/accumulate',
       { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken }, body: JSON.stringify({ date }) }));
     renderOnlineConfirmed(d);
+    renderOnlineReconcile();
   } catch (e) { /* เงียบ */ }
 }
 
 function renderOnlineConfirmed(d) {
+  onlineConfirmedData = d || null;
   const card = document.getElementById('onlineConfirmedCard');
   if (!card) return;
   const oc = Number((d || {}).order_count || 0);
@@ -1860,12 +1864,95 @@ function renderOnlineConfirmed(d) {
     </div>`;
 }
 
+function sumOnlineIssues(issues) {
+  return (issues || []).reduce((sum, it) => sum + Number((it || {}).qty || 0), 0);
+}
+
+function formatSigned(n) {
+  const v = Number(n || 0);
+  if (v > 0) return '+' + v.toLocaleString();
+  if (v < 0) return v.toLocaleString();
+  return '0';
+}
+
+function onlineIssueNames(issues) {
+  const rows = (issues || []).filter(it => it && (it.code || it.sku));
+  if (!rows.length) return '';
+  return rows.slice(0, 8)
+    .map(it => `${escapeHtml(it.code || it.sku)} ${Number(it.qty || 0).toLocaleString()} ชิ้น`)
+    .join(' · ') + (rows.length > 8 ? ` · และอีก ${(rows.length - 8).toLocaleString()} รายการ` : '');
+}
+
+function renderOnlineReconcile() {
+  const card = document.getElementById('onlineReconcileCard');
+  if (!card) return;
+  const selectedDate = (document.getElementById('onlineDate') || {}).value || '';
+  const confirmed = onlineConfirmedData && (!selectedDate || onlineConfirmedData.date === selectedDate) ? onlineConfirmedData : {};
+  const batchPayload = onlineBatchesData && (!selectedDate || (onlineBatchesData.batches || []).some(b => b.date === selectedDate) || !(onlineBatchesData.batches || []).length) ? onlineBatchesData : {};
+  const preview = onlineLastData && (!selectedDate || onlineLastData.date === selectedDate) ? onlineLastData : {};
+  const batches = batchPayload.batches || [];
+  const confirmedGross = Number(confirmed.total_pieces || 0);
+  const cancelledPieces = Number(confirmed.cancelled_pieces || 0);
+  const confirmedNet = confirmed.cancelled_available ? (confirmedGross - cancelledPieces) : confirmedGross;
+  const confirmedOrders = Number(confirmed.order_count || 0);
+  const confirmedNetOrders = Number(confirmed.net_order_count != null ? confirmed.net_order_count : confirmedOrders);
+  const batchQty = batches.reduce((s, b) => s + Number(b.total_qty || 0), 0);
+  const batchOrders = batches.reduce((s, b) => s + Number(b.order_count || 0), 0);
+  const mappedQty = Number(preview.cumulative_pcs || 0);
+  const mappedItems = Number(preview.cumulative_items || 0);
+  const issueRows = [...(preview.cumulative_mapping_issues || []), ...(preview.cumulative_skipped || [])];
+  const issueQty = sumOnlineIssues(issueRows);
+  const hasAny = confirmedGross || batchQty || mappedQty || issueQty;
+  if (!hasAny) { card.style.display = 'none'; return; }
+  const batchVsConfirmed = batchQty ? batchQty - confirmedNet : 0;
+  const mappedVsBatch = mappedQty && batchQty ? mappedQty - batchQty : 0;
+  const trustLine = mappedQty
+    ? `เลขตัดสต็อกที่ให้เชื่อคือ <b>${mappedQty.toLocaleString()} ชิ้น</b> (${mappedItems.toLocaleString()} SKU) เพราะเป็นยอดรอบที่บันทึกแล้วหลังผ่าน mapping เข้า stock-movement`
+    : `ยังไม่มียอดหลัง mapping ให้กด <b>ดูยอดออนไลน์ที่ควรตัด</b> ก่อน เพื่อให้ระบบคำนวณเลขตัดสต็อกจริง`;
+  card.style.display = '';
+  card.innerHTML = `
+    <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap">
+      <div>
+        <div style="font-size:13px;color:#1d4ed8;font-weight:700">🔗 เชื่อมตัวเลขวันนี้: ใช้เลขไหนทำอะไร</div>
+        <div style="font-size:12.5px;color:#334155;margin-top:4px">${trustLine}</div>
+      </div>
+      <div style="font-size:12px;color:#64748b;text-align:right">สูตรนี้ดึงจาก Script-Ecom + รอบที่บันทึก + mapping ก่อนเขียน stock</div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-top:12px">
+      <div style="background:white;border:1px solid #dbeafe;border-radius:8px;padding:10px">
+        <div style="font-size:12px;color:#64748b">1) ยอดยืนยันสะสมจากแพลตฟอร์ม</div>
+        <div style="font-size:21px;font-weight:800;color:#0f172a">${confirmedGross.toLocaleString()} ชิ้น</div>
+        <div style="font-size:12px;color:#64748b">${confirmedOrders.toLocaleString()} ออเดอร์ · หักยกเลิก ${cancelledPieces.toLocaleString()} ชิ้น → สุทธิ ${confirmedNet.toLocaleString()} ชิ้น / ${confirmedNetOrders.toLocaleString()} ออเดอร์</div>
+      </div>
+      <div style="background:white;border:1px solid #dbeafe;border-radius:8px;padding:10px">
+        <div style="font-size:12px;color:#64748b">2) รอบที่บันทึกไว้ / ใบปะหน้า</div>
+        <div style="font-size:21px;font-weight:800;color:#0f172a">${batchQty.toLocaleString()} ชิ้น</div>
+        <div style="font-size:12px;color:#64748b">${batchOrders.toLocaleString()} ออเดอร์ · ต่างจากยอดยืนยันสุทธิ ${formatSigned(batchVsConfirmed)} ชิ้น</div>
+      </div>
+      <div style="background:white;border:1px solid #dbeafe;border-radius:8px;padding:10px">
+        <div style="font-size:12px;color:#64748b">3) ยอดที่จะเขียนลงสต็อกจริง</div>
+        <div style="font-size:21px;font-weight:800;color:#16a34a">${mappedQty.toLocaleString()} ชิ้น</div>
+        <div style="font-size:12px;color:#64748b">${mappedItems.toLocaleString()} SKU · ต่างจากรอบที่บันทึก ${formatSigned(mappedVsBatch)} ชิ้น</div>
+      </div>
+      <div style="background:white;border:1px solid #fed7aa;border-radius:8px;padding:10px">
+        <div style="font-size:12px;color:#9a3412">4) ไม่ถูกตัดเพราะ mapping/skip</div>
+        <div style="font-size:21px;font-weight:800;color:#ea580c">${issueQty.toLocaleString()} ชิ้น</div>
+        <div style="font-size:12px;color:#64748b">${issueRows.length.toLocaleString()} รายการ${onlineIssueNames(issueRows) ? ` · ${onlineIssueNames(issueRows)}` : ''}</div>
+      </div>
+    </div>
+    <div style="font-size:12.5px;color:#475569;line-height:1.65;margin-top:10px">
+      อ่านแบบสั้น: <b>ยอดยืนยันสะสม</b> ใช้ตรวจว่าแพลตฟอร์มกดยืนยันครบไหม · <b>รอบที่บันทึก</b> ใช้เป็นชุดใบปะหน้า/รอบเข้ารับ · <b>ยอดที่จะเขียนลงสต็อกจริง</b> คือเลขสุดท้ายที่ควรเชื่อสำหรับตัด stock
+    </div>`;
+}
+
 // 🔍 โหมดพิสูจน์: ดูยอดที่ควรตัด (ไม่เขียนลง DB)
 let onlineLastData = null;
 let onlineLastMode = 'preview';
 let onlineSort = { key: 'code', dir: 'asc' };
 let onlineActiveBatchId = null;
 let onlineBatchData = null;
+let onlineConfirmedData = null;
+let onlineBatchesData = null;
 let onlinePrintData = null;
 let onlinePrintFilters = { platform: 'all', category: 'all', carrier: 'all', query: '', mode: 'sku' };
 
@@ -2005,6 +2092,7 @@ async function loadOnlineBatches() {
     });
     const d = await readApiJson(res);
     if (!res.ok) throw new Error(d.detail || 'โหลดรอบยืนยันไม่สำเร็จ');
+    onlineBatchesData = d || null;
     const batches = d.batches || [];
     if (!batches.length) {
       card.innerHTML = '<b>รอบยืนยันวันนี้</b><div class="muted" style="margin-top:6px">ยังไม่มี batch ที่ freeze ไว้สำหรับวันนี้</div>';
@@ -2037,6 +2125,7 @@ async function loadOnlineBatches() {
         }).join('') + '</div>';
     }
     card.style.display = '';
+    renderOnlineReconcile();
   } catch (e) {
     card.innerHTML = '<b>รอบยืนยันวันนี้</b><div style="color:#b91c1c;margin-top:6px">' + escapeHtml(e.message) + '</div>';
     card.style.display = '';
@@ -2517,6 +2606,7 @@ function renderOnlinePreview(d) {
   ensureOnlineControls();
   onlineLastData = d;
   onlineLastMode = 'preview';
+  renderOnlineReconcile();
   const card = document.getElementById('onlineResultCard');
   const tbody = document.querySelector('#onlineResultTable tbody');
   document.getElementById('onlineResultTitle').innerHTML =
@@ -2629,6 +2719,7 @@ function renderOnlineResult(d) {
   ensureOnlineControls();
   onlineLastData = d;
   onlineLastMode = 'result';
+  renderOnlineReconcile();
   const card = document.getElementById('onlineResultCard');
   const tbody = document.querySelector('#onlineResultTable tbody');
   document.getElementById('onlineResultTitle').innerHTML =
