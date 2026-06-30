@@ -2082,9 +2082,24 @@ def online_sync():
         for pid in affected:
             recompute_product(cur, pid)
         conn.commit()
+        written_pcs = sum(float((it or {}).get("qty") or 0) for it in applied)
+        written_status = {
+            "exists": bool(applied),
+            "items": len(applied),
+            "pcs": num(written_pcs),
+            "shopee": num(sum(float((it or {}).get("shopee") or 0) for it in applied)),
+            "lazada": num(sum(float((it or {}).get("lazada") or 0) for it in applied)),
+            "tiktok": num(sum(float((it or {}).get("tiktok") or 0) for it in applied)),
+            "doc_no": doc_no,
+            "matches_cumulative": True,
+            "diff_pcs": 0,
+            "mismatched_count": 0,
+            "mismatched_codes": [],
+        }
         return jsonify(status="ok", date=p_date, written=len(applied),
                        skipped=len(skipped), skipped_codes=[x.get("code") for x in skipped],
                        skipped_items=skipped, items=applied,
+                       online_written=written_status,
                        mapping_issues=mapping_issues,
                        platforms=payload.get("platforms") or {})
     except Exception as e:
@@ -2137,10 +2152,36 @@ def online_preview():
         code_to = {c: {"id": i, "name": n} for c, i, n in cur.fetchall()}
         # ยอดช่อง online ที่ "เคยลงไว้แล้ว" ของวันนั้น (ถ้ามี) เพื่อเทียบ
         cur.execute(f"""
-            SELECT product_id, qty_out FROM {config.DB_SCHEMA}.stock_movements
-            WHERE movement_date = %s AND channel = 'online'
+            SELECT sm.product_id, p.code, sm.qty_out, sm.qty_shopee, sm.qty_lazada, sm.qty_tiktok, sm.doc_no
+            FROM {config.DB_SCHEMA}.stock_movements sm
+            JOIN {config.DB_SCHEMA}.products p ON p.id = sm.product_id
+            WHERE sm.movement_date = %s AND sm.channel = 'online'
         """, (p_date,))
-        existing = {pid: q for pid, q in cur.fetchall()}
+        existing_rows = cur.fetchall()
+        existing = {pid: q for pid, _code, q, _sp, _lz, _tt, _doc in existing_rows}
+        existing_by_code = {
+            code: {
+                "qty": online_issue_number(qty),
+                "shopee": online_issue_number(sp),
+                "lazada": online_issue_number(lz),
+                "tiktok": online_issue_number(tt),
+                "doc_no": doc_no or "",
+            }
+            for _pid, code, qty, sp, lz, tt, doc_no in existing_rows
+        }
+        online_written = {
+            "exists": bool(existing_rows),
+            "items": len(existing_rows),
+            "pcs": num(sum(float(row[2] or 0) for row in existing_rows)),
+            "shopee": num(sum(float(row[3] or 0) for row in existing_rows)),
+            "lazada": num(sum(float(row[4] or 0) for row in existing_rows)),
+            "tiktok": num(sum(float(row[5] or 0) for row in existing_rows)),
+            "doc_no": next((row[6] for row in existing_rows if row[6]), ""),
+            "matches_cumulative": False,
+            "diff_pcs": 0,
+            "mismatched_count": 0,
+            "mismatched_codes": [],
+        }
 
         items, skipped, total = [], [], 0
         for it in proposed:
@@ -2218,6 +2259,7 @@ def online_preview():
         cumulative_items = 0
         cumulative_rounds = 0
         cumulative_mapping_issues = []
+        cumulative_expected = {}
         cumulative_skipped = []  # รหัสในยอดสะสมที่ map ไม่ได้ → จะไม่ถูกตัด (โชว์เตือนก่อนเขียน)
         try:
             cumj = script_ecom_json(
@@ -2233,6 +2275,12 @@ def online_preview():
                 if ccode in code_to:  # นับเฉพาะรหัสที่ map ได้ (เหมือนตอนเขียนจริง)
                     cumulative_items += 1
                     cumulative_pcs += cqty
+                    cumulative_expected[ccode] = {
+                        "qty": online_issue_number((ci or {}).get("qty")),
+                        "shopee": online_issue_number((ci or {}).get("shopee")),
+                        "lazada": online_issue_number((ci or {}).get("lazada")),
+                        "tiktok": online_issue_number((ci or {}).get("tiktok")),
+                    }
                 else:  # map ไม่ได้ → จะไม่ถูกตัด เก็บไว้เตือนผู้ใช้
                     cumulative_skipped.append(
                         {
@@ -2249,6 +2297,19 @@ def online_preview():
         except Exception:
             pass  # Script-Ecom ล่ม → ไม่โชว์ยอดสะสม (ปุ่มยังทำงานตามเดิม)
 
+        if cumulative_expected or existing_by_code:
+            mismatched = []
+            for code in sorted(set(cumulative_expected) | set(existing_by_code)):
+                exp = cumulative_expected.get(code) or {"qty": 0, "shopee": 0, "lazada": 0, "tiktok": 0}
+                got = existing_by_code.get(code) or {"qty": 0, "shopee": 0, "lazada": 0, "tiktok": 0}
+                if any(abs(float(exp.get(k) or 0) - float(got.get(k) or 0)) > 0.0001
+                       for k in ("qty", "shopee", "lazada", "tiktok")):
+                    mismatched.append(code)
+            online_written["diff_pcs"] = num(float(online_written["pcs"] or 0) - float(cumulative_pcs or 0))
+            online_written["mismatched_count"] = len(mismatched)
+            online_written["mismatched_codes"] = mismatched[:20]
+            online_written["matches_cumulative"] = bool(cumulative_expected) and not mismatched
+
         return jsonify(status="ok", date=p_date, mode="preview",
                        total_qty=total, matched=len(items), skipped=len(skipped),
                        items=items, skipped_items=skipped,
@@ -2259,6 +2320,7 @@ def online_preview():
                        cumulative_rounds=cumulative_rounds,
                        cumulative_mapping_issues=cumulative_mapping_issues,
                        cumulative_skipped=cumulative_skipped,
+                       online_written=online_written,
                        platforms=payload.get("platforms") or {})
     except Exception as e:
         return jsonify(error="server_error", detail=str(e)), 500

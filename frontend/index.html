@@ -1902,6 +1902,7 @@ function renderOnlineReconcile() {
   const mappedItems = Number(preview.cumulative_items || 0);
   const issueRows = [...(preview.cumulative_mapping_issues || []), ...(preview.cumulative_skipped || [])];
   const issueQty = sumOnlineIssues(issueRows);
+  const written = preview.online_written || {};
   const hasAny = confirmedGross || batchQty || mappedQty || issueQty;
   if (!hasAny) { card.style.display = 'none'; return; }
   const batchVsConfirmed = batchQty ? batchQty - confirmedNet : 0;
@@ -1942,7 +1943,8 @@ function renderOnlineReconcile() {
     </div>
     <div style="font-size:12.5px;color:#475569;line-height:1.65;margin-top:10px">
       อ่านแบบสั้น: <b>ยอดยืนยันสะสม</b> ใช้ตรวจว่าแพลตฟอร์มกดยืนยันครบไหม · <b>รอบที่บันทึก</b> ใช้เป็นชุดใบปะหน้า/รอบเข้ารับ · <b>ยอดที่จะเขียนลงสต็อกจริง</b> คือเลขสุดท้ายที่ควรเชื่อสำหรับตัด stock
-    </div>`;
+    </div>
+    ${onlineWrittenStatusHtml({ online_written: written })}`;
 }
 
 // 🔍 โหมดพิสูจน์: ดูยอดที่ควรตัด (ไม่เขียนลง DB)
@@ -2638,14 +2640,25 @@ function renderOnlinePreview(d) {
   const wb = document.getElementById('onlineWriteBtn');
   document.getElementById('onlineSkipped').innerHTML =
     platformCoverageHtml(d) +
+    onlineWrittenStatusHtml(d) +
     onlineMappingIssuesHtml([...(d.mapping_issues || []), ...(d.skipped_items || [])], 'รายการที่ยังไม่ถูกตัดในยอดสด') +
     onlineMappingIssuesHtml([...(d.cumulative_mapping_issues || []), ...(d.cumulative_skipped || [])], 'รายการที่จะไม่ถูกตัดเมื่อเขียนยอดสะสม');
   if (wb) {
     const willPcs = Number(d.cumulative_pcs || 0);
     const willItems = Number(d.cumulative_items || 0);
-    wb.textContent = willPcs > 0
-      ? `✍️ เขียนยอดตัดสะสมทุกรอบ (${willItems.toLocaleString()} รายการ · ${willPcs.toLocaleString()} ชิ้น) ลงช่อง "ออนไลน์" จริง`
-      : '✍️ เขียนยอดตัดสะสมทุกรอบ ลงช่อง "ออนไลน์" จริง';
+    const written = d.online_written || {};
+    wb.disabled = !!written.matches_cumulative;
+    if (written.matches_cumulative) {
+      wb.textContent = `✅ เขียนแล้ว ยอดตรง (${Number(written.items || 0).toLocaleString()} SKU · ${Number(written.pcs || 0).toLocaleString()} ชิ้น)`;
+    } else if (written.exists) {
+      wb.textContent = willPcs > 0
+        ? `✍️ อัปเดต/เขียนทับยอดเดิม (${willItems.toLocaleString()} รายการ · ${willPcs.toLocaleString()} ชิ้น) ไม่บวกซ้ำ`
+        : '✍️ อัปเดต/เขียนทับยอดเดิม ไม่บวกซ้ำ';
+    } else {
+      wb.textContent = willPcs > 0
+        ? `✍️ เขียนยอดตัดสะสมทุกรอบ (${willItems.toLocaleString()} รายการ · ${willPcs.toLocaleString()} ชิ้น) ลงช่อง "ออนไลน์" จริง`
+        : '✍️ เขียนยอดตัดสะสมทุกรอบ ลงช่อง "ออนไลน์" จริง';
+    }
     // โชว์ปุ่มเมื่อมี "ยอดสะสมรอบ" ให้เขียน (ไม่ผูกกับ leftover) — กดได้แม้ freeze ครบแล้ว
     // ถ้ายังไม่มีรอบเลย (willPcs=0) ก็ยังโชว์เมื่อมีของค้าง เพื่อให้ confirm เตือนให้ freeze ก่อน
     wb.style.display = (willPcs > 0 || (d.items && d.items.length)) ? '' : 'none';
@@ -2661,6 +2674,10 @@ function renderOnlinePreview(d) {
 // ✍️ เขียนจริง (opt-in, ต้องยืนยัน) — ใช้เมื่อพิสูจน์แล้ว
 async function writeOnline() {
   const d = onlineLastData || {};
+  if ((d.online_written || {}).matches_cumulative) {
+    alert('ยอดนี้เขียนลงช่อง "ออนไลน์" แล้ว และตรงกับยอดสะสมล่าสุด ไม่ต้องกดซ้ำ');
+    return;
+  }
   const leftoverItems = (d.items || []).length;
   const leftoverPcs = Number(d.total_qty || 0);
   const willPcs = Number(d.cumulative_pcs || 0);
@@ -2740,6 +2757,7 @@ function renderOnlineResult(d) {
     ((d.skipped_codes && d.skipped_codes.length) ? `<div style="margin-top:6px">ข้าม (ไม่มีรหัสใน ecom_stock): ${d.skipped_codes.join(', ')}</div>` : '');
   document.getElementById('onlineSkipped').innerHTML =
     platformCoverageHtml(d) +
+    onlineWrittenStatusHtml(d) +
     onlineMappingIssuesHtml([...(d.mapping_issues || []), ...(d.skipped_items || [])], 'รายการที่ไม่ได้ถูกเขียนลงสต็อก');
   const wb = document.getElementById('onlineWriteBtn'); if (wb) wb.style.display = 'none';
   const pb = document.getElementById('onlinePrintBtn');
@@ -2796,6 +2814,27 @@ function onlineMappingIssuesHtml(issues, title) {
     `</div>` +
     (hidden > 0 ? `<div style="margin-top:6px;color:#64748b">และอีก ${hidden.toLocaleString()} รายการ</div>` : '') +
     `</div>`;
+}
+
+function onlineWrittenStatusHtml(d) {
+  const w = (d || {}).online_written || {};
+  const pcs = Number(w.pcs || 0);
+  const items = Number(w.items || 0);
+  if (!w.exists) {
+    return `<div style="margin-top:8px;border:1px solid #fbbf24;background:#fffbeb;color:#92400e;border-radius:8px;padding:10px 12px;font-size:12.5px;line-height:1.55">` +
+      `<b>📝 ยังไม่ได้เขียนยอดนี้ลงช่อง "ออนไลน์" จริง</b><br>กดปุ่มเขียนยอดเมื่อยืนยันแล้ว ระบบจะเขียนแบบ overwrite ของวันเดียวกัน ไม่บวกซ้ำ</div>`;
+  }
+  if (w.matches_cumulative) {
+    return `<div style="margin-top:8px;border:1px solid #86efac;background:#f0fdf4;color:#166534;border-radius:8px;padding:10px 12px;font-size:12.5px;line-height:1.55">` +
+      `<b>✅ เขียนลงช่อง "ออนไลน์" แล้ว และยอดตรงกับรอบล่าสุด</b><br>` +
+      `ใน stock ตอนนี้: ${items.toLocaleString()} SKU · ${pcs.toLocaleString()} ชิ้น${w.doc_no ? ` · ${escapeHtml(w.doc_no)}` : ''} · ถ้ากดซ้ำจะเป็นการเขียนทับยอดเดิม ไม่บวกซ้ำ แต่ตอนนี้ไม่จำเป็นต้องกดซ้ำ</div>`;
+  }
+  const diff = Number(w.diff_pcs || 0);
+  const codes = (w.mismatched_codes || []).slice(0, 10).map(escapeHtml).join(', ');
+  return `<div style="margin-top:8px;border:1px solid #fb923c;background:#fff7ed;color:#9a3412;border-radius:8px;padding:10px 12px;font-size:12.5px;line-height:1.55">` +
+    `<b>⚠️ เคยเขียนลงช่อง "ออนไลน์" แล้ว แต่ยอดใน stock ยังไม่ตรงกับยอดสะสมล่าสุด</b><br>` +
+    `ใน stock ตอนนี้: ${items.toLocaleString()} SKU · ${pcs.toLocaleString()} ชิ้น · ส่วนต่าง ${formatSigned(diff)} ชิ้น${codes ? ` · SKU ต่างกัน: ${codes}` : ''}<br>` +
+    `กดปุ่มเขียนยอดอีกครั้งได้ ระบบจะอัปเดต/เขียนทับยอดเดิมของวันนี้ ไม่บวกซ้ำ</div>`;
 }
 
 function platformCoverageHtml(d) {
