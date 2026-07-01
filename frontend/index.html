@@ -2888,23 +2888,88 @@ function onlineIssueLineText(it) {
   return `${code}${sku} x ${onlineIssueQty(it).toLocaleString()} ชิ้น - ${onlineIssueReason(it)} (${onlineIssuePlatformText(it)})`;
 }
 
+// จับคู่เอง: เก็บ metadata ของแต่ละแถวไว้ให้ปุ่ม resolve เรียกใช้ (กัน injection ใน onclick)
+let _onlineResolveSeq = 0;
+const _onlineResolveRows = {};
+
+function ensureOnlineCodeDatalist() {
+  const products = (typeof DB !== 'undefined' && DB && DB.products) ? DB.products : [];
+  let dl = document.getElementById('onlineCodeList');
+  if (dl && dl.childElementCount === products.length) return;
+  if (!dl) { dl = document.createElement('datalist'); dl.id = 'onlineCodeList'; document.body.appendChild(dl); }
+  dl.innerHTML = products.map(p =>
+    `<option value="${escapeHtml(p.code)}">${escapeHtml(p.name || '')}</option>`).join('');
+}
+
+function onlineResolveFormHtml(it) {
+  if (!adminToken) return '';
+  const sku = String((it || {}).sku || (it || {}).code || '').trim();
+  if (!sku) return '';
+  const seq = ++_onlineResolveSeq;
+  _onlineResolveRows[seq] = { sku };
+  return `<div style="margin-top:5px;display:flex;flex-wrap:wrap;align-items:center;gap:6px">` +
+    `<input id="resCode${seq}" list="onlineCodeList" placeholder="เลือกรหัสปลายทาง" ` +
+      `style="flex:1 1 150px;min-width:130px;padding:4px 6px;border:1px solid #f59e0b;border-radius:6px;font-size:12px" ` +
+      `autocomplete="off">` +
+    `<span style="color:#92400e">×</span>` +
+    `<input id="resMult${seq}" type="number" min="1" step="1" value="1" inputmode="numeric" ` +
+      `onfocus="this.select()" title="จำนวนชิ้นต่อ 1 หน่วยขาย (เซ็ต = มากกว่า 1)" ` +
+      `style="width:52px;padding:4px 6px;border:1px solid #f59e0b;border-radius:6px;font-size:12px;text-align:center">` +
+    `<label style="display:flex;align-items:center;gap:3px;color:#7c2d12;font-size:11.5px;white-space:nowrap">` +
+      `<input id="resRem${seq}" type="checkbox" checked> จำไว้</label>` +
+    `<button id="resBtn${seq}" onclick="resolveOnlineItem(${seq})" ` +
+      `style="padding:4px 10px;border:0;border-radius:6px;background:#16a34a;color:#fff;font-size:12px;cursor:pointer">` +
+      `ตัดเข้ายอด</button>` +
+    `</div>`;
+}
+
 function onlineMappingIssuesHtml(issues, title) {
   const rows = (issues || []).filter(it => onlineIssueQty(it) > 0 || (it && (it.code || it.sku)));
   if (!rows.length) return '';
+  ensureOnlineCodeDatalist();
   const total = rows.reduce((sum, it) => sum + onlineIssueQty(it), 0);
   const shown = rows.slice(0, 24);
   const hidden = rows.length - shown.length;
   return `<div style="margin-top:8px;border:1px solid #f59e0b;background:#fffbeb;color:#92400e;border-radius:8px;padding:10px 12px;font-size:12.5px;line-height:1.55">` +
     `<b>⚠️ ${escapeHtml(title)}: ${rows.length.toLocaleString()} รายการ · ${total.toLocaleString()} ชิ้น</b>` +
-    `<div style="margin-top:6px;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:4px 14px">` +
+    (adminToken ? `<div style="margin-top:2px;color:#a16207;font-size:11.5px">จับคู่รหัสปลายทางแล้วกด “ตัดเข้ายอด” — ตัดลงเลนแยก ไม่กระทบสินค้าอื่น</div>` : '') +
+    `<div style="margin-top:6px;display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:8px 14px">` +
     shown.map(it => {
       const code = escapeHtml((it || {}).code || (it || {}).sku || '?');
       const sku = (it || {}).sku && (it || {}).sku !== (it || {}).code ? ` <span style="color:#64748b">(${escapeHtml((it || {}).sku)})</span>` : '';
-      return `<div><code>${code}</code>${sku} · ${onlineIssueQty(it).toLocaleString()} ชิ้น<br><span style="color:#7c2d12">${escapeHtml(onlineIssueReason(it))}</span><br><span style="color:#475569">${escapeHtml(onlineIssuePlatformText(it))}</span></div>`;
+      return `<div style="border-bottom:1px dashed #fde68a;padding-bottom:6px"><code>${code}</code>${sku} · ${onlineIssueQty(it).toLocaleString()} ชิ้น<br><span style="color:#7c2d12">${escapeHtml(onlineIssueReason(it))}</span><br><span style="color:#475569">${escapeHtml(onlineIssuePlatformText(it))}</span>` +
+        onlineResolveFormHtml(it) + `</div>`;
     }).join('') +
     `</div>` +
     (hidden > 0 ? `<div style="margin-top:6px;color:#64748b">และอีก ${hidden.toLocaleString()} รายการ</div>` : '') +
     `</div>`;
+}
+
+async function resolveOnlineItem(seq) {
+  const row = _onlineResolveRows[seq];
+  if (!row) return;
+  if (!adminToken) { toast('เข้าโหมด Admin ก่อน', 'err'); return; }
+  const code = (document.getElementById('resCode' + seq).value || '').trim().toUpperCase();
+  const multiplier = Number(document.getElementById('resMult' + seq).value || 1) || 1;
+  const remember = document.getElementById('resRem' + seq).checked;
+  if (!code) { toast('เลือกรหัสสินค้าปลายทางก่อน', 'err'); return; }
+  if (multiplier <= 0) { toast('จำนวนต้องมากกว่า 0', 'err'); return; }
+  const date = document.getElementById('onlineDate').value;
+  const btn = document.getElementById('resBtn' + seq);
+  if (btn) { btn.disabled = true; btn.textContent = 'กำลังบันทึก...'; }
+  try {
+    const d = await adminFetch('/api/online/resolve', { date, sku: row.sku, code, multiplier, remember });
+    if (d.status === 'saved_no_write') {
+      toast(`บันทึกจับคู่ ${row.sku} → ${code} แล้ว (ยังไม่ตัด: ${d.detail || 'Script-Ecom ไม่พร้อม'})`);
+    } else {
+      toast(`✅ จับคู่ ${row.sku} → ${code} ×${multiplier} · ตัด ${Number(d.cut_qty || 0).toLocaleString()} ชิ้น`, 'ok');
+    }
+    await loadData();
+    if (onlineLastMode === 'result') { await syncOnline(); } else { await previewOnline(); }
+  } catch (e) {
+    toast('❌ ' + e.message, 'err');
+    if (btn) { btn.disabled = false; btn.textContent = 'ตัดเข้ายอด'; }
+  }
 }
 
 function onlineWrittenStatusHtml(d) {

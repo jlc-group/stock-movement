@@ -114,7 +114,38 @@ def ensure_premium_warehouse_table():
         print(f"[warn] ensure_premium_warehouse_table failed: {e}")
 
 
+def ensure_online_sku_map_table():
+    """Create the online_sku_map table if missing (see migrations/002_online_sku_map.sql).
+
+    Holds user-defined fallback mappings for online SKUs that Script-Ecom returns
+    as `unmatched`. Purely additive — never touches existing tables. Stock cut from
+    these mappings is written to channel='online_manual', isolated from every other
+    lane, so it can never overwrite another product's movements.
+    """
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute(f"""
+            CREATE TABLE IF NOT EXISTS {config.DB_SCHEMA}.online_sku_map (
+                id         SERIAL PRIMARY KEY,
+                sku        TEXT UNIQUE NOT NULL,
+                code       TEXT NOT NULL,
+                multiplier NUMERIC NOT NULL DEFAULT 1,
+                scope      TEXT NOT NULL DEFAULT 'always',
+                once_date  DATE,
+                note       TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[warn] ensure_online_sku_map_table failed: {e}")
+
+
 ensure_premium_warehouse_table()
+ensure_online_sku_map_table()
 
 
 def ensure_campaigns_table():
@@ -509,6 +540,152 @@ def online_upstream_mapping_issues(payload):
             "ถูกตั้งค่าให้ข้าม ไม่ตัดสต็อก",
         ))
     return issues
+
+
+def online_mappable_rows(payload):
+    """Rows a local online_sku_map entry may resolve: upstream `unmatched` + `skipped`.
+
+    Both are rows Script-Ecom will NOT cut on its own. A local mapping lets the admin
+    cut them into the isolated 'online_manual' lane. A row with no mapping is still
+    never cut, so widening the source to include `skipped` cannot affect any product
+    the admin did not explicitly map.
+    """
+    p = payload or {}
+    return list(p.get("unmatched") or []) + list(p.get("skipped") or [])
+
+
+# ---- Local fallback SKU→code mapping (online_sku_map) --------------------
+# Resolves ONLY rows that Script-Ecom returned as `unmatched`. Cut stock lands
+# in channel='online_manual', a lane isolated from 'online'/'mixed', so it can
+# never overwrite another product. The lane is fully re-derived every run
+# (delete-then-insert), making it idempotent and self-cleaning.
+ONLINE_MANUAL_CHANNEL = "online_manual"
+
+
+def _online_norm_sku(value):
+    return str(value or "").strip().upper()
+
+
+def load_online_sku_map(cur, date_iso):
+    """Return {SKU_UPPER: (code, multiplier)} applicable to `date_iso`.
+
+    scope='always' rows apply every day; scope='once' rows apply only on their
+    once_date (single-shot cuts that never affect other dates).
+    """
+    cur.execute(f"""
+        SELECT sku, code, multiplier, scope, once_date
+        FROM {config.DB_SCHEMA}.online_sku_map
+    """)
+    smap = {}
+    for sku, code, mult, scope, once_date in cur.fetchall():
+        if (scope or "always") == "once":
+            if not (once_date and once_date.isoformat() == date_iso):
+                continue
+        try:
+            m = float(mult or 1)
+        except (TypeError, ValueError):
+            m = 1.0
+        smap[_online_norm_sku(sku)] = (str(code or "").strip(), m)
+    return smap
+
+
+def resolve_online_unmatched(unmatched_rows, smap):
+    """Aggregate mapped unmatched rows by target code.
+
+    Returns (agg_by_code, resolved_skus_upper). Each agg entry sums qty and the
+    per-platform split, multiplied by the mapping's multiplier (e.g. a set of 3).
+    """
+    agg = {}
+    resolved = set()
+    for row in unmatched_rows or []:
+        raw = str((row or {}).get("sku") or (row or {}).get("code") or "").strip()
+        key = _online_norm_sku(raw)
+        if not key or key not in smap:
+            continue
+        code, mult = smap[key]
+        if not code:
+            continue
+        q = online_issue_number((row or {}).get("qty"))
+        sp = online_issue_number((row or {}).get("shopee"))
+        lz = online_issue_number((row or {}).get("lazada"))
+        tt = online_issue_number((row or {}).get("tiktok"))
+        base = q if q > 0 else (sp + lz + tt)
+        a = agg.setdefault(code, {"qty": 0.0, "shopee": 0.0, "lazada": 0.0,
+                                  "tiktok": 0.0, "skus": []})
+        a["qty"] += base * mult
+        a["shopee"] += sp * mult
+        a["lazada"] += lz * mult
+        a["tiktok"] += tt * mult
+        a["skus"].append(raw)
+        resolved.add(key)
+    return agg, resolved
+
+
+def rewrite_online_manual(cur, date_iso, unmatched_rows):
+    """Re-derive the whole 'online_manual' lane for a date from current mappings.
+
+    Delete-then-insert so the lane always equals exactly the current mapping
+    resolution (idempotent; removing a mapping cleans up). Recomputes running
+    balance for every product that gained OR lost a manual row. Returns a summary
+    with `resolved_skus`, applied items, and any mapping that points to a missing
+    product code (`bad`).
+    """
+    smap = load_online_sku_map(cur, date_iso)
+    agg, resolved = resolve_online_unmatched(unmatched_rows, smap)
+
+    cur.execute(f"SELECT code, id FROM {config.DB_SCHEMA}.products")
+    code_to_id = {c: i for c, i in cur.fetchall()}
+
+    cur.execute(f"""
+        SELECT DISTINCT product_id FROM {config.DB_SCHEMA}.stock_movements
+        WHERE movement_date = %s AND channel = %s
+    """, (date_iso, ONLINE_MANUAL_CHANNEL))
+    old_pids = {r[0] for r in cur.fetchall()}
+    cur.execute(f"""
+        DELETE FROM {config.DB_SCHEMA}.stock_movements
+        WHERE movement_date = %s AND channel = %s
+    """, (date_iso, ONLINE_MANUAL_CHANNEL))
+
+    doc_no = "ONLINE-MAP-" + date_iso.replace("-", "")
+    new_pids, applied, bad = set(), [], []
+    for code, a in agg.items():
+        pid = code_to_id.get(code)
+        base = a["qty"] if a["qty"] > 0 else (a["shopee"] + a["lazada"] + a["tiktok"])
+        if pid is None:
+            bad.append({"kind": "missing_product", "code": code,
+                        "qty": num(base), "skus": a["skus"],
+                        "reason": "mapping ชี้ไปรหัสที่ไม่มีใน stock-movement"})
+            continue
+        cur.execute(f"""
+            INSERT INTO {config.DB_SCHEMA}.stock_movements
+                (product_id, movement_date, doc_no, qty_in, qty_out, balance, note, channel,
+                 qty_shopee, qty_lazada, qty_tiktok)
+            VALUES (%s, %s, %s, 0, %s, 0, %s, %s, %s, %s, %s)
+        """, (pid, date_iso, doc_no, base,
+              "ตัดสต็อกออนไลน์ (จับคู่เอง: " + ", ".join(a["skus"][:5]) + ")",
+              ONLINE_MANUAL_CHANNEL, a["shopee"], a["lazada"], a["tiktok"]))
+        new_pids.add(pid)
+        applied.append({"code": code, "qty": num(base), "skus": a["skus"],
+                        "shopee": num(a["shopee"]), "lazada": num(a["lazada"]),
+                        "tiktok": num(a["tiktok"])})
+
+    for pid in (old_pids | new_pids):
+        recompute_product(cur, pid)
+
+    return {"resolved_skus": resolved, "applied": applied, "bad": bad}
+
+
+def filter_resolved_issues(issues, resolved_skus):
+    """Drop warning rows whose SKU is now handled by a local mapping."""
+    if not resolved_skus:
+        return issues
+    out = []
+    for it in issues or []:
+        key = _online_norm_sku((it or {}).get("sku") or (it or {}).get("code"))
+        if key in resolved_skus:
+            continue
+        out.append(it)
+    return out
 
 
 # ---- Admin auth ---------------------------------------------------------
@@ -2087,6 +2264,9 @@ def online_sync():
             })
         for pid in affected:
             recompute_product(cur, pid)
+        # จับคู่เอง (online_sku_map): ตัดยอด unmatched/skipped ที่ผู้ใช้ map ไว้ ลงเลนแยก 'online_manual'
+        manual = rewrite_online_manual(cur, p_date, online_mappable_rows(payload))
+        mapping_issues = filter_resolved_issues(mapping_issues, manual["resolved_skus"])
         conn.commit()
         written_pcs = sum(float((it or {}).get("qty") or 0) for it in applied)
         written_status = {
@@ -2107,6 +2287,7 @@ def online_sync():
                        skipped_items=skipped, items=applied,
                        online_written=written_status,
                        mapping_issues=mapping_issues,
+                       manual_applied=manual["applied"], manual_bad=manual["bad"],
                        platforms=payload.get("platforms") or {})
     except Exception as e:
         conn.rollback()
@@ -2267,9 +2448,11 @@ def online_preview():
         cumulative_mapping_issues = []
         cumulative_expected = {}
         cumulative_skipped = []  # รหัสในยอดสะสมที่ map ไม่ได้ → จะไม่ถูกตัด (โชว์เตือนก่อนเขียน)
+        cum_unmatched = []       # unmatched ของยอดสะสม — ใช้เช็ค online_sku_map ที่เขียนจริง
         try:
             cumj = script_ecom_json(
                 "/api/stock/propose-cumulative?date=" + urllib.parse.quote(p_date), timeout=20)
+            cum_unmatched = online_mappable_rows(cumj)
             cumulative_mapping_issues = online_upstream_mapping_issues(cumj)
             cumulative_rounds = int(cumj.get("batches_count") or 0)
             for ci in (cumj.get("proposed") or []):
@@ -2316,6 +2499,22 @@ def online_preview():
             online_written["mismatched_codes"] = mismatched[:20]
             online_written["matches_cumulative"] = bool(cumulative_expected) and not mismatched
 
+        # ---- จับคู่เอง (online_sku_map): read-only ในโหมด preview ----
+        # ซ่อน warning ของ SKU ที่ผู้ใช้ map ไว้แล้ว (จะถูกตัดจริงตอนกดเขียน/เมื่อ resolve).
+        smap = load_online_sku_map(cur, p_date)
+        _, resolved_leftover = resolve_online_unmatched(online_mappable_rows(payload), smap)
+        cum_agg, resolved_cum = resolve_online_unmatched(cum_unmatched, smap)
+        mapping_issues = filter_resolved_issues(mapping_issues, resolved_leftover)
+        cumulative_mapping_issues = filter_resolved_issues(cumulative_mapping_issues, resolved_cum)
+        cumulative_skipped = filter_resolved_issues(cumulative_skipped, resolved_cum)
+        manual_mapped = [
+            {"code": code, "qty": num(a["qty"] if a["qty"] > 0
+                                      else a["shopee"] + a["lazada"] + a["tiktok"]),
+             "skus": a["skus"], "shopee": num(a["shopee"]),
+             "lazada": num(a["lazada"]), "tiktok": num(a["tiktok"])}
+            for code, a in cum_agg.items()
+        ]
+
         return jsonify(status="ok", date=p_date, mode="preview",
                        total_qty=total, matched=len(items), skipped=len(skipped),
                        items=items, skipped_items=skipped,
@@ -2326,9 +2525,120 @@ def online_preview():
                        cumulative_rounds=cumulative_rounds,
                        cumulative_mapping_issues=cumulative_mapping_issues,
                        cumulative_skipped=cumulative_skipped,
+                       manual_mapped=manual_mapped,
                        online_written=online_written,
                        platforms=payload.get("platforms") or {})
     except Exception as e:
+        return jsonify(error="server_error", detail=str(e)), 500
+    finally:
+        conn.close()
+
+
+@app.route("/api/online/resolve", methods=["POST"])
+@require_admin
+def online_resolve():
+    """จับคู่ SKU ออนไลน์ที่ Script-Ecom map ไม่ได้ (unmatched) → รหัสสินค้าใน stock-movement.
+
+    body: { date, sku, code, multiplier=1, remember=true }
+      remember=true  → จำถาวร (scope='always') ใช้ทุกวันถัดไปอัตโนมัติ
+      remember=false → ตัดครั้งเดียวเฉพาะวันนี้ (scope='once')
+    บันทึก mapping แล้วคำนวณเลน 'online_manual' ของวันนั้นใหม่ (isolated ไม่ทับสินค้าอื่น).
+    """
+    data = request.get_json(silent=True) or {}
+    date_iso = str(data.get("date", "")).strip()
+    sku = str(data.get("sku", "")).strip()
+    code = str(data.get("code", "")).strip()
+    remember = bool(data.get("remember", True))
+    try:
+        mult = float(data.get("multiplier", 1) or 1)
+    except (TypeError, ValueError):
+        return jsonify(error="bad_request", detail="จำนวน (ตัวคูณ) ไม่ถูกต้อง"), 400
+    if not date_iso or not sku or not code:
+        return jsonify(error="bad_request", detail="ต้องระบุ date, sku และ code"), 400
+    if mult <= 0:
+        return jsonify(error="bad_request", detail="ตัวคูณต้องมากกว่า 0"), 400
+    try:
+        date.fromisoformat(date_iso)
+    except ValueError:
+        return jsonify(error="bad_request", detail=f"วันที่ไม่ถูกต้อง: {date_iso}"), 400
+
+    conn = get_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute(f"SELECT id FROM {config.DB_SCHEMA}.products WHERE code = %s", (code,))
+        if not cur.fetchone():
+            return jsonify(error="bad_request",
+                           detail=f"ไม่มีรหัส {code} ใน stock-movement — สร้างสินค้าก่อน"), 400
+        skun = _online_norm_sku(sku)
+        scope = "always" if remember else "once"
+        once_date = None if remember else date_iso
+        cur.execute(f"""
+            INSERT INTO {config.DB_SCHEMA}.online_sku_map
+                (sku, code, multiplier, scope, once_date, updated_at)
+            VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+            ON CONFLICT (sku) DO UPDATE SET
+                code = EXCLUDED.code, multiplier = EXCLUDED.multiplier,
+                scope = EXCLUDED.scope, once_date = EXCLUDED.once_date,
+                updated_at = CURRENT_TIMESTAMP
+        """, (skun, code, mult, scope, once_date))
+
+        # ดึง unmatched ของยอดสะสมวันนั้นจาก Script-Ecom แล้วคำนวณเลน online_manual ใหม่
+        try:
+            payload = script_ecom_json(
+                "/api/stock/propose-cumulative?date=" + urllib.parse.quote(date_iso), timeout=25)
+        except urllib.error.HTTPError as he:
+            conn.commit()  # mapping ถูกบันทึกแล้ว แม้ยังตัดยอดไม่ได้
+            return jsonify(status="saved_no_write",
+                           detail=f"บันทึก mapping แล้ว แต่ Script-Ecom ยังไม่มีข้อมูลวันนี้ (HTTP {he.code}) — กดเขียนยอดใหม่ภายหลัง"), 200
+        except Exception as e:
+            conn.commit()
+            return jsonify(status="saved_no_write",
+                           detail=f"บันทึก mapping แล้ว แต่เชื่อม Script-Ecom ไม่ได้ ({e}) — กดเขียนยอดใหม่ภายหลัง"), 200
+
+        manual = rewrite_online_manual(cur, date_iso, online_mappable_rows(payload))
+        conn.commit()
+        cut = next((a for a in manual["applied"] if a["code"] == code), None)
+        return jsonify(status="ok", date=date_iso, sku=skun, code=code,
+                       multiplier=mult, remember=remember,
+                       cut_qty=(cut or {}).get("qty", 0),
+                       manual_applied=manual["applied"], manual_bad=manual["bad"])
+    except Exception as e:
+        conn.rollback()
+        return jsonify(error="server_error", detail=str(e)), 500
+    finally:
+        conn.close()
+
+
+@app.route("/api/online/unmap", methods=["POST"])
+@require_admin
+def online_unmap():
+    """ลบ mapping ที่เคยจับคู่ไว้ (แก้ที่ผิด) แล้วคำนวณเลน online_manual ของวันนั้นใหม่.
+
+    body: { date, sku }
+    """
+    data = request.get_json(silent=True) or {}
+    date_iso = str(data.get("date", "")).strip()
+    sku = _online_norm_sku(data.get("sku", ""))
+    if not sku:
+        return jsonify(error="bad_request", detail="ต้องระบุ sku"), 400
+    conn = get_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute(f"DELETE FROM {config.DB_SCHEMA}.online_sku_map WHERE sku = %s", (sku,))
+        removed = cur.rowcount
+        # คำนวณเลน online_manual ใหม่ (ถ้ามีวันที่ + Script-Ecom เข้าถึงได้) เพื่อคืนยอดที่ถอน
+        if date_iso:
+            try:
+                date.fromisoformat(date_iso)
+                payload = script_ecom_json(
+                    "/api/stock/propose-cumulative?date=" + urllib.parse.quote(date_iso), timeout=25)
+                rewrite_online_manual(cur, date_iso, online_mappable_rows(payload))
+            except Exception:
+                pass  # ลบ mapping สำเร็จแล้ว; เลน online_manual จะอัปเดตครั้งถัดไปที่เขียนยอด
+        conn.commit()
+        return jsonify(status="ok", sku=sku, removed=removed)
+    except Exception as e:
+        conn.rollback()
         return jsonify(error="server_error", detail=str(e)), 500
     finally:
         conn.close()
