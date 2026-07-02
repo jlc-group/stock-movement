@@ -144,8 +144,30 @@ def ensure_online_sku_map_table():
         print(f"[warn] ensure_online_sku_map_table failed: {e}")
 
 
+def ensure_movement_wh_in_column():
+    """Add stock_movements.wh_in if missing (see migrations/003_movement_warehouse.sql).
+
+    Records which warehouse (soi8/lamlukka) a warehouse-backed brand's receipt
+    landed in, per movement row. Purely additive — every read query now selects
+    wh_in, so a server running this code against a DB that never ran migration 003
+    would 500 on /api/products. Self-heals on startup so any deploy is safe.
+    """
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute(f"""
+            ALTER TABLE {config.DB_SCHEMA}.stock_movements
+            ADD COLUMN IF NOT EXISTS wh_in TEXT
+        """)
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[warn] ensure_movement_wh_in_column failed: {e}")
+
+
 ensure_premium_warehouse_table()
 ensure_online_sku_map_table()
+ensure_movement_wh_in_column()
 
 
 def ensure_campaigns_table():
