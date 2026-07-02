@@ -850,13 +850,15 @@ def apply_premium_warehouse_delta(cur, product_id, qty_in, qty_out, in_dest, bra
 def apply_premium_warehouse_edit(cur, product_id, old_in, old_out, old_wh_in,
                                   new_in, new_out, new_wh_in):
     """Recompute ลำลูกกา/ซอย8 for an EDITED row by reversing its old contribution
-    and reapplying the new one — unlike apply_premium_warehouse_delta (net change
-    only), this also handles qty unchanged + destination warehouse changed, which
-    a pure delta computes as 0 and silently leaves stock in the wrong bucket.
-    Falls back to a net-delta when the old destination isn't a single known
-    warehouse (legacy row predating per-row tracking, or 'mixed' = accumulated
-    from multiple destinations in one day) — that case can't be reversed
-    precisely without a per-transaction ledger."""
+    and reapplying the new one. Unlike a plain delta (net change only), this also
+    handles qty unchanged + destination warehouse changed — the case where a delta
+    is 0 and would silently leave stock in the wrong bucket.
+
+    Bucket rule (matches how closing is derived): qty_in sat in ลำลูกกา ONLY when
+    the row was explicitly tagged 'lamlukka'; every other tag — 'soi8', NULL
+    (legacy rows predating per-row wh_in tracking), 'mixed' — is treated as ซอย8,
+    the historical default. qty_out always drew from ซอย8. This lets editing a
+    legacy receipt's destination actually move the stock instead of no-op'ing."""
     cur.execute(f"""
         SELECT lamlukka, soi8 FROM {config.DB_SCHEMA}.premium_warehouse
         WHERE product_id = %s
@@ -865,23 +867,18 @@ def apply_premium_warehouse_edit(cur, product_id, old_in, old_out, old_wh_in,
     lam = float(row[0]) if row else 0.0
     soi = float(row[1]) if row else 0.0
 
-    if old_wh_in in ("lamlukka", "soi8"):
-        if old_wh_in == "lamlukka":
-            lam -= old_in
-        else:
-            soi -= old_in
-        soi += old_out
-        if new_wh_in == "lamlukka":
-            lam += new_in
-        else:
-            soi += new_in
-        soi -= new_out
+    # Reverse the row's OLD contribution (non-'lamlukka' tag ⇒ it was in ซอย8).
+    if old_wh_in == "lamlukka":
+        lam -= old_in
     else:
-        soi -= (new_out - old_out)
-        if new_wh_in == "lamlukka":
-            lam += (new_in - old_in)
-        else:
-            soi += (new_in - old_in)
+        soi -= old_in
+    soi += old_out
+    # Apply the NEW contribution.
+    if new_wh_in == "lamlukka":
+        lam += new_in
+    else:
+        soi += new_in
+    soi -= new_out
 
     closing = lam + soi
 

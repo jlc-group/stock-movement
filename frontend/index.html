@@ -4337,6 +4337,11 @@ async function loadData() {
     filtered = DB.products.slice();
     applyFilters();
     renderDashboard();
+    // Keep the warehouse pages in sync too — handlers that reload via loadData()
+    // (bulk import, online stock cut) can change premium/Beauterry ลำลูกกา/ซอย8
+    // but don't go through mergeProduct, so refresh the active one here as well.
+    if (document.getElementById('page-premium')?.classList.contains('active')) renderPremium();
+    if (document.getElementById('page-beauterry')?.classList.contains('active')) renderBeauterry();
   } catch (e) {
     tbody.innerHTML = `<tr><td colspan="9" class="empty">โหลดข้อมูลไม่สำเร็จ: ${escapeHtml(e.message)}</td></tr>`;
   }
