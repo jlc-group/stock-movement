@@ -1458,17 +1458,22 @@ def set_premium_warehouse():
 @app.route("/api/premium/transfer", methods=["POST"])
 @require_admin
 def transfer_premium_warehouse():
-    """Internal warehouse move (warehouse-backed brands only): shift `qty` from
-    ลำลูกกา to ซอย8. ลำลูกกา decreases, ซอย8 increases, closing (lam+soi) is
-    UNCHANGED. Does NOT touch the ledger (stock_movements) or total_in/out."""
+    """Internal warehouse move (warehouse-backed brands only): shift `qty`
+    between ลำลูกกา and ซอย8. closing (lam+soi) is UNCHANGED — only the split
+    moves. `direction` picks which way: 'lam_to_soi' (default) or 'soi_to_lam'.
+    Does NOT touch the ledger (stock_movements) or total_in/out."""
     data = request.get_json(silent=True) or {}
     pid = data.get("id")
+    direction = str(data.get("direction", "lam_to_soi")).strip() or "lam_to_soi"
     try:
         qty = float(data.get("qty", 0) or 0)
     except (TypeError, ValueError):
         return jsonify(error="bad_request", detail="จำนวนต้องเป็นตัวเลข"), 400
     if not pid:
         return jsonify(error="bad_request", detail="ต้องระบุ id ของสินค้า"), 400
+    if direction not in ("lam_to_soi", "soi_to_lam"):
+        return jsonify(error="bad_request",
+                       detail="ทิศทางต้องเป็น lam_to_soi หรือ soi_to_lam"), 400
     if qty <= 0:
         return jsonify(error="bad_request", detail="จำนวนที่ย้ายต้องมากกว่า 0"), 400
 
@@ -1492,12 +1497,18 @@ def transfer_premium_warehouse():
         lam = float(wh[0]) if wh else 0.0
         soi = float(wh[1]) if wh else 0.0
 
-        if qty > lam:
+        # Cap at the source warehouse's balance — can't move out more than it holds.
+        src, src_label = (lam, "ลำลูกกา") if direction == "lam_to_soi" else (soi, "ซอย8")
+        if qty > src:
             return jsonify(error="bad_request",
-                           detail=f"ย้ายได้สูงสุด {lam:g} ชิ้น (เท่ายอดลำลูกกา)"), 400
+                           detail=f"ย้ายได้สูงสุด {max(src, 0):g} ชิ้น (เท่ายอด{src_label})"), 400
 
-        lam -= qty
-        soi += qty
+        if direction == "lam_to_soi":
+            lam -= qty
+            soi += qty
+        else:
+            soi -= qty
+            lam += qty
         # closing = lam + soi is unchanged (internal move); still upsert so the
         # split is persisted and products.closing stays in sync.
         cur.execute(f"""

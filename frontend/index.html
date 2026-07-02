@@ -747,8 +747,8 @@ body.admin-on .admin-bar { display: flex; }
 
 <div class="app page" id="page-premium">
   <div class="dash-head">
-    <h1>💎 สินค้าพรีเมี่ยม — ย้ายคลังลำลูกกา → ซอย8</h1>
-    <div class="sub">การย้ายของจากคลังลำลูกกา → คลังซอย8 · <b>คงเหลือ = ลำลูกกา + ซอย8</b> (ยอดเดียวกับหน้ารายการสินค้า) · บันทึกลงฐานข้อมูล pgSQL · แก้ไขได้เฉพาะโหมด Admin</div>
+    <h1>💎 สินค้าพรีเมี่ยม — ย้ายคลังลำลูกกา ⇄ ซอย8</h1>
+    <div class="sub">ย้ายของระหว่างคลังลำลูกกา ⇄ คลังซอย8 (สองทิศ) · <b>คงเหลือ = ลำลูกกา + ซอย8</b> (ยอดเดียวกับหน้ารายการสินค้า) · บันทึกลงฐานข้อมูล pgSQL · แก้ไขได้เฉพาะโหมด Admin</div>
   </div>
   <div class="card" style="padding:16px">
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
@@ -1248,9 +1248,14 @@ body.admin-on .admin-bar { display: flex; }
         <div class="hint" style="font-size:12px;color:#9ca3af;margin-top:4px">จ่ายออกจะตัดจากคลังซอย8 เสมอ</div>
       </div>
       <div class="field" id="mvTransferField" style="display:none">
-        <label>จำนวนที่ย้าย (ลำลูกกา → ซอย8)</label>
+        <label>ทิศทางการย้าย</label>
+        <select id="mvTransferDir" onchange="applyTransferMode(); updatePreview()">
+          <option value="lam_to_soi">🏭 ลำลูกกา → 🏪 ซอย8</option>
+          <option value="soi_to_lam">🏪 ซอย8 → 🏭 ลำลูกกา</option>
+        </select>
+        <label style="margin-top:8px">จำนวนที่ย้าย</label>
         <input type="number" id="mvTransferQty" value="0" step="any" min="0" inputmode="decimal" onfocus="this.select()" oninput="updatePreview()">
-        <div class="hint" style="font-size:12px;color:#9ca3af;margin-top:4px">ย้ายได้สูงสุด <b id="mvTransferMax">0</b> ชิ้น (เท่ายอดคลังลำลูกกา) · คงเหลือสุทธิเท่าเดิม</div>
+        <div class="hint" style="font-size:12px;color:#9ca3af;margin-top:4px">ย้ายได้สูงสุด <b id="mvTransferMax">0</b> ชิ้น (เท่ายอดคลังต้นทาง) · คงเหลือสุทธิเท่าเดิม</div>
       </div>
       <div class="field"><label>หมายเหตุ</label><input type="text" id="mvNote" placeholder="หมายเหตุ (ถ้ามี)"></div>
       <div class="preview-bal" id="mvPreview" style="display:none"></div>
@@ -4748,6 +4753,13 @@ function mvIsPremium() { return !!mvSelected && (mvSelected.brand === 'สิน
 
 const MV_TRANSFER = '__transfer__';   // UI-only channel value (never sent to /api/movements)
 function mvIsTransfer() { return document.getElementById('mvChannel').value === MV_TRANSFER; }
+function mvTransferDir() { return document.getElementById('mvTransferDir').value; }
+// Source-warehouse balance for the current transfer direction (what caps the move).
+function mvTransferSrcBal() {
+  const lam = Number(mvSelected && mvSelected.lamlukka) || 0;
+  const soi = Number(mvSelected && mvSelected.soi8) || 0;
+  return mvTransferDir() === 'soi_to_lam' ? soi : lam;
+}
 
 // Add/remove the "ย้ายคลัง" option in #mvChannel depending on the selected product.
 function syncTransferChannelOption() {
@@ -4757,7 +4769,7 @@ function syncTransferChannelOption() {
     if (!existing) {
       const opt = document.createElement('option');
       opt.value = MV_TRANSFER;
-      opt.textContent = '🔄 ย้ายคลัง (ลำลูกกา→ซอย8)';
+      opt.textContent = '🔄 ย้ายคลัง (ลำลูกกา ⇄ ซอย8)';
       sel.appendChild(opt);
     }
   } else if (existing) {
@@ -4772,7 +4784,7 @@ function applyTransferMode() {
   document.getElementById('mvDestField').style.display = (!transfer && mvIsPremium()) ? 'block' : 'none';
   document.getElementById('mvTransferField').style.display = transfer ? 'block' : 'none';
   if (transfer) {
-    document.getElementById('mvTransferMax').textContent = fmt(Number(mvSelected && mvSelected.lamlukka) || 0);
+    document.getElementById('mvTransferMax').textContent = fmt(Math.max(0, mvTransferSrcBal()));
   }
 }
 
@@ -4781,14 +4793,18 @@ function updatePreview() {
   if (!mvSelected) { prev.style.display = 'none'; return; }
   prev.style.display = 'block';
   if (mvIsTransfer()) {
-    const max = Number(mvSelected.lamlukka) || 0;
+    const lam0 = Number(mvSelected.lamlukka) || 0;
     const soi0 = Number(mvSelected.soi8) || 0;
+    const soiToLam = mvTransferDir() === 'soi_to_lam';
+    const src = soiToLam ? soi0 : lam0;
     const qty = parseFloat(document.getElementById('mvTransferQty').value) || 0;
-    const over = qty > max;
+    const over = qty > src;
+    const lamNew = soiToLam ? lam0 + qty : lam0 - qty;
+    const soiNew = soiToLam ? soi0 - qty : soi0 + qty;
     prev.innerHTML = `ย้าย <b class="${over ? 'neg' : ''}">${fmt(qty)}</b> ชิ้น · ` +
-      `ลำลูกกา ${fmt(max)} → <b>${fmt(max - qty)}</b> · ซอย8 ${fmt(soi0)} → <b>${fmt(soi0 + qty)}</b> ` +
-      `<span style="color:#9ca3af;font-size:12px">· คงเหลือสุทธิ ${fmt(max + soi0)} (เท่าเดิม)</span>` +
-      (over ? `<span class="neg" style="font-size:12px"> · เกินยอดลำลูกกา</span>` : '');
+      `ลำลูกกา ${fmt(lam0)} → <b>${fmt(lamNew)}</b> · ซอย8 ${fmt(soi0)} → <b>${fmt(soiNew)}</b> ` +
+      `<span style="color:#9ca3af;font-size:12px">· คงเหลือสุทธิ ${fmt(lam0 + soi0)} (เท่าเดิม)</span>` +
+      (over ? `<span class="neg" style="font-size:12px"> · เกินยอดคลังต้นทาง</span>` : '');
     return;
   }
   const qin = parseFloat(document.getElementById('mvIn').value) || 0;
@@ -4874,17 +4890,19 @@ async function submitTransfer() {
   const msg = document.getElementById('mvMsg');
   const btn = document.getElementById('mvSubmit');
   const qty = parseFloat(document.getElementById('mvTransferQty').value) || 0;
-  const max = Number(mvSelected.lamlukka) || 0;
+  const dir = mvTransferDir();
+  const src = mvTransferSrcBal();
+  const srcLabel = dir === 'soi_to_lam' ? 'ซอย8' : 'ลำลูกกา';
   if (qty <= 0) { msg.className = 'form-msg err show'; msg.textContent = 'กรุณากรอกจำนวนที่ย้าย'; return; }
-  if (qty > max) { msg.className = 'form-msg err show'; msg.textContent = `ย้ายได้สูงสุด ${fmt(max)} ชิ้น (เท่ายอดลำลูกกา)`; return; }
+  if (qty > src) { msg.className = 'form-msg err show'; msg.textContent = `ย้ายได้สูงสุด ${fmt(Math.max(0, src))} ชิ้น (เท่ายอด${srcLabel})`; return; }
   btn.disabled = true;
   try {
-    const data = await adminFetch('/api/premium/transfer', { id: mvSelected.id, qty });
+    const data = await adminFetch('/api/premium/transfer', { id: mvSelected.id, qty, direction: dir });
     mergeProduct(data.product);
     mvSelected = data.product;   // keep selection updated with new split
     document.getElementById('mvSelBal').textContent = fmt(mvSelected.closing);
     document.getElementById('mvTransferQty').value = '0';
-    document.getElementById('mvTransferMax').textContent = fmt(Number(mvSelected.lamlukka) || 0);
+    document.getElementById('mvTransferMax').textContent = fmt(Math.max(0, mvTransferSrcBal()));
     updatePreview();
     msg.className = 'form-msg ok show';
     msg.textContent = `ย้ายแล้ว · ลำลูกกา ${fmt(mvSelected.lamlukka)} · ซอย8 ${fmt(mvSelected.soi8)} · คงเหลือ ${fmt(mvSelected.closing)}`;
