@@ -135,6 +135,8 @@ body.admin-on .tx-col-act { display: table-cell; }
 .pf-lazada { background: #e8efff; color: #1d4ed8; } .pf-lazada .dot { background: #1d4ed8; }
 .pf-tiktok { background: #e6f7f3; color: #0f766e; } .pf-tiktok .dot { background: #0f766e; }
 .pf-total { margin-left: auto; color: #334155; font-weight: 700; }
+/* ป้ายคลังใต้ตัวเลขรับ/ออก (Beauterry): รับเข้า → คลังที่เลือก, จ่ายออก ← ซอย8 เสมอ */
+.wh-tag { font-size: 10.5px; font-weight: 500; color: #6b7280; white-space: nowrap; margin-top: 2px; }
 .empty { padding: 40px; text-align: center; color: #9ca3af; }
 .results-count { font-size: 13px; color: #6b7280; padding: 8px 4px; }
 .tx-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 12px; }
@@ -4142,23 +4144,37 @@ function renderHistory() {
   }
   // Show latest date first (newest → oldest)
   txs = txs.slice().sort((a, b) => (b[0] || '').localeCompare(a[0] || ''));
+  // Beauterry: ติดป้ายคลังใต้ตัวเลขรับ/ออก — รับเข้าใช้ wh_in ที่เก็บติดแถว (t[10]),
+  // จ่ายออกตัดจากคลังซอย8 เสมอ (กติการะบบ) จึงแสดงได้ทุกแถวรวมถึงรายการเก่า
+  const showWh = p.brand === 'Beauterry';
   tbody.innerHTML = txs.map(t => {
-    // t = [date, in, out, balance, doc, note, channel, shopee, lazada, tiktok]
-    // (channel at index 6; per-platform online qty at 7..9, post-migration)
+    // t = [date, in, out, balance, doc, note, channel, shopee, lazada, tiktok, wh_in]
+    // (channel at index 6; per-platform online qty at 7..9, wh_in at 10, post-migration)
     const movement = (t[1] || 0) !== 0 || (t[2] || 0) !== 0;
     const ch = t[6] || DEFAULT_CHANNEL;
+    const whIn = showWh && (t[1] || 0) > 0 ? whInTag(t[10]) : '';
+    const whOut = showWh && (t[2] || 0) > 0 ? '<div class="wh-tag">← 🏪 ซอย8</div>' : '';
     const row = `<tr class="${movement ? 'tx-row-movement' : ''}">
       <td>${formatDate(t[0])}</td>
       <td>${escapeHtml(t[4])}</td>
       <td>${channelBadge(ch)}</td>
-      <td class="num in">${fmt(t[1])}</td>
-      <td class="num out">${fmt(t[2])}</td>
+      <td class="num in">${fmt(t[1])}${whIn}</td>
+      <td class="num out">${fmt(t[2])}${whOut}</td>
       <td class="num bal ${cls(t[3])}">${fmt(t[3])}</td>
       <td>${escapeHtml(t[5])}</td>
       <td class="tx-col-act"><button class="tx-edit-btn" onclick="openEditMovement('${t[0]}', '${escapeHtml(ch)}')">✏️ แก้ไข</button></td>
     </tr>`;
     return row + platformBreakdownRow(ch, t[7], t[8], t[9]);
   }).join('');
+}
+
+// ป้ายคลังปลายทางของยอดรับเข้า (Beauterry) — ค่า wh_in มีเฉพาะรายการที่บันทึก
+// หลังเพิ่มระบบเก็บคลังต่อแถว; แถวเก่ากว่านั้นไม่ทราบคลัง จึงไม่แสดงป้าย
+function whInTag(w) {
+  if (w === 'lamlukka') return '<div class="wh-tag">→ 🏭 ลำลูกกา</div>';
+  if (w === 'soi8') return '<div class="wh-tag">→ 🏪 ซอย8</div>';
+  if (w === 'mixed') return '<div class="wh-tag">→ หลายคลัง</div>';
+  return '';
 }
 
 // A1 breakdown: a sub-row under an online movement showing per-platform qty.
@@ -4918,7 +4934,10 @@ function openEditMovement(dateIso, channel) {
   // Warehouse-backed brands: show the คลังปลายทาง selector (mirrors บันทึกรับ-จ่าย).
   const isPrem = p.brand === 'สินค้าพรีเมี่ยม' || p.brand === 'Beauterry';
   document.getElementById('emDestField').style.display = isPrem ? 'block' : 'none';
-  document.getElementById('emDest').value = 'soi8';
+  // Prefill from the row's stored warehouse (t[10] wh_in) so editing qty doesn't
+  // silently flip the receipt to ซอย8; unknown/mixed/legacy rows keep the default.
+  document.getElementById('emDest').value =
+    (t[10] === 'lamlukka' || t[10] === 'soi8') ? t[10] : 'soi8';
   document.getElementById('emMsg').className = 'form-msg';
   updateEditPreview();
   openAModal('editMovementModal');

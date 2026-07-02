@@ -716,18 +716,19 @@ def fetch_product(cur, product_id):
         return None
     cur.execute(f"""
         SELECT movement_date, qty_in, qty_out, balance, doc_no, note, channel,
-               qty_shopee, qty_lazada, qty_tiktok
+               qty_shopee, qty_lazada, qty_tiktok, wh_in
         FROM {config.DB_SCHEMA}.stock_movements
         WHERE product_id = %s
         ORDER BY movement_date, id
     """, (product_id,))
-    # channel is at index 6; per-platform online qty appended at 7..9 (additive) so the
-    # existing 0..6 fields keep their positions for every export/create/POST/PUT consumer.
+    # channel is at index 6; per-platform online qty appended at 7..9, wh_in at 10
+    # (additive) so the existing 0..6 fields keep their positions for every
+    # export/create/POST/PUT consumer.
     tx = [[
         r[0].isoformat() if r[0] else "",
         num(r[1]), num(r[2]), num(r[3]),
         r[4] or "", r[5] or "", r[6] or "mixed",
-        num(r[7]), num(r[8]), num(r[9]),
+        num(r[7]), num(r[8]), num(r[9]), r[10] or "",
     ] for r in cur.fetchall()]
     return {
         "id": p[0], "sheet": p[1], "code": p[2], "name": p[3] or "", "category": p[4],
@@ -824,6 +825,58 @@ def apply_premium_warehouse_delta(cur, product_id, qty_in, qty_out, in_dest, bra
     """, (closing, product_id))
 
 
+def apply_premium_warehouse_edit(cur, product_id, old_in, old_out, old_wh_in,
+                                  new_in, new_out, new_wh_in):
+    """Recompute ลำลูกกา/ซอย8 for an EDITED row by reversing its old contribution
+    and reapplying the new one — unlike apply_premium_warehouse_delta (net change
+    only), this also handles qty unchanged + destination warehouse changed, which
+    a pure delta computes as 0 and silently leaves stock in the wrong bucket.
+    Falls back to a net-delta when the old destination isn't a single known
+    warehouse (legacy row predating per-row tracking, or 'mixed' = accumulated
+    from multiple destinations in one day) — that case can't be reversed
+    precisely without a per-transaction ledger."""
+    cur.execute(f"""
+        SELECT lamlukka, soi8 FROM {config.DB_SCHEMA}.premium_warehouse
+        WHERE product_id = %s
+    """, (product_id,))
+    row = cur.fetchone()
+    lam = float(row[0]) if row else 0.0
+    soi = float(row[1]) if row else 0.0
+
+    if old_wh_in in ("lamlukka", "soi8"):
+        if old_wh_in == "lamlukka":
+            lam -= old_in
+        else:
+            soi -= old_in
+        soi += old_out
+        if new_wh_in == "lamlukka":
+            lam += new_in
+        else:
+            soi += new_in
+        soi -= new_out
+    else:
+        soi -= (new_out - old_out)
+        if new_wh_in == "lamlukka":
+            lam += (new_in - old_in)
+        else:
+            soi += (new_in - old_in)
+
+    closing = lam + soi
+
+    cur.execute(f"""
+        INSERT INTO {config.DB_SCHEMA}.premium_warehouse (product_id, lamlukka, soi8, updated_at)
+        VALUES (%s, %s, %s, CURRENT_TIMESTAMP)
+        ON CONFLICT (product_id) DO UPDATE SET
+            lamlukka = EXCLUDED.lamlukka, soi8 = EXCLUDED.soi8,
+            updated_at = CURRENT_TIMESTAMP
+    """, (product_id, lam, soi))
+    cur.execute(f"""
+        UPDATE {config.DB_SCHEMA}.products
+        SET closing_balance = %s, updated_at = CURRENT_TIMESTAMP
+        WHERE id = %s
+    """, (closing, product_id))
+
+
 # ---- Read endpoints -----------------------------------------------------
 @app.route("/")
 def index():
@@ -869,20 +922,20 @@ def products():
 
     cur.execute(f"""
         SELECT product_id, movement_date, qty_in, qty_out, balance, doc_no, note, channel,
-               qty_shopee, qty_lazada, qty_tiktok
+               qty_shopee, qty_lazada, qty_tiktok, wh_in
         FROM {config.DB_SCHEMA}.stock_movements
         ORDER BY product_id, movement_date, id
     """)
-    # channel at index 6 (mirrors fetch_product); per-platform online qty at 7..9 (additive).
-    # ORDER BY adds `id` so same-day multi-channel rows have a stable order
-    # matching recompute_product's running-balance order.
+    # channel at index 6 (mirrors fetch_product); per-platform online qty at 7..9,
+    # wh_in at 10 (additive). ORDER BY adds `id` so same-day multi-channel rows
+    # have a stable order matching recompute_product's running-balance order.
     tx_by_product = defaultdict(list)
     for r in cur.fetchall():
         tx_by_product[r[0]].append([
             r[1].isoformat() if r[1] else "",
             num(r[2]), num(r[3]), num(r[4]),
             r[5] or "", r[6] or "", r[7] or "mixed",
-            num(r[8]), num(r[9]), num(r[10]),
+            num(r[8]), num(r[9]), num(r[10]), r[11] or "",
         ])
 
     cur.close()
@@ -1755,19 +1808,30 @@ def add_movement():
         # Warehouse-backed brands (ลำลูกกา/ซอย8 split, closing = lam + soi8).
         is_premium = brand in ("สินค้าพรีเมี่ยม", "Beauterry")
 
+        # Warehouse-backed brands remember which warehouse received the qty_in
+        # (per-row wh_in). Accumulating a second receipt into a different
+        # warehouse on the same (day, channel) degrades to 'mixed'.
+        wh_in = in_dest if (is_premium and qty_in > 0) else None
+
         # Same (day, channel) -> accumulate; otherwise a new row. Conflict
         # target is the post-migration key (product_id, movement_date, channel)
         # so each channel keeps its own lane for the same day.
         cur.execute(f"""
             INSERT INTO {config.DB_SCHEMA}.stock_movements
-                (product_id, movement_date, doc_no, qty_in, qty_out, balance, note, channel)
-            VALUES (%s, %s, %s, %s, %s, 0, %s, %s)
+                (product_id, movement_date, doc_no, qty_in, qty_out, balance, note, channel, wh_in)
+            VALUES (%s, %s, %s, %s, %s, 0, %s, %s, %s)
             ON CONFLICT (product_id, movement_date, channel) DO UPDATE SET
                 qty_in  = {config.DB_SCHEMA}.stock_movements.qty_in  + EXCLUDED.qty_in,
                 qty_out = {config.DB_SCHEMA}.stock_movements.qty_out + EXCLUDED.qty_out,
                 doc_no  = COALESCE(EXCLUDED.doc_no, {config.DB_SCHEMA}.stock_movements.doc_no),
-                note    = COALESCE(EXCLUDED.note,  {config.DB_SCHEMA}.stock_movements.note)
-        """, (product_id, mv_date, doc_no, qty_in, qty_out, note, channel))
+                note    = COALESCE(EXCLUDED.note,  {config.DB_SCHEMA}.stock_movements.note),
+                wh_in   = CASE
+                    WHEN EXCLUDED.wh_in IS NULL THEN {config.DB_SCHEMA}.stock_movements.wh_in
+                    WHEN {config.DB_SCHEMA}.stock_movements.wh_in IS NULL
+                         OR {config.DB_SCHEMA}.stock_movements.wh_in = EXCLUDED.wh_in THEN EXCLUDED.wh_in
+                    ELSE 'mixed'
+                END
+        """, (product_id, mv_date, doc_no, qty_in, qty_out, note, channel, wh_in))
 
         recompute_product(cur, product_id)
         # Premium products are warehouse-backed: qty_out always draws from ซอย8,
@@ -1829,10 +1893,12 @@ def edit_movement():
         product_id, brand = row[0], row[1]
         is_premium = brand in ("สินค้าพรีเมี่ยม", "Beauterry")
 
-        # Read the pre-edit qty so warehouse-backed brands can apply only the
-        # NET change (new − old) to the ลำลูกกา/ซอย8 split below.
+        # Read the pre-edit qty + warehouse so warehouse-backed brands can
+        # reverse the row's old contribution before reapplying the new one
+        # (apply_premium_warehouse_edit below) — needed because qty can stay
+        # the same while only the destination warehouse changes.
         cur.execute(f"""
-            SELECT qty_in, qty_out FROM {config.DB_SCHEMA}.stock_movements
+            SELECT qty_in, qty_out, wh_in FROM {config.DB_SCHEMA}.stock_movements
             WHERE product_id = %s AND movement_date = %s AND channel = %s
         """, (product_id, mv_date, channel))
         before = cur.fetchone()
@@ -1842,23 +1908,28 @@ def edit_movement():
                            detail=f"ไม่พบรายการของวันที่ {mv_date} ช่อง {channel}"), 404
         old_in = float(before[0] or 0)
         old_out = float(before[1] or 0)
+        old_wh_in = before[2]
 
         # Target one (day, channel) lane — without the channel predicate this
         # would hit every channel row of the day after the migration.
+        # Edit is an overwrite, so wh_in follows the same semantics: the whole
+        # day's receipt now belongs to the selected warehouse (NULL if no receipt).
+        wh_in = in_dest if (is_premium and qty_in > 0) else None
         cur.execute(f"""
             UPDATE {config.DB_SCHEMA}.stock_movements
-            SET qty_in = %s, qty_out = %s, doc_no = %s, note = %s
+            SET qty_in = %s, qty_out = %s, doc_no = %s, note = %s, wh_in = %s
             WHERE product_id = %s AND movement_date = %s AND channel = %s
-        """, (qty_in, qty_out, doc_no, note, product_id, mv_date, channel))
+        """, (qty_in, qty_out, doc_no, note, wh_in, product_id, mv_date, channel))
 
         recompute_product(cur, product_id)
-        # Warehouse-backed brands: apply the NET change of this row to the
-        # ลำลูกกา/ซอย8 split (qty_out draws from ซอย8, qty_in lands in in_dest),
-        # then closing = ลำลูกกา + ซอย8 (overrides recompute's movement-derived
-        # closing). Passing the delta keeps the warehouse in sync with the edit.
+        # Warehouse-backed brands: reverse this row's old ลำลูกกา/ซอย8
+        # contribution and reapply the new one, then closing = ลำลูกกา + ซอย8
+        # (overrides recompute's movement-derived closing). A plain delta would
+        # compute 0 when only the destination warehouse changes (qty unchanged)
+        # and silently leave stock in the old bucket — see apply_premium_warehouse_edit.
         if is_premium:
-            apply_premium_warehouse_delta(
-                cur, product_id, qty_in - old_in, qty_out - old_out, in_dest, brand)
+            apply_premium_warehouse_edit(
+                cur, product_id, old_in, old_out, old_wh_in, qty_in, qty_out, in_dest)
         product = fetch_product(cur, product_id)
         conn.commit()
         return jsonify(status="ok", product=product)
