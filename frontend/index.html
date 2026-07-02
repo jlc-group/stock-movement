@@ -587,6 +587,13 @@ body.admin-on .admin-bar { display: flex; }
 .pmd-mv-note { font-size: 11.5px; color: #94a3b8; text-align: right; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pmd-empty { color: #94a3b8; font-size: 13px; padding: 14px 4px; text-align: center; }
 .pmd-foot { font-size: 11.5px; color: #94a3b8; margin-top: 14px; line-height: 1.5; border-top: 1px dashed #e2e8f0; padding-top: 10px; }
+/* Admin-only inline editor for the ลำลูกกา/ซอย8 split (in the detail modal) */
+.pmd-edit { margin-top: 16px; padding: 14px 16px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 12px; }
+.pmd-edit-head { font-size: 13px; font-weight: 700; color: #92400e; margin-bottom: 10px; }
+.pmd-edit-row { display: flex; gap: 12px; flex-wrap: wrap; }
+.pmd-edit-row .field { flex: 1 1 120px; }
+.pmd-edit-preview { font-size: 13px; color: #334155; margin: 10px 0 12px; font-weight: 600; }
+.pmd-edit-foot { display: flex; gap: 8px; justify-content: flex-end; }
 /* กราฟกระจายสต๊อกตามคลัง */
 .pm-chart-card { margin-top: 14px; border-radius: 14px; border: 1px solid #e2e8f0; background: #fff; padding: 16px; }
 .pm-chart-head { font-weight: 800; font-size: 14px; color: #0f172a; margin-bottom: 14px; }
@@ -1145,6 +1152,19 @@ body.admin-on .admin-bar { display: flex; }
     </div>
     <div class="pmd-body">
       <div class="pmd-wh" id="pmdWh"></div>
+      <div class="pmd-edit" id="pmdEdit" style="display:none">
+        <div class="pmd-edit-head">✏️ แก้ไขยอดคลัง (Admin) — คงเหลือ = ลำลูกกา + ซอย8</div>
+        <div class="form-msg" id="pmdEditMsg"></div>
+        <div class="pmd-edit-row">
+          <div class="field"><label>คลังลำลูกกา</label><input type="number" id="pmdEditLam" value="0" step="any" min="0" inputmode="decimal" onfocus="this.select()" oninput="pmdEditPreview()"></div>
+          <div class="field"><label>คลังซอย8</label><input type="number" id="pmdEditSoi" value="0" step="any" min="0" inputmode="decimal" onfocus="this.select()" oninput="pmdEditPreview()"></div>
+        </div>
+        <div class="pmd-edit-preview" id="pmdEditPreviewBox"></div>
+        <div class="pmd-edit-foot">
+          <button class="btn btn-ghost" onclick="pmdEditReset()">คืนค่าเดิม</button>
+          <button class="btn btn-primary" id="pmdEditSave" onclick="submitPmWarehouse()">บันทึกยอดคลัง</button>
+        </div>
+      </div>
       <div class="pmd-h">🔄 ประวัติเคลื่อนไหวล่าสุด</div>
       <div id="pmdHistory"></div>
       <div class="pmd-foot" id="pmdFoot"></div>
@@ -1664,10 +1684,12 @@ function renderPmChart(srcList) {
 
 // การ์ดรายละเอียด: ยอดแยกคลัง + อัปเดตล่าสุด + ประวัติเคลื่อนไหว
 // ใช้ร่วมกันทั้งพรีเมี่ยม และ Beauterry (คงเหลือ=ลำลูกกา+ซอย8 เหมือนกัน)
+let pmdCurrentId = null;   // product id shown in the detail modal (target of the warehouse editor)
 function openPmDetail(id) {
   const p = (DB.products || []).find(x => x.id === id);
   if (!p) return;
   const lam = Number(p.lamlukka) || 0, soi = Number(p.soi8) || 0, closing = Number(p.closing) || 0;
+  pmdCurrentId = id;
 
   document.getElementById('pmdTitle').textContent = `${p.code} · ${p.name || ''}`;
 
@@ -1698,7 +1720,63 @@ function openPmDetail(id) {
   document.getElementById('pmdFoot').innerHTML =
     'หมายเหตุ: "ออก" หักจากคลังซอย8 เสมอ · "รับเข้า" เป็นยอดรับรวม (ระบบยังไม่ได้บันทึกแยกว่าเข้าคลังไหนต่อรายการ)';
 
+  // Admin-only: show the inline ลำลูกกา/ซอย8 editor, prefilled with current values.
+  const editBox = document.getElementById('pmdEdit');
+  if (adminToken) {
+    editBox.style.display = 'block';
+    document.getElementById('pmdEditLam').value = lam;
+    document.getElementById('pmdEditSoi').value = soi;
+    document.getElementById('pmdEditMsg').className = 'form-msg';
+    pmdEditPreview();
+  } else {
+    editBox.style.display = 'none';
+  }
+
   document.getElementById('pmDetailModal').classList.add('show');
+}
+
+// Live preview of the closing that the entered ลำลูกกา/ซอย8 would produce.
+function pmdEditPreview() {
+  const lam = parseFloat(document.getElementById('pmdEditLam').value) || 0;
+  const soi = parseFloat(document.getElementById('pmdEditSoi').value) || 0;
+  const p = (DB.products || []).find(x => x.id === pmdCurrentId);
+  const cur = p ? (Number(p.closing) || 0) : 0;
+  const nb = lam + soi;
+  document.getElementById('pmdEditPreviewBox').innerHTML =
+    `คงเหลือใหม่: <b class="${nb < 0 ? 'neg' : ''}">${fmt(nb)}</b> = ลำลูกกา ${fmt(lam)} + ซอย8 ${fmt(soi)}` +
+    (nb !== cur ? ` <span style="color:#b45309">· เดิม ${fmt(cur)}</span>` : '');
+}
+
+// Restore the inputs to the product's current stored split.
+function pmdEditReset() {
+  const p = (DB.products || []).find(x => x.id === pmdCurrentId);
+  if (!p) return;
+  document.getElementById('pmdEditLam').value = Number(p.lamlukka) || 0;
+  document.getElementById('pmdEditSoi').value = Number(p.soi8) || 0;
+  document.getElementById('pmdEditMsg').className = 'form-msg';
+  pmdEditPreview();
+}
+
+// Save the edited split → PUT /api/premium/warehouse (closing = ลำลูกกา + ซอย8),
+// then refresh the active premium/Beauterry list (row + คงเหลือ) and the modal.
+async function submitPmWarehouse() {
+  const msg = document.getElementById('pmdEditMsg');
+  const btn = document.getElementById('pmdEditSave');
+  if (!pmdCurrentId) return;
+  const lam = parseFloat(document.getElementById('pmdEditLam').value) || 0;
+  const soi = parseFloat(document.getElementById('pmdEditSoi').value) || 0;
+  if (lam < 0 || soi < 0) { msg.className = 'form-msg err show'; msg.textContent = 'จำนวนห้ามติดลบ'; return; }
+  btn.disabled = true;
+  try {
+    const data = await adminFetch('/api/premium/warehouse', { id: pmdCurrentId, lamlukka: lam, soi8: soi }, 'PUT');
+    mergeProduct(data.product);       // re-renders active premium/Beauterry page: row + คงเหลือ update live
+    openPmDetail(pmdCurrentId);        // refresh the modal tiles + inputs with saved values
+    toast('อัปเดตยอดคลัง ' + data.product.code + ' สำเร็จ', 'ok');
+  } catch (e) {
+    msg.className = 'form-msg err show'; msg.textContent = e.message;
+  } finally {
+    btn.disabled = false;
+  }
 }
 function closePmDetail() { document.getElementById('pmDetailModal').classList.remove('show'); }
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePmDetail(); });
